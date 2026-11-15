@@ -150,6 +150,7 @@ docs/
   decisions/               # ADR：为什么这样定
   research-hot-mod-reload.md  # 2026-11 调研报告；历史背景，结论以 status 为准
   roadmap.md               # 长期路线；短期执行以 status 为准
+  tech-debt.md             # 结构性技术债与架构升级点（P0/P1/P2）
 src/main/java/dev/modreloader/  # NeoForge 1.21.1 热加载器（A0 / A1.2）
 tools/analyzer/            # 只读分析器（Python）
 experiments/self-attach-poc/  # 自附加 + 类重定义最小验证（Java）
