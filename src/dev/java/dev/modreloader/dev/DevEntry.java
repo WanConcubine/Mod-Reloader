@@ -69,6 +69,9 @@ public final class DevEntry {
         if (Boolean.getBoolean("modreloader.verifyDelete")) {
             DeleteCheck.start();
         }
+        if (Boolean.getBoolean("modreloader.verifyRegistryProbe")) {
+            RegistryProbeCheck.start();
+        }
         String verifyPayloadRemote = System.getProperty("modreloader.verifyPayloadRemote", "").trim();
         if (!verifyPayloadRemote.isEmpty()) {
             RemotePayloadCheck.start(Path.of(verifyPayloadRemote));

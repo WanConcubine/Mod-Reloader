@@ -43,6 +43,7 @@
 | **引擎边界（P0-2）** | **`hotadd` 不再 import `client`/`server`；`PlatformHooks` 由两侧 bootstrap 注册；客户端 add / 服务端热加 / payload E2 全 PASS** | 2026-11-15 20:34 / 21:02 / 21:04 |
 | **反射锚点守卫（P0-1）** | **client：`module_injection=ok modlist_rebuild=ok network_adaptation=ok mixin_hotadd=ok resource_packs=ok`；server：`resource_packs=n/a`；两端 add 仍 PASS** | 2026-11-15 21:06 / 21:08：`[ModReloader] capabilities:` |
 | **Java 单测（P2-8）** | **3 passed**：i18n 键集 + `%s` 占位符一致、每个 `FailureKind` 都有 summary/suggestion、两者成对 | `./gradlew test`；[LangKeysTest.java](../src/test/java/dev/modreloader/LangKeysTest.java) |
+| **T4 注册表探针（只读）** | **BLOCK 1060 / ITEM 1333 均 frozen；`registryAccess(BLOCK)` 与 `BuiltInRegistries.BLOCK` 同实例；blockstate id map 26684（stone=1）；89 个内置注册表；`RegisterEvent` 构造器包私有；`unfreeze()` public；裸 re-freeze 后 stone 1→26685（id 漂移）** | 2026-11-15 21:28 / 21:30：`runClient -PverifyAddCommand=... -PverifyRegistryProbe=true [-PverifyRegistryRefreeze=true]`；见 [research-t4-registry.md](research-t4-registry.md) |
 | **dev 移出发布包（P0-3）** | **生产 jar 内 `dev/modreloader/dev/` 0 条目；`check` 会编译 `src/dev`；dev harness 仍可用（AddCmdCheck PASS）** | 2026-11-15 21:07：`./gradlew build` + `runClient -PverifyAddCommand=...` |
 
 ## 验证状态
@@ -56,6 +57,7 @@
 - **A1.0 / A1.1 / A1.2**：probe → spike → 全流水线；`lsp.mixins.json` 运行时注册、JBR redefine 已加载 target、首载织入未加载 target、`postInitialise` 修复接口合并、LAN 屏控件可用。失败回滚覆盖 post-ModList / post-pack（module / ModList / config / 类的原始字节 / 资源包），post-ModList 重试成功。详见 [a1-mixin-hotadd.md](features/a1-mixin-hotadd.md)。
 - **监听 / 预检 / GUI**：后台轮询 `run/mods` + `run/modreloader/inbox`；稳定检测 + 基线；`ModInspector` 预测 T2–T5；主菜单弹窗、世界中只 toast；失败打开 `LoadFailureScreen`；配置与忽略/失败记录独立 JSON；i18n `en_us`/`zh_cn`（各 125 key，键集由单测核对）。详见 [gui-mod-watcher.md](features/gui-mod-watcher.md)。
 - **双端化**：dedicated server 加载、热加 T2 夹具、命令重放（93→94）、tick 事件到达；payload 适配 E1/E2/E3（含跨进程）。机制与证据见 [server-hotadd.md](features/server-hotadd.md)；边界与副作用见已知问题 13/14。
+- **T4 调研（只读探针 + 受控 re-freeze）**：注册表与同步机制见 [research-t4-registry.md](research-t4-registry.md)；结论是「机制可行，但只能 add-only、单向提交、存档绑定该 mod，且 datapack 内容仍是空白」，裸 re-freeze 会移动 BlockState id（必须先清空重建）。[ADR-0008](decisions/0008-t4-registry-adaptation-poc.md) 为 Proposed。
 - **架构收口（2026-11-15）**：
   - **P0-2 引擎边界**：`HotAddEngine` / `FmlEvents` / `ActiveConnections` 不再引用 `Minecraft`、`ServerCommands`、`ResourcePackLoader`、`ClientConnections`；改由 [PlatformHooks](../src/main/java/dev/modreloader/hotadd/PlatformHooks.java)（+ [ClientPlatformHooks](../src/main/java/dev/modreloader/client/ClientPlatformHooks.java) / [ServerPlatformHooks](../src/main/java/dev/modreloader/server/ServerPlatformHooks.java)）提供 key mapping、客户端生命周期、资源包、命令重放、本端额外连接。顺带修掉缺口：**客户端以前从不重放 `RegisterCommandsEvent`**，单人游戏里热加模组的命令根本不存在；现在集成服务器也重放（标题屏安静跳过）。
   - **P0-1 能力守卫**：[Capabilities](../src/main/java/dev/modreloader/capability/Capabilities.java) 启动时只读探测五组锚点并打一行报告；module/modlist/mixin 缺失时 `FailureKind.CAPABILITY` fail-fast，资源包只 warn + 跳过。局限见已知问题 16。
@@ -69,7 +71,7 @@
 - **`/modreloader gui` / `scan` 命令**：已注册，未自动验证（`/modreloader add`、世界内 toast、主菜单入口与忽略恢复已有 harness）。
 - **忽略/失败 JSON 跨重启持久化**：GUI 内 ignore → restore 已自动验证，重启客户端后是否仍记住未验证。
 - **已加载后删除 jar**：行为已知（mod 仍留在 ModList，没有卸载路径，不会再成为候选），但没有跑过专门检查。
-- **T4（注册表内容）**：未开始。
+- **T4（注册表内容）**：未实现，只在调研阶段（[research-t4-registry.md](research-t4-registry.md)）；没有注册表写入实验。
 - **Tier 预测 vs 人工标注**：没有 ground truth，准确率未知。
 - **Fabric intermediary 映射**：`class_XXX` 目标识别仍退化。
 - **多版本 / 多加载器**：1.21.1 之外未测试。
@@ -93,6 +95,7 @@
 14. **服务端：命令靠重放生效，payload 可适配但有边界**：重放 `RegisterCommandsEvent` 后命令真的进了 dispatcher（93→94），重复触发的 `ServerTickEvent` 也能到达。**副作用**：重放是全局总线事件，所有已加载 mod 的监听器会再跑一遍；Brigadier 合并节点所以实测幂等，但有副作用的监听器会执行两次。payload 通过反射解冻 `NetworkRegistry.setup` + 重放 `RegisterPayloadHandlersEvent` 注册，E2 起还能把新 channel 补进已建立连接的 `PayloadSetup`；E3 跨进程验证。**仍缺**：① 握手（两端必须是同一个 jar，人工保证）；② 与 `@ApiStatus.Internal` 对着干，锁 1.21.1；③ `ServerStartedEvent` 之类一次性事件、注册表内容（T4）。
 15. **客户端重放 `RegisterCommandsEvent` 的副作用**（2026-11-15）：补上单人游戏命令注册的同时，集成服务器每次热加都会让**所有**已加载模组的命令监听器再跑一遍（与 14 同源）。热加发生在标题屏（无集成服务器）时不重放。
 16. **Capabilities 只查名字，不查行为**：字段/方法/构造器存在且签名对上，不等于语义没变。它的价值是「框架漂移时立刻给人话失败而不是静默跳过」，不能代替游戏内 harness；锚点清单自己也会写错（第一版把 `createPackForMod(IModFileInfo)` 写成 `ModFileInfo`，被 harness 抓到）。
+17. **T4 的第一个坑：裸 unfreeze/freeze 会移动 BlockState id**（2026-11-15 实测）：不注册任何东西，`GameData.unfreezeData()` → `freezeData()` 之后 `stone` 的 state id 从 1 变成 26685。原因是 `BlockCallbacks.onBake` 用 `IdMapper.add()` 重建映射，而 `add()` 无条件分配新 id（旧 id 槽位保留）。适配路线必须先清空 `BlockCallbacks.BLOCKSTATE_TO_ID_MAP` 再 freeze，否则在 re-freeze 之后写出的区块会用重启后不存在的 id。细节见 [research-t4-registry.md](research-t4-registry.md)。
 
 ## 下一步
 
@@ -104,13 +107,14 @@
 3. **GUI / 文件夹监听完善**：Phase 3/4——忽略/重试持久化、批量/依赖排序、`-PverifyGui` 自动化；见 [gui-mod-watcher.md](features/gui-mod-watcher.md)。
 4. **分析器校准**：50 个 1.21.1 模组，人工标注 tier；算准确率；修 `mekanismgenerators` 类漏判。
 5. **游戏内 `/modreload why <mod>`**：NeoForge 1.21.1，只读。
-6. **T4（ADR-0006）**：先做 managed relaunch（存盘 → 重启 → 回存档），再在 dedicated server 做「一代重建」PoC，最后才评估客户端软重启；ADR-0006 当时**拒绝注入注册表**，但 payload 适配（E1–E3）证明「解冻+重放」有效果 → **T4 开题时先评估「注册表适配」是否成立**，再定是否仍走 relaunch；需要新 ADR-0008，并写明「已有存档不可用」的硬约束。
+6. **T4（ADR-0006；ADR-0008 Proposed）**：产品路径仍是 managed relaunch（存盘 → 重启 → 回存档），再在 dedicated server 做「一代重建」PoC。ADR-0006 的修订要求先评估「注册表适配」：调研见 [research-t4-registry.md](research-t4-registry.md)，结论是**机制可行但只限 add-only、单向提交、存档绑定该 mod，datapack 内容仍是空白**；按 §6 做四个实验（最小方块夹具 → 失败语义 → 客户端 → 数据包）后再决定 ADR-0008 是否接受。硬约束：必须在建连接前完成、BlockState id 必须先清空重建、提交后失败只能标 dirty + 重启。
 7. **B fallback**：只在 A 失败时提供 offline/republish；不是主线。
 
 ## 最近变更
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近几条。
 
+- **2026-11-15（T4 调研开题）**：只读注册表探针 + 受控 re-freeze 实验；发现裸 re-freeze 会移动 BlockState id（stone 1→26685）；写 [research-t4-registry.md](research-t4-registry.md) 与 [ADR-0008](decisions/0008-t4-registry-adaptation-poc.md)（Proposed）。
 - **2026-11-15（架构收口）**：P0-2 引擎解耦（`PlatformHooks`）、P0-1 `Capabilities` 锚点守卫、P0-3 `dev` 源集、P2-8 三个 Java 单测；客户端补上集成服务器命令重放。
 - **2026-11-15（payload E3）**：跨进程 payload 适配打通（专用服 + 独立客户端各自热加）。
 - **2026-11-15（payload E1/E2）**：连接前/连接后注册 payload 都可适配，已建连接会就地补 `PayloadSetup`。
