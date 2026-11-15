@@ -212,8 +212,8 @@ public final class HotAddEngine {
                 }
                 if (!payloads.added().isEmpty()) {
                     ModReloader.LOGGER.info(
-                            "[ModReloader] adapted payloads for {}: {} (only connections opened "
-                                    + "after this add can use them)",
+                            "[ModReloader] adapted payloads for {}: {}; existing connections were "
+                                    + "patched too (requires the runtime on the other side)",
                             container.getModId(), payloads.added());
                 }
             }

@@ -70,8 +70,22 @@ cd ../.. && ./gradlew runClient -PverifyPayload=/tmp/payloadfix/payloadfix-1.0.0
 [PayloadCheck] RESULT: PASS
 ```
 
-限制：只在**单 JVM**（单人）验证过；跨进程的专用服 + 独立客户端仍待验证；
-在**已经连接之后**才热加的 payload 还需要修补连接的 `PayloadSetup`（未实现）。
+已建立连接后再热加（E2）：
+
+```bash
+./gradlew runClient -PverifyPayload=/tmp/payloadfix/payloadfix-1.0.0.jar -PverifyPayloadAfterJoin=true
+```
+
+期望多出这两行：
+
+```text
+[ModReloader] patched payload setup of an existing connection: [payloadfix:ping]
+[PayloadFix] PING RECEIVED on side client
+```
+
+限制：只在**单 JVM**（单人）验证过；跨进程的专用服 + 独立客户端仍待验证
+（两端必须各自适配）。夹具用 `NetworkRegistry.hasChannel` 守卫发包，避免在
+未协商的通道上发送导致连接异常。
 
 ## 反例对照
 

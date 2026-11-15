@@ -31,6 +31,8 @@ public final class PayloadCheck {
     private static boolean failed;
     private static boolean pressedCreate;
     private static Path jar;
+    private static final boolean AFTER_JOIN =
+            Boolean.getBoolean("modreloader.verifyPayloadAfterJoin");
     private static int worldTicks;
 
     private PayloadCheck() {
@@ -49,6 +51,31 @@ public final class PayloadCheck {
         }
         ModReloader.LOGGER.info("[PayloadCheck] started; hot-adding {}", jar);
         NeoForge.EVENT_BUS.addListener(ClientTickEvent.Post.class, event -> tick());
+        startDiagnostics();
+    }
+
+    /** Client ticks stall inside {@code doWorldLoad}, so a separate thread reports state. */
+    private static void startDiagnostics() {
+        Thread thread = new Thread(() -> {
+            while (started) {
+                try {
+                    Thread.sleep(2000L);
+                } catch (InterruptedException e) {
+                    return;
+                }
+                Minecraft mc = Minecraft.getInstance();
+                if (mc == null) {
+                    continue;
+                }
+                ModReloader.LOGGER.info("[PayloadCheck] diag: stage={}, overlay={}, server={}, ready={}",
+                        stage,
+                        mc.getOverlay() == null ? "null" : mc.getOverlay().getClass().getSimpleName(),
+                        mc.getSingleplayerServer() == null ? "null" : "present",
+                        mc.getSingleplayerServer() != null && mc.getSingleplayerServer().isReady());
+            }
+        }, "modreloader-payload-diag");
+        thread.setDaemon(true);
+        thread.start();
     }
 
     private static void tick() {
@@ -78,7 +105,7 @@ public final class PayloadCheck {
                 || ModReloader.WATCHER == null) {
             return;
         }
-        stage = Stage.ADD;
+        stage = AFTER_JOIN ? Stage.OPEN_CREATE : Stage.ADD;
         ticks = 0;
     }
 
@@ -90,11 +117,24 @@ public final class PayloadCheck {
             fail("hot-add failed: " + result.kind() + ": " + result.message());
             return;
         }
+        if (AFTER_JOIN) {
+            stage = Stage.WAIT_PING;
+            ticks = 0;
+            return;
+        }
         stage = Stage.OPEN_CREATE;
         ticks = 0;
     }
 
     private static void openCreate(Minecraft mc) {
+        // The hot-add triggers a resource-pack reload; opening the create-world
+        // screen under its overlay swallows the button press.
+        if (mc.getOverlay() != null) {
+            if (ticks > 20 * 60) {
+                fail("resource reload overlay did not clear");
+            }
+            return;
+        }
         try {
             CreateWorldScreen.openFresh(mc, mc.screen);
             stage = Stage.WAIT_CREATE_SCREEN;
@@ -129,6 +169,14 @@ public final class PayloadCheck {
     }
 
     private static void waitWorld(Minecraft mc) {
+        if (ticks % 100 == 0) {
+            ModReloader.LOGGER.info("[PayloadCheck] waiting: level={}, player={}, overlay={}, "
+                            + "singleplayerServer={}, ready={}",
+                    mc.level != null, mc.player != null,
+                    mc.getOverlay() == null ? "null" : mc.getOverlay().getClass().getSimpleName(),
+                    mc.getSingleplayerServer() == null ? "null" : "present",
+                    mc.getSingleplayerServer() != null && mc.getSingleplayerServer().isReady());
+        }
         if (mc.level == null || mc.player == null) {
             worldTicks = 0;
             if (ticks > 20 * 120) {
@@ -138,6 +186,12 @@ public final class PayloadCheck {
         }
         worldTicks++;
         if (worldTicks < 20) {
+            return;
+        }
+        if (AFTER_JOIN) {
+            ModReloader.LOGGER.info("[PayloadCheck] in world; hot-adding now (after the connection exists)");
+            stage = Stage.ADD;
+            ticks = 0;
             return;
         }
         ModReloader.LOGGER.info("[PayloadCheck] in world; waiting for the payload marker");

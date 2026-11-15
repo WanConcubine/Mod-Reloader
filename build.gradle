@@ -37,6 +37,7 @@ def verifyAddCommand = providers.gradleProperty('verifyAddCommand').orNull
 def verifyMenu = providers.gradleProperty('verifyMenu').orNull
 def verifyDelete = providers.gradleProperty('verifyDelete').orNull
 def verifyPayload = providers.gradleProperty('verifyPayload').orNull
+def verifyPayloadAfterJoin = providers.gradleProperty('verifyPayloadAfterJoin').orNull
 
 neoForge {
     version = project.neo_version
@@ -73,6 +74,9 @@ neoForge {
             }
             if (verifyPayload) {
                 systemProperty 'modreloader.verifyPayload', verifyPayload
+            }
+            if (verifyPayloadAfterJoin) {
+                systemProperty 'modreloader.verifyPayloadAfterJoin', 'true'
             }
             if (verifyDelete) {
                 systemProperty 'modreloader.verifyDelete', 'true'
