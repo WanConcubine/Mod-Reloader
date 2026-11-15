@@ -35,7 +35,7 @@
 | **A0 热加 EasyLAN** | **isLoaded=true, container=true；resource pack `mod/easylan` 选中并重载；keyMappings 34→34；JBR 下复测通过；无异常** | 见 [a0-hot-add.md](features/a0-hot-add.md) |
 | **A1.2 全流水线（主路径）** | **isLoaded/container=true；4 mixins；UUIDUtil/AbstractWidget redefine；ShareToLanScreen/PlayerList 首载织入；接口合并；LAN 屏打开，port=25565；3 个 EditBox；截图** | `runClient -PautoAdd=/tmp/lanmods/lanserverproperties-1.13.2-neoforge.jar -PverifyLan=true`；`run/screenshots/a1-lan-screen.png` |
 | **A1.2 失败回滚** | **post-ModList：ModList/container/module/config/4 classes/资源包恢复，retry add PASS；post-pack：pack 移除 + classes 恢复；构造 listener 不可注销** | `-PverifyRollback=true -PfailAfterModList=true` / `-PfailAfterPack=true`；`RollbackCheck` |
-| **GUI / 监听** | **EasyLAN 检测→加载、坏 jar 失败屏、Ex Nihilo 贵妃级不可加载、LSP 回滚屏、ignore→restore（1→0）、世界内 toast、放入→删除→拷回 均 PASS；jar 内无 key 泄漏** | 见 [gui-mod-watcher.md](features/gui-mod-watcher.md)；截图在 `run/screenshots/` |
+| **GUI / 监听** | **EasyLAN 检测→加载、坏 jar 失败屏、Ex Nihilo 贵妃级实验性加载、LSP 回滚屏、ignore→restore（1→0）、世界内 toast、放入→删除→拷回 均 PASS；jar 内无 key 泄漏** | 见 [gui-mod-watcher.md](features/gui-mod-watcher.md)；截图在 `run/screenshots/` |
 | **JDK / JBR 21** | **编译用 Gradle toolchain Temurin 21；运行用 JBR 21.0.11，`enhancedRedefinition=true`；系统 JDK 17/8** | `java -version`；`runClient` 自动切 JBR |
 | **MixinRuntime 可选** | **无 mr：启动正常、warn + toast、EasyLAN（嫔级）可热加；有 mr：LSP（妃级）`registered=[lsp.mixins.json]`、redefined 2 / eager 2** | 2026-11-15 15:32 / 15:33：移走 / 放回 `run/mods` 的 mr |
 | **世界内 add（成功 / 缺 mr 被拒）** | **成功：返回 1、`isLoaded=true`、RESULT: PASS；缺 mr：返回 0、`isLoaded=false`、错误写明 `MixinRuntime (mr)`、无 rollback 错误** | 2026-11-15 15:38 / 15:39：`-PverifyAddCommand`（后者加 `-PverifyAddCommandExpectFailure`） |
@@ -43,6 +43,7 @@
 | **引擎边界（P0-2）** | **`hotadd` 不再 import `client`/`server`；`PlatformHooks` 由两侧 bootstrap 注册；客户端 add / 服务端热加 / payload E2 全 PASS** | 2026-11-15 20:34 / 21:02 / 21:04 |
 | **反射锚点守卫（P0-1）** | **client：`module_injection=ok modlist_rebuild=ok network_adaptation=ok mixin_hotadd=ok resource_packs=ok`；server：`resource_packs=n/a`；两端 add 仍 PASS** | 2026-11-15 21:06 / 21:08：`[ModReloader] capabilities:` |
 | **Java 单测（P2-8）** | **3 passed**：i18n 键集 + `%s` 占位符一致、每个 `FailureKind` 都有 summary/suggestion、两者成对 | `./gradlew test`；[LangKeysTest.java](../src/test/java/dev/modreloader/LangKeysTest.java) |
+| **真实 dogfood（众星捧月 1.5.0）** | **标题屏 + 进世界 `/modreloader add` 均 PASS：blocks 1060→1140、items 1333→1514、states 26684→26818，stoneId 1→1；payload `set_machine_output` 适配；创造栏 15 个；**datapack（299 配方/77 战利品/标签）未加载** | 2026-11-15 23:14：`runClient -PautoAdd=/Users/kaifengcrt/Projects/Ex-Nihilo-Satellitium/build/libs/exnihilosatellitium-1.21.1-1.5.0.jar`；`-PverifyAddCommand=... -PverifyAddCommandModId=exnihilosatellitium` |
 | **贵妃级客户端路径（实验性）** | **in-world `/modreloader add`：registry commit（stoneId 1→1）、`resource packs ... (new [mod/t4fixture])`、`rebuilt 14 creative tab(s)`、fixture 把物品加进 `minecraft:building_blocks`、AddCmdCheck PASS** | 2026-11-15 22:21：`runClient -PverifyAddCommand=/tmp/t4fixture/t4fixture-1.0.0.jar -PverifyAddCommandModId=t4fixture`；fixture 带 blockstate/model/lang |
 | **贵妃级 GUI 路径（实验性）** | **watcher 检测 → 提示屏显示 `[贵妃]` 与警告「实验性/仅新增/存档依赖/不可回滚」→ 加载 → registry 窗口（blocks 1060→1061、stoneId 1→1）→ `WatchCheck RESULT: PASS`** | 2026-11-15 22:51：`runClient -PverifyWatch=true -PwatchJar=/tmp/t4fixture-ui.jar -PwatchModId=t4fixture`；截图 [t4-registry-prompt.png](features/images/t4-registry-prompt.png) |
 | **贵妃级注册表热加（实验性）** | **blocks 1060→1061、items 1333→1334、states 26684→26685，stoneId 1→1 稳定；放置 `(0,100,0)` 存盘；重启读档 `isT4Block=true`、entryId/stateId 不变，RESULT: PASS** | 2026-11-15 21:48：`runServer -PautoAdd=/tmp/t4fixture/t4fixture-1.0.0.jar -Pt4fixtureSelftest=true` → fixture 放进 `run/mods` → `runServer -Pt4fixtureSelftest=true -Pt4fixtureSelftestRead=true`；见 [t4-registry-hotadd.md](features/t4-registry-hotadd.md) |
@@ -60,6 +61,7 @@
 - **A1.0 / A1.1 / A1.2**：probe → spike → 全流水线；`lsp.mixins.json` 运行时注册、JBR redefine 已加载 target、首载织入未加载 target、`postInitialise` 修复接口合并、LAN 屏控件可用。失败回滚覆盖 post-ModList / post-pack（module / ModList / config / 类的原始字节 / 资源包），post-ModList 重试成功。详见 [a1-mixin-hotadd.md](features/a1-mixin-hotadd.md)。
 - **监听 / 预检 / GUI**：后台轮询 `run/mods` + `run/modreloader/inbox`；稳定检测 + 基线；`ModInspector` 预测嫔–皇后级；主菜单弹窗、世界中只 toast；失败打开 `LoadFailureScreen`；配置与忽略/失败记录独立 JSON；i18n `en_us`/`zh_cn`（各 132 key，键集由单测核对）。详见 [gui-mod-watcher.md](features/gui-mod-watcher.md)。
 - **双端化**：dedicated server 加载、热加嫔级夹具、命令重放（93→94）、tick 事件到达；payload 适配 E1/E2/E3（含跨进程）。机制与证据见 [server-hotadd.md](features/server-hotadd.md)；边界与副作用见已知问题 13/14。
+- **真实 dogfood（众星捧月 / Ex Nihilo 1.5.0）**：贵妃级注册层热加通过（80 方块 / 181 物品 / 134 个 BlockState；stoneId 稳定；创造栏 15 个；payload `set_machine_output` 适配），标题屏与进世界 `/modreloader add` 都 PASS。**但 datapack（299 配方、77 战利品表、标签、机器数据）不会热加载**，所以「能注册」不等于「能完整游玩」；放置/破坏/合成未实测。
 - **贵妃级注册表热加（实验性）**：`hotadd/RegistryStage` 在构造前 `unfreezeData()`、构造后按 `getRegistrationOrder()` 逐注册表按容器重放 `RegisterEvent`、清空 BlockState id 映射再 `freezeData()`；fixture 端到端 PASS（见表尺）。限制：add-only、不可回滚、datapack 与多人登录同步未做；客户端资源包/创造栏已在单人验证；UI 已放行（警告后直接提交）。见 [t4-registry-hotadd.md](features/t4-registry-hotadd.md)。
 - **贵妃级调研（只读探针 + 受控 re-freeze）**：注册表与同步机制见 [research-t4-registry.md](research-t4-registry.md)；结论是「机制可行，但只能 add-only、单向提交、存档绑定该 mod，且 datapack 内容仍是空白」，裸 re-freeze 会移动 BlockState id（必须先清空重建）。[ADR-0008](decisions/0008-t4-registry-adaptation-poc.md) 为 Proposed。
 - **架构收口（2026-11-15）**：
@@ -100,7 +102,7 @@
 15. **客户端重放 `RegisterCommandsEvent` 的副作用**（2026-11-15）：补上单人游戏命令注册的同时，集成服务器每次热加都会让**所有**已加载模组的命令监听器再跑一遍（与 14 同源）。热加发生在标题屏（无集成服务器）时不重放。
 16. **Capabilities 只查名字，不查行为**：字段/方法/构造器存在且签名对上，不等于语义没变。它的价值是「框架漂移时立刻给人话失败而不是静默跳过」，不能代替游戏内 harness；锚点清单自己也会写错（第一版把 `createPackForMod(IModFileInfo)` 写成 `ModFileInfo`，被 harness 抓到）。
 17. **贵妃级的第一个坑：裸 unfreeze/freeze 会移动 BlockState id**（2026-11-15 实测）：不注册任何东西，`GameData.unfreezeData()` → `freezeData()` 之后 `stone` 的 state id 从 1 变成 26685。原因是 `BlockCallbacks.onBake` 用 `IdMapper.add()` 重建映射，而 `add()` 无条件分配新 id（旧 id 槽位保留）。适配路线必须先清空 `BlockCallbacks.BLOCKSTATE_TO_ID_MAP` 再 freeze，否则在 re-freeze 之后写出的区块会用重启后不存在的 id。细节见 [research-t4-registry.md](research-t4-registry.md)。
-18. **贵妃级目前只到 add-only**（2026-11-15）：引擎能热加方块/物品并保证存盘/重启可读，UI 已放行（带警告），单人客户端的资源包与创造栏已验证；但**多人登录同步**（连接后热加无法同步给已在线客户端）、datapack 内容、实体类 post-register 事件未做，提交后不可回滚。见 [features/t4-registry-hotadd.md](features/t4-registry-hotadd.md) §5。
+18. **贵妃级目前只到 add-only**（2026-11-15）：引擎能热加方块/物品并保证存盘/重启可读，UI 已放行（带警告），单人客户端的资源包与创造栏已验证，真实 dogfood 众星捧月也能注册；但**datapack 内容不加载**（配方/战利品/标签/机器数据）、**多人登录同步**未做、实体类 post-register 事件未重放、提交后不可回滚。见 [features/t4-registry-hotadd.md](features/t4-registry-hotadd.md) §7。
 
 ## 下一步
 
@@ -112,13 +114,14 @@
 3. **GUI / 文件夹监听完善**：Phase 3/4——忽略/重试持久化、批量/依赖排序、`-PverifyGui` 自动化；见 [gui-mod-watcher.md](features/gui-mod-watcher.md)。
 4. **分析器校准**：50 个 1.21.1 模组，人工标注 tier；算准确率；修 `mekanismgenerators` 类漏判。
 5. **游戏内 `/modreload why <mod>`**：NeoForge 1.21.1，只读。
-6. **贵妃级（ADR-0008 已接受）**：add-only 的注册表热加已跑通（服务端闭环 + GUI + 单人客户端资源/创造栏，见 [t4-registry-hotadd.md](features/t4-registry-hotadd.md)）；后续按顺序扩大：① 多人登录前热加与跨进程同步；② 失败语义（dirty 暴露）；③ datapack 内容评估。managed relaunch（ADR-0006）仍是不支持内容的兜底。硬约束：建连接前完成、BlockState id 先清空重建、提交后不可回滚。
+6. **贵妃级（ADR-0008 已接受）**：add-only 的注册表热加已跑通（服务端闭环 + GUI + 单人客户端资源/创造栏 + 真实 dogfood 注册层，见 [t4-registry-hotadd.md](features/t4-registry-hotadd.md)）；**datapack 已成为明确的硬阻塞**（众星捧月 299 配方/77 战利品/标签不加载）。后续按顺序：① datapack 内容能否在运行中重建；② 多人登录前热加与跨进程同步；③ 失败语义（dirty 暴露）。managed relaunch（ADR-0006）仍是不支持内容的兜底。硬约束：建连接前完成、BlockState id 先清空重建、提交后不可回滚。
 7. **B fallback**：只在 A 失败时提供 offline/republish；不是主线。
 
 ## 最近变更
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近几条。
 
+- **2026-11-15（众星捧月贵妃级热加）**：真实 dogfood 注册层通过（80 方块/181 物品），但 datapack 配方/战利品/标签未加载；见 [t4-registry-hotadd.md](features/t4-registry-hotadd.md) §5。
 - **2026-11-15（贵妃级客户端路径）**：in-world 热加 fixture 后资源包 `mod/t4fixture` 选中、创造栏重建 14 个、物品进 building_blocks，AddCmdCheck PASS。
 - **2026-11-15（贵妃级 UI 放行）**：贵妃级候选在提示屏显示实验性警告，Load 可用；GUI 路径热加 fixture 通过（`WatchCheck RESULT: PASS`）。
 - **2026-11-15（贵妃级注册表热加跑通）**：`RegistryStage` + fixture 端到端验证：服务端热加方块/物品、放置存盘、重启读档 PASS，BlockState id 稳定。见 [t4-registry-hotadd.md](features/t4-registry-hotadd.md)。

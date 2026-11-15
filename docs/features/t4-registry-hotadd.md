@@ -85,7 +85,29 @@ Load 可用；点击后走同一个引擎，`WatchCheck RESULT: PASS`。截图�
 ./gradlew runClient -PverifyWatch=true -PwatchJar=/tmp/t4fixture-ui.jar -PwatchModId=t4fixture
 ```
 
-## 5. 复现
+## 5. 真实模组演练（无中生有：众星捧月 1.5.0，2026-11-15 23:14）
+
+真实 dogfood 模组 `exnihilosatellitium-1.21.1-1.5.0.jar`（80 方块 / 181 物品 / 自定义机器数据，无 mixin）：
+
+```text
+[ModReloader] registry content detected: true
+[ModReloader] registry window open: blocks=1060 items=1333 states=26684 stoneId=1
+[ModReloader] registry commit: 89 registries replayed; blocks 1060 -> 1140, items 1333 -> 1514,
+              states 26684 -> 26818 (cleared 26684 entries), stoneId 1 -> 1 (stable)
+[ModReloader] adapted payloads for exnihilosatellitium: [exnihilosatellitium:set_machine_output]
+[ModReloader] rebuilt 15 creative tab(s) after registry content
+[ModReloader] resource packs selected after add: [... mod/exnihilosatellitium] (new [mod/exnihilosatellitium])
+[AddCmdCheck] ModList exnihilosatellitium: isLoaded=true, container=true
+[AddCmdCheck] RESULT: PASS
+```
+
+标题屏 `-PautoAdd` 与进世界 `/modreloader add` 都通过。
+
+**但这不等于「能玩」**：它的 299 个配方、77 个战利品表、标签和自定义机器数据都是 **datapack 内容**，
+热加后不会进入当前数据包列表——方块能放，但合成/掉落/挖掘等级可能不对；放置/破坏/合成也没有实测。
+完整生效仍需把 jar 放进 `mods/` 重启。存档一旦使用这些内容，就绑定该 mod。
+
+## 6. 复现
 
 ```bash
 # 1) 构建夹具（需要先 ./gradlew build 生成 build/moddev/*LegacyClasspath.txt）
@@ -100,7 +122,7 @@ cp /tmp/t4fixture/t4fixture-1.0.0.jar run/mods/
 rm run/mods/t4fixture-1.0.0.jar
 ```
 
-## 6. 限制（按当前实现）
+## 7. 限制（按当前实现）
 
 - **只有服务端验证**：客户端资源包（模型/blockstates/语言）、创造栏重建、登录同步还没接。
 - **add-only**：没有删除/更新；删掉 mod 会让存档里的条目变成 missing entries（NeoForge 提示并丢弃）。
@@ -109,10 +131,11 @@ rm run/mods/t4fixture-1.0.0.jar
 - **post-register 事件未重放**：`BlockEntityTypeAddBlocksEvent` / spawn placements / attribute modifications
   还没有接；方块 + 物品之外的实体类内容暂时不要指望。
 - **UI 已放行，但只有警告、没有确认框**：Load 一次点击即提交，且不可回滚。
+- **real mod 的 datapack 内容仍是空白**：众星捧月演练证明注册层能过，但配方/战利品/标签/机器数据不在当前数据包里（见 §5）。
 - **多人登录同步未验证**：连接建立后再热加，已在线客户端拿不到新的 registry snapshot（登录配置阶段是唯一同步点）；两端都必须在连接前热加。
 - **提交后失败不可回滚**：运行时被标记 dirty，只能重启。
 
-## 7. 下一步
+## 8. 下一步
 
 1. 多人：两端在连接前热加 → 登录快照包含新条目；连接后热加则明确拒绝/提示。需要一个跨进程 harness。
 2. 失败语义：construct 抛异常时确认 abort 能恢复 canonical id，并把 dirty 状态暴露给用户。
