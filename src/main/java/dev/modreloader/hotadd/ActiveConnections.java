@@ -1,8 +1,6 @@
 package dev.modreloader.hotadd;
 
 import dev.modreloader.ModReloader;
-import dev.modreloader.Platform;
-import dev.modreloader.client.ClientConnections;
 import net.minecraft.network.Connection;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -37,12 +35,10 @@ public final class ActiveConnections {
         } catch (Throwable t) {
             ModReloader.LOGGER.warn("[ModReloader] cannot list server connections", t);
         }
-        if (Platform.isClient()) {
-            try {
-                connections.addAll(ClientConnections.current());
-            } catch (Throwable t) {
-                ModReloader.LOGGER.warn("[ModReloader] cannot list the client connection", t);
-            }
+        try {
+            connections.addAll(PlatformHooks.get().extraConnections());
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn("[ModReloader] cannot list the side's extra connections", t);
         }
         return connections;
     }

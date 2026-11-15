@@ -33,7 +33,7 @@ public final class FailureAnalyzer {
     public static Report analyze(HotAddEngine.Result result, ModInspection inspection) {
         String name = inspection == null ? "mod" : inspection.fileName();
         Component title = Component.translatable("modreloader.failure.title", name);
-        String key = failureKey(result);
+        String key = FailureKeys.of(result);
         Component summary;
         Component suggestion;
         if (result.rollbackPartial()) {
@@ -76,30 +76,6 @@ public final class FailureAnalyzer {
                 Path.of("logs/latest.log").toAbsolutePath()));
 
         return new Report(title, summary, suggestion, String.join("\n", lines));
-    }
-
-    private static String failureKey(HotAddEngine.Result result) {
-        return switch (result.rollbackPartial() ? HotAddEngine.FailureKind.ROLLBACK_PARTIAL : result.kind()) {
-            case MISSING_FILE -> "missing_file";
-            case NOT_A_MOD -> "not_a_mod";
-            case INVALID_METADATA -> "invalid_metadata";
-            case ALREADY_LOADED -> "already_loaded";
-            case MISSING_DEPENDENCY -> "missing_dependency";
-            case JBR_REQUIRED -> "jbr_required";
-            case MIXIN_RUNTIME -> "mixin_runtime";
-            case NETWORK_PAYLOAD -> "network_payload";
-            case UNSUPPORTED_TIER -> "unsupported_tier";
-            case MIXIN_CONFIG -> "mixin_config";
-            case MIXIN_TARGET -> "mixin_target";
-            case REDEFINE -> "redefine";
-            case MODULE -> "module";
-            case MODLIST -> "modlist";
-            case CONSTRUCT -> "construct";
-            case EVENT -> "event";
-            case RESOURCE_PACK -> "resource_pack";
-            case ROLLBACK_PARTIAL -> "rollback_partial";
-            default -> "unknown";
-        };
     }
 
     public static Report preflight(ModInspection inspection) {

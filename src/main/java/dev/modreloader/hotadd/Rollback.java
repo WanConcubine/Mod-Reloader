@@ -14,9 +14,9 @@ import java.util.List;
  * On failure the actions run in reverse order; every failure is logged and
  * collected instead of aborting the remaining undo steps.
  */
-final class Rollback {
+public final class Rollback {
     @FunctionalInterface
-    interface Action {
+    public interface Action {
         void run() throws Throwable;
     }
 
@@ -25,7 +25,7 @@ final class Rollback {
 
     private final Deque<Step> steps = new ArrayDeque<>();
 
-    void add(String name, Action action) {
+    public void add(String name, Action action) {
         steps.push(new Step(name, action));
     }
 

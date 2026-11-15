@@ -2,13 +2,8 @@ package dev.modreloader.hotadd;
 
 import cpw.mods.jarhandling.JarContents;
 import dev.modreloader.ModReloader;
-import dev.modreloader.Platform;
+import dev.modreloader.capability.Capabilities;
 import dev.modreloader.inspect.MixinRuntimeSupport;
-import dev.modreloader.server.ServerCommands;
-import net.minecraft.client.Minecraft;
-import net.minecraft.server.packs.PackType;
-import net.minecraft.server.packs.repository.Pack;
-import net.neoforged.neoforge.resource.ResourcePackLoader;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.loading.moddiscovery.ModFile;
@@ -25,10 +20,8 @@ import net.neoforged.neoforgespi.locating.ModFileDiscoveryAttributes;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 /**
@@ -48,7 +41,7 @@ public final class HotAddEngine {
 
     public enum FailureKind {
         NONE, MISSING_FILE, NOT_A_MOD, INVALID_METADATA, ALREADY_LOADED, MISSING_DEPENDENCY, JBR_REQUIRED,
-        MIXIN_RUNTIME, NETWORK_PAYLOAD, UNSUPPORTED_TIER, MIXIN_CONFIG, MIXIN_TARGET, REDEFINE, MODULE, MODLIST,
+        MIXIN_RUNTIME, NETWORK_PAYLOAD, UNSUPPORTED_TIER, CAPABILITY, MIXIN_CONFIG, MIXIN_TARGET, REDEFINE, MODULE, MODLIST,
         CONSTRUCT, EVENT, RESOURCE_PACK, ROLLBACK_PARTIAL, UNKNOWN
     }
 
@@ -138,6 +131,21 @@ public final class HotAddEngine {
                     ids, jar.getFileName(),
                     mixinConfigs.stream().map(ModFileParser.MixinConfig::config).toList());
 
+            // Framework anchors first: if NeoForge drifted under us, say so
+            // before anything is mutated instead of crashing halfway through.
+            Capabilities.Result moduleCapability =
+                    Capabilities.get(Capabilities.Capability.MODULE_INJECTION);
+            if (!moduleCapability.available()) {
+                return fail(rollback, Stage.VALIDATE, FailureKind.CAPABILITY,
+                        moduleCapability.describe());
+            }
+            Capabilities.Result modListCapability =
+                    Capabilities.get(Capabilities.Capability.MODLIST_REBUILD);
+            if (!modListCapability.available()) {
+                return fail(rollback, Stage.VALIDATE, FailureKind.CAPABILITY,
+                        modListCapability.describe());
+            }
+
             // 1. module: the new mod's classes must be resolvable before Mixin
             //    reads its config or the mod constructor runs.
             stage = Stage.MODULE;
@@ -155,6 +163,12 @@ public final class HotAddEngine {
                     return fail(rollback, Stage.MIXIN, FailureKind.MIXIN_RUNTIME,
                             ids + " declares mixins but " + MixinRuntimeSupport.name()
                                     + " is not installed");
+                }
+                Capabilities.Result mixinCapability =
+                        Capabilities.get(Capabilities.Capability.MIXIN_HOTADD);
+                if (!mixinCapability.available()) {
+                    return fail(rollback, Stage.MIXIN, FailureKind.CAPABILITY,
+                            mixinCapability.describe());
                 }
                 List<String> mixinLog = new ArrayList<>();
                 String mixinError = MixinStage.register(mixinConfigs, ids, primaryId, rollback,
@@ -189,16 +203,15 @@ public final class HotAddEngine {
                                     + "unregistered; only ModList/module/mixin state is restored");
                 }
             });
-            int keysBefore = Platform.isClient()
-                    ? Minecraft.getInstance().options.keyMappings.length : -1;
+            PlatformHooks hooks = PlatformHooks.get();
+            int keysBefore = hooks.keyMappingCount();
             List<String> loaded = new ArrayList<>();
             for (ModContainer container : containers) {
                 FmlEvents.constructAndInit(container);
                 constructed[0] = true;
                 loaded.add(container.getModId());
             }
-            int keysAfter = Platform.isClient()
-                    ? Minecraft.getInstance().options.keyMappings.length : -1;
+            int keysAfter = hooks.keyMappingCount();
 
             // 4a. payloads: NeoForge closes its network registry after start-up, so
             //     reopen it for this mod only. Connections that already exist keep
@@ -219,19 +232,22 @@ public final class HotAddEngine {
             }
 
             // 4b. commands: the server fired RegisterCommandsEvent long ago, so a
-            //     hot-added mod's listener never ran. Re-fire it now.
-            if (ServerCommands.available()) {
-                ServerCommands.replay();
-            }
+            //     hot-added mod's listener never ran. Re-fire it now. On a client
+            //     this targets the integrated server (and is a no-op at the title
+            //     screen); the side decides, the engine does not.
+            hooks.replayCommands();
 
             // 5. resource packs, after the mod had a chance to register content.
             //    A dedicated server has no resource pack repository.
             stage = Stage.PACK;
-            if (Platform.isClient()) {
-                injectResourcePack(modFile, newFileInfo, ids, rollback);
+            Capabilities.Result packCapability =
+                    Capabilities.get(Capabilities.Capability.RESOURCE_PACKS);
+            if (packCapability.available()) {
+                hooks.injectResourcePack(modFile, newFileInfo, ids, rollback);
             } else {
-                ModReloader.LOGGER.info(
-                        "[ModReloader] server side: skipping resource pack injection for {}", ids);
+                // Resources are cosmetic; never fail an otherwise good add for this.
+                ModReloader.LOGGER.warn("[ModReloader] resource pack injection skipped: {}",
+                        packCapability.describe());
             }
             if (Boolean.getBoolean("modreloader.failAfterPack")) {
                 return fail(rollback, Stage.PACK, FailureKind.UNKNOWN, "injected failure after resource pack");
@@ -286,75 +302,5 @@ public final class HotAddEngine {
         }
         ModReloader.LOGGER.error("[ModReloader] {}", message);
         return new Result(false, message, stage, kind, List.copyOf(errors));
-    }
-
-    private static void injectResourcePack(ModFile modFile, ModFileInfo fileInfo, Set<String> modIds,
-                                           Rollback rollback) {
-        try {
-            Minecraft mc = Minecraft.getInstance();
-            Map<IModFile, Object> packs = UnsafeAccess.getStatic(ResourcePackLoader.class, "modResourcePacks");
-            if (packs == null) {
-                packs = new HashMap<>();
-                UnsafeAccess.setStatic(ResourcePackLoader.class, "modResourcePacks", packs);
-            }
-            var repository = mc.getResourcePackRepository();
-            Map<IModFile, Object> packsBefore = new HashMap<>(packs);
-            List<String> selectedBefore = repository.getSelectedPacks().stream()
-                    .map(Pack::getId)
-                    .toList();
-            rollback.add("resource packs", () -> {
-                Map<IModFile, Object> current = UnsafeAccess.getStatic(
-                        ResourcePackLoader.class, "modResourcePacks");
-                if (current == null) {
-                    current = new HashMap<>();
-                    UnsafeAccess.setStatic(ResourcePackLoader.class, "modResourcePacks", current);
-                }
-                // Restore in place: pack finders hold a reference to this map.
-                current.clear();
-                current.putAll(packsBefore);
-                List<String> selected = new ArrayList<>(selectedBefore);
-                selected.removeIf(id -> modIds.stream().anyMatch(modId ->
-                        id.equals("mod/" + modId) || id.startsWith("mod/" + modId + "/")));
-                repository.setSelected(selected);
-                repository.reload();
-                ModReloader.LOGGER.info("[ModReloader] rollback: resource packs selected={}",
-                        repository.getSelectedPacks().stream().map(Pack::getId).toList());
-                mc.reloadResourcePacks();
-            });
-            packs.put(modFile, ResourcePackLoader.createPackForMod(fileInfo));
-
-            ResourcePackLoader.populatePackRepository(repository, PackType.CLIENT_RESOURCES, true);
-            repository.reload();
-
-            // Mod packs are not "required", so PackRepository does not select
-            // them automatically. Select the packs that belong to the new mods
-            // and reload; reloadResourcePacks() also refreshes the language
-            // manager, so the mod's translations are usable immediately.
-            var added = repository.getAvailablePacks().stream()
-                    .map(Pack::getId)
-                    .filter(id -> modIds.stream().anyMatch(modId ->
-                            id.equals("mod/" + modId) || id.startsWith("mod/" + modId + "/")))
-                    .toList();
-            if (!added.isEmpty()) {
-                var selected = new ArrayList<String>(repository.getSelectedIds());
-                for (String id : added) {
-                    if (!selected.contains(id)) {
-                        selected.add(0, id);
-                    }
-                }
-                repository.setSelected(selected);
-                repository.reload();
-                ModReloader.LOGGER.info("[ModReloader] resource packs selected after add: {} (new {})",
-                        repository.getSelectedPacks().stream().map(Pack::getId).toList(), added);
-                mc.reloadResourcePacks().thenRun(() -> ModReloader.LOGGER.info(
-                        "[ModReloader] resource reload finished after adding {}", added));
-            } else {
-                ModReloader.LOGGER.info("[ModReloader] no resource pack found for {}", modIds);
-            }
-            var ids = repository.getAvailablePacks().stream().map(Pack::getId).toList();
-            ModReloader.LOGGER.info("[ModReloader] resource packs after add: {}", ids);
-        } catch (Throwable t) {
-            ModReloader.LOGGER.warn("[ModReloader] resource pack injection failed", t);
-        }
     }
 }

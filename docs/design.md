@@ -112,6 +112,23 @@ mods/*.jar
 
 配置在独立 JSON（`config/modreloader/watcher.json`；ignored/failed 指纹）。永不自动加载；T4/T5 只提示重启。UI 文本走 `en_us` / `zh_cn` 语言文件（`Component.translatable`）；Phase 3/4 再补批量/依赖排序和更多自动化。
 
+### 双端化与引擎边界（2026-11-15）
+
+```
+[ModReloader]（两端都加载）
+   ├── client/ClientBootstrap → ClientPlatformHooks · UI/命令/toast/资源包/tick → ServerCommands.install()
+   └── server/ServerBootstrap → ServerPlatformHooks · 控制台命令 · ServerStartedEvent
+                                    │
+                     hotadd/HotAddEngine（不 import client/server）
+                                    │
+                 PlatformHooks：keyMappingCount / acceptClientLifecycle /
+                                injectResourcePack / replayCommands / extraConnections
+```
+
+- **依赖方向单向**：引擎不认识两端，端把实现注册进来；`ActiveConnections` 只枚举两端共有的服务端玩家连接，客户端连接由 hook 追加。
+- **Capabilities 先声明后使用**：启动时只读探测 module / modlist / network / mixin / resource pack 的反射锚点，缺失时对应阶段 fail-fast，资源包只 warn + 跳过。
+- **dev 不入发布包**：`src/dev/java` 是独立 source set；主源集只按名字反射 `DevEntry.install()`，所以生产 jar 里没有 harness，也不会被顺手调用。
+
 ### 未来（v1，可写）
 
 ```
@@ -142,6 +159,7 @@ mods/*.jar
 4. **Tier 必须解释**：不能只给“T4”，要给“因为 `DeferredRegister#register` / 9 个 content 类 / 33 个 static”。
 5. **版本/加载器/许可证变更需所有者同意**。
 6. **预测 ≠ 验证**：文档和 UI 必须区分“静态预测”和“游戏内验证”。
+7. **能力先声明后使用**：反射锚点缺失时提前失败并说人话，不静默跳过；锚点清单本身也要靠游戏内 harness 回归。
 
 ## 6. 技术约束（为什么不能更简单）
 

@@ -57,6 +57,8 @@
   "modreloader.failure.missing_dependency.suggestion": "Add the dependency to mods and restart, or load it first.",
   "modreloader.failure.jbr_required.summary": "T3 layout changes require JBR enhanced redefinition.",
   "modreloader.failure.jbr_required.suggestion": "Use JBR 21 with -XX:+AllowEnhancedClassRedefinition, or wait for sidecar.",
+  "modreloader.failure.capability.summary": "This runtime cannot hot-add: an internal framework anchor it needs is missing.",
+  "modreloader.failure.capability.suggestion": "Check the capabilities line in latest.log; this game version probably does not match this build. Nothing was changed.",
   "modreloader.failure.mixin_runtime.summary": "This mod declares mixins, which need MixinRuntime (modId: mr); it is not installed.",
   "modreloader.failure.mixin_runtime.suggestion": "Install MixinRuntime (modId: mr, version >= 1.0.2) into mods/ and restart, then retry.",
   "modreloader.failure.unsupported_tier.summary": "This mod needs a restart/soft restart; A1.2 does not hot-add it.",

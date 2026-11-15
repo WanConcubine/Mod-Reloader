@@ -14,14 +14,56 @@ java {
     toolchain.languageVersion = JavaLanguageVersion.of(21)
 }
 
+sourceSets {
+    // Dev-only verification harnesses (src/dev/java). They are compiled against
+    // the mod but are not part of the production jar: the jar and the release
+    // mod file come from the main source set.
+    dev {
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
+    }
+}
+
 repositories {
     maven { name = 'BMCLAPI'; url = uri('https://bmclapi2.bangbang93.com/maven/') }
     mavenCentral()
+
+    // Test-only artifacts come from Maven Central exclusively. NeoForge's maven
+    // is unreachable on some networks (DNS lands on an unrelated host and every
+    // lookup stalls); without this, resolving JUnit first walks that repository
+    // and the build hangs for minutes. Exclusive content keeps the game
+    // dependency graph untouched.
+    exclusiveContent {
+        forRepository {
+            maven { name = 'MavenCentralForTests'; url = uri('https://repo1.maven.org/maven2') }
+        }
+        filter {
+            includeGroupByRegex 'org\\.junit.*'
+            includeGroupByRegex 'org\\.opentest4j.*'
+            includeGroupByRegex 'org\\.apiguardian.*'
+        }
+    }
 }
 
 dependencies {
     // A1.2 dev dependency; the runtime jar is placed in run/mods for dev.
     compileOnly files('libs/MixinRuntime-1.0.2-mc1.21.jar')
+
+    // Plain JUnit tests, no game: language-file parity and failure-key coverage.
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+}
+
+// `check` also compiles the dev harnesses (not shipped), so a change that only
+// breaks src/dev still fails the build.
+tasks.named('check') {
+    dependsOn 'compileDevJava'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+    }
 }
 
 def autoAddJar = providers.gradleProperty('autoAdd').orNull
@@ -126,6 +168,8 @@ neoForge {
     mods {
         "${mod_id}" {
             sourceSet(sourceSets.main)
+            // Dev runs load the harnesses with the mod; release jars do not.
+            sourceSet(sourceSets.dev)
         }
     }
 }

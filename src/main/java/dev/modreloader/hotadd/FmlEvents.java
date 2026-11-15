@@ -1,15 +1,11 @@
 package dev.modreloader.hotadd;
 
-import dev.modreloader.Platform;
-import net.minecraft.client.Minecraft;
 import net.neoforged.fml.DeferredWorkQueue;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.ModLoadingContext;
-import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.fml.event.lifecycle.FMLConstructModEvent;
 import net.neoforged.fml.event.lifecycle.FMLLoadCompleteEvent;
-import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodType;
@@ -44,14 +40,9 @@ public final class FmlEvents {
         container.acceptEvent(new FMLCommonSetupEvent(container, commonQueue));
         commonQueue.runTasks();
 
-        // Client-only events: a dedicated server must not replay these.
-        if (Platform.isClient()) {
-            DeferredWorkQueue clientQueue = queue(container, "client");
-            container.acceptEvent(new FMLClientSetupEvent(container, clientQueue));
-            clientQueue.runTasks();
-
-            container.acceptEvent(new RegisterKeyMappingsEvent(Minecraft.getInstance().options));
-        }
+        // Client-only events: a dedicated server must not replay these, so the
+        // side hook decides instead of the engine.
+        PlatformHooks.get().acceptClientLifecycle(container);
 
         DeferredWorkQueue completeQueue = queue(container, "complete");
         container.acceptEvent(new FMLLoadCompleteEvent(container, completeQueue));

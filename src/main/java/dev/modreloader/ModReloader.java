@@ -1,6 +1,7 @@
 package dev.modreloader;
 
 import com.mojang.logging.LogUtils;
+import dev.modreloader.capability.Capabilities;
 import dev.modreloader.client.ClientBootstrap;
 import dev.modreloader.inspect.MixinRuntimeSupport;
 import dev.modreloader.server.ServerBootstrap;
@@ -42,6 +43,7 @@ public final class ModReloader {
         } else {
             ServerBootstrap.install();
         }
+        Capabilities.probe();
         logRuntime();
     }
 

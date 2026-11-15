@@ -2,17 +2,10 @@ package dev.modreloader.client;
 
 import dev.modreloader.ModReloader;
 import dev.modreloader.command.ReloaderCommands;
-import dev.modreloader.dev.AddCommandCheck;
-import dev.modreloader.dev.DeleteCheck;
-import dev.modreloader.dev.LanScreenCheck;
-import dev.modreloader.dev.MenuEntryCheck;
-import dev.modreloader.dev.PayloadCheck;
-import dev.modreloader.dev.RemotePayloadCheck;
-import dev.modreloader.dev.RollbackCheck;
-import dev.modreloader.dev.WatchCheck;
-import dev.modreloader.hotadd.HotAddEngine;
 import dev.modreloader.hotadd.MixinProbe;
+import dev.modreloader.hotadd.PlatformHooks;
 import dev.modreloader.inspect.MixinRuntimeSupport;
+import dev.modreloader.server.ServerCommands;
 import dev.modreloader.ui.ModReloaderScreen;
 import dev.modreloader.ui.ModReloaderToasts;
 import dev.modreloader.watch.ModsFolderWatcher;
@@ -33,8 +26,6 @@ public final class ClientBootstrap {
     private static boolean installed;
     private static int watcherTicks;
     private static boolean watcherStarted;
-    private static int autoAddTicks;
-    private static boolean autoAddDone;
     private static int probeTicks;
     private static boolean probeDone;
 
@@ -46,11 +37,15 @@ public final class ClientBootstrap {
             return;
         }
         installed = true;
+        PlatformHooks.install(new ClientPlatformHooks());
+        // The integrated server fires RegisterCommandsEvent too, so capture it on
+        // a client as well; otherwise a hot-added mod's commands never exist in
+        // single-player (they only ever worked on a dedicated server).
+        ServerCommands.install();
         NeoForge.EVENT_BUS.addListener(ReloaderCommands::registerClient);
         MenuEntry.install();
         NeoForge.EVENT_BUS.addListener(ClientTickEvent.Post.class, event -> tick());
-        installAutoAdd();
-        installDevChecks();
+        installDevEntry();
     }
 
     private static void tick() {
@@ -74,62 +69,19 @@ public final class ClientBootstrap {
         }
     }
 
-    private static void installAutoAdd() {
-        String autoAdd = System.getProperty("modreloader.autoAdd", "").trim();
-        boolean verifyLan = Boolean.getBoolean("modreloader.verifyLan");
-        boolean verifyRollback = Boolean.getBoolean("modreloader.verifyRollback");
-        if (autoAdd.isEmpty()) {
-            if (verifyLan || verifyRollback) {
-                ModReloader.LOGGER.warn(
-                        "[ModReloader] verifyLan/verifyRollback need autoAdd; not starting the check");
-            }
-            return;
-        }
-        Path jar = Path.of(autoAdd);
-        NeoForge.EVENT_BUS.addListener(ClientTickEvent.Post.class, event -> {
-            if (autoAddDone) {
-                return;
-            }
-            if (++autoAddTicks < 100) {
-                return;
-            }
-            autoAddDone = true;
-            HotAddEngine.Result result = HotAddEngine.add(jar);
-            ModReloader.LOGGER.info("[ModReloader] autoAdd result: {}", result.message());
-            if (verifyRollback) {
-                RollbackCheck.start(jar, result);
-            } else if (verifyLan && result.ok()) {
-                LanScreenCheck.start();
-            }
-        });
-    }
-
-    private static void installDevChecks() {
-        if (Boolean.getBoolean("modreloader.verifyMenu")) {
-            MenuEntryCheck.start();
-        }
-        if (Boolean.getBoolean("modreloader.verifyDelete")) {
-            DeleteCheck.start();
-        }
-        String verifyPayloadRemote = System.getProperty("modreloader.verifyPayloadRemote", "").trim();
-        if (!verifyPayloadRemote.isEmpty()) {
-            RemotePayloadCheck.start(Path.of(verifyPayloadRemote));
-        }
-        String verifyPayload = System.getProperty("modreloader.verifyPayload", "").trim();
-        if (!verifyPayload.isEmpty()) {
-            PayloadCheck.start(Path.of(verifyPayload));
-        }
-        String verifyAddCommand = System.getProperty("modreloader.verifyAddCommand", "").trim();
-        if (!verifyAddCommand.isEmpty()) {
-            AddCommandCheck.start(Path.of(verifyAddCommand));
-        }
-        String watchJar = System.getProperty("modreloader.watchJar", "").trim();
-        if (Boolean.getBoolean("modreloader.verifyWatch")) {
-            if (watchJar.isEmpty()) {
-                ModReloader.LOGGER.warn("[ModReloader] verifyWatch needs watchJar; not starting");
-            } else {
-                WatchCheck.start(Path.of(watchJar));
-            }
+    /**
+     * Dev harnesses live in the {@code dev} source set, which is not part of the
+     * production jar. Reached by name so the main source set cannot depend on it.
+     */
+    private static void installDevEntry() {
+        try {
+            Class.forName("dev.modreloader.dev.DevEntry")
+                    .getMethod("install")
+                    .invoke(null);
+        } catch (ClassNotFoundException notShipped) {
+            ModReloader.LOGGER.debug("[ModReloader] dev harnesses are not on the classpath");
+        } catch (Throwable t) {
+            ModReloader.LOGGER.error("[ModReloader] cannot install dev harnesses", t);
         }
     }
 

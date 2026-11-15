@@ -38,7 +38,11 @@ python3 tools/analyzer/run.py scan ~/Projects/Ex-Nihilo-Satellitium/build/libs/e
 ### Mod Reloader（NeoForge 1.21.1 / Java 21）
 
 ```bash
+# 编译 + Java 单测（i18n 键/占位符、FailureKind 文案）+ 编译 dev harness
 ./gradlew build
+
+# 只跑不需要游戏的 Java 单测
+./gradlew test
 
 # 启动 dev client，并在主菜单后自动热加一个 T2 mod
 ./gradlew runClient -PautoAdd=/path/to/EasyLAN-neoforge-1.21.1-v1.6a.jar
@@ -151,7 +155,9 @@ docs/
   research-hot-mod-reload.md  # 2026-11 调研报告；历史背景，结论以 status 为准
   roadmap.md               # 长期路线；短期执行以 status 为准
   tech-debt.md             # 结构性技术债与架构升级点（P0/P1/P2）
-src/main/java/dev/modreloader/  # NeoForge 1.21.1 热加载器（A0 / A1.2）
+src/main/java/dev/modreloader/  # NeoForge 1.21.1 热加载器（A0 / A1.2）；含 capability/ 反射锚点守卫
+src/dev/java/dev/modreloader/dev/  # dev-only harness（独立 source set，不进发布 jar）
+src/test/java/dev/modreloader/     # 不需要游戏的 JUnit 测试
 tools/analyzer/            # 只读分析器（Python）
 experiments/self-attach-poc/  # 自附加 + 类重定义最小验证（Java）
 experiments/server-fixture/   # 夹具：命令+tick、payload（payload 适配验证）
@@ -169,4 +175,4 @@ experiments/server-fixture/   # 夹具：命令+tick、payload（payload 适配�
 
 - 分析器改动：单测全绿 + 至少一次真实 jar 扫描 + `status.md` 更新表尺。
 - 文档改动：链接可点、状态与 `status.md` 不矛盾、不新增未定义术语。
-- 运行时改动（未来）：真实游戏内验证 + 存档可读 + 失败可回滚；缺一项就不算完成。
+- 运行时改动（未来）：真实游戏内验证 + 存档可读 + 失败可回滚；缺一项就不算完成。构建层面还要 `./gradlew build` 通过（含单测与 dev harness 编译）。

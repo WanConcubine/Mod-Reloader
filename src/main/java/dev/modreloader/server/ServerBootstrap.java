@@ -4,6 +4,7 @@ import dev.modreloader.ModReloader;
 import dev.modreloader.command.ReloaderCommands;
 import dev.modreloader.hotadd.HotAddEngine;
 import dev.modreloader.hotadd.MixinProbe;
+import dev.modreloader.hotadd.PlatformHooks;
 import dev.modreloader.watch.ModsFolderWatcher;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
@@ -28,6 +29,7 @@ public final class ServerBootstrap {
             return;
         }
         installed = true;
+        PlatformHooks.install(new ServerPlatformHooks());
         NeoForge.EVENT_BUS.addListener(ReloaderCommands::registerServer);
         ServerCommands.install();
         NeoForge.EVENT_BUS.addListener(ServerStartedEvent.class, event -> onServerStarted());

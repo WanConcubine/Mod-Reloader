@@ -57,6 +57,8 @@
   "modreloader.failure.missing_dependency.suggestion": "把缺失依赖放进 mods 后重启；或先加载依赖。",
   "modreloader.failure.jbr_required.summary": "T3 布局变更需要 JBR 增强类重定义。",
   "modreloader.failure.jbr_required.suggestion": "使用 JBR 21 并加 -XX:+AllowEnhancedClassRedefinition，或等待 sidecar。",
+  "modreloader.failure.capability.summary": "当前运行环境缺少热加载所需的内部锚点，无法加载。",
+  "modreloader.failure.capability.suggestion": "查看 latest.log 的 capabilities 行；多半是这个游戏版本与当前构建不匹配。本次没有改动任何状态。",
   "modreloader.failure.mixin_runtime.summary": "该模组声明了 mixin，需要 MixinRuntime（modId: mr），但它没有安装。",
   "modreloader.failure.mixin_runtime.suggestion": "把 MixinRuntime（modId: mr，版本 >= 1.0.2）放进 mods/ 后重启，再重试。",
   "modreloader.failure.unsupported_tier.summary": "该模组需要重启/软重启，A1.2 不热加。",
