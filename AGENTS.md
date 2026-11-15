@@ -150,7 +150,7 @@ docs/
   design.md                # 架构、分层、不变量
   glossary.md              # 术语（Tn、软重启、sidecar、registry…）
   use-cases.md             # 真实场景：什么情况下无需重启最有价值
-  features/                # 功能规格与验证：a0-hot-add.md / a1-mixin-hotadd.md / gui-mod-watcher.md / lan-doctor.md
+  features/                # 功能规格与验证：a0-hot-add.md / a1-mixin-hotadd.md / gui-mod-watcher.md / server-hotadd.md / lan-doctor.md
   decisions/               # ADR：为什么这样定
   research-hot-mod-reload.md  # 2026-11 调研报告；历史背景，结论以 status 为准
   roadmap.md               # 长期路线；短期执行以 status 为准

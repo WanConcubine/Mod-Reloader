@@ -33,21 +33,13 @@
 | LAN 3 个模组 | **T2 1 / T3 2**；0.05 s | `lanserverproperties`、`mcwifipnp`、`EasyLAN`（1.21.1 NeoForge） |
 | 启动到进世界 | **约 83 s**（dev 环境） | `run/logs/latest.log`：23:19:57.701 ModLauncher → 23:21:20.791 世界加载 |
 | **A0 热加 EasyLAN** | **isLoaded=true, container=true；resource pack `mod/easylan` 选中并重载；keyMappings 34→34；JBR 下复测通过；无异常** | 见 [a0-hot-add.md](features/a0-hot-add.md) |
-| **A1.0 probe / A1.1 spike（历史）** | **probe：4 mixins / 4 targets / 2 loaded；+1 field / +16 methods；verdict=JBR_REDEFINE。spike：config 注册成功；`ShareToLanScreen` 字段/方法可见；`UUIDUtil` redefined 9155 bytes**（未检查接口合并，A1.2 修正） | `-Pa1` 入口已移除；见 [a1-mixin-hotadd.md](features/a1-mixin-hotadd.md) |
 | **A1.2 全流水线（主路径）** | **isLoaded/container=true；4 mixins；UUIDUtil/AbstractWidget redefine；ShareToLanScreen/PlayerList 首载织入；接口合并；LAN 屏打开，port=25565；3 个 EditBox；截图** | `runClient -PautoAdd=/tmp/lanmods/lanserverproperties-1.13.2-neoforge.jar -PverifyLan=true`；`run/screenshots/a1-lan-screen.png` |
 | **A1.2 失败回滚** | **post-ModList：ModList/container/module/config/4 classes/资源包恢复，retry add PASS；post-pack：pack 移除 + classes 恢复；构造 listener 不可注销** | `-PverifyRollback=true -PfailAfterModList=true` / `-PfailAfterPack=true`；`RollbackCheck` |
-| **mods 监听 / 预检 / 弹窗** | **run/mods + run/modreloader/inbox；EasyLAN 检测 T2→弹窗→加载 PASS；坏 jar 失败屏 PASS；Ex Nihilo T4→不可加载；LSP + failAfterModList→失败屏 + 回滚 PASS；i18n 无 key 泄漏** | `-PverifyWatch=true -PwatchJar=...`；`run/screenshots/watch-prompt.png` / `watch-failure.png` |
-| 系统 JDK | 17 / 8；**Gradle toolchain JDK 21** 在 `~/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x/jdk-21.0.12.1+1/Contents/Home` | `java -version`；Gradle foojay |
-| **JBR 21** | **JBR-21.0.11+10-1163.125-nomod**；`enhancedRedefinition=true` | `~/Library/Java/JavaVirtualMachines/jbr-21.jdk/Contents/Home`；`runClient` 自动使用 |
-| **MixinRuntime 可选（无 mr / 有 mr）** | **无 mr：无 `Missing or unsupported`，warn「MixinRuntime (mr) is not installed」，EasyLAN `isLoaded=true`；有 mr：`registered=[lsp.mixins.json]`，redefined 2 / eager 2，T3 `isLoaded=true`** | 2026-11-15 15:32 / 15:33：移走/放回 `run/mods` 的 mr |
+| **GUI / 监听** | **EasyLAN 检测→加载、坏 jar 失败屏、Ex Nihilo T4 不可加载、LSP 回滚屏、ignore→restore（1→0）、世界内 toast、放入→删除→拷回 均 PASS；jar 内无 key 泄漏** | 见 [gui-mod-watcher.md](features/gui-mod-watcher.md)；截图在 `run/screenshots/` |
+| **JDK / JBR 21** | **编译用 Gradle toolchain Temurin 21；运行用 JBR 21.0.11，`enhancedRedefinition=true`；系统 JDK 17/8** | `java -version`；`runClient` 自动切 JBR |
+| **MixinRuntime 可选** | **无 mr：启动正常、warn + toast、EasyLAN（T2）可热加；有 mr：LSP（T3）`registered=[lsp.mixins.json]`、redefined 2 / eager 2** | 2026-11-15 15:32 / 15:33：移走 / 放回 `run/mods` 的 mr |
 | **世界内 add（成功 / 缺 mr 被拒）** | **成功：返回 1、`isLoaded=true`、RESULT: PASS；缺 mr：返回 0、`isLoaded=false`、错误写明 `MixinRuntime (mr)`、无 rollback 错误** | 2026-11-15 15:38 / 15:39：`-PverifyAddCommand`（后者加 `-PverifyAddCommandExpectFailure`） |
-| **世界内 toast（不弹窗）** | **`new mod(s) detected in world; toast only`；toast 队列命中 1；`screen=null`、`promptOpened=false`** | 2026-11-15 15:43：`-PverifyAddCommand=... -PverifyAddCommandWatchJar=...` |
-| **专用服务端（加载 / dist 拦截）** | **加载：`loaded on dedicated server`、watcher 在 Server thread、`Done`；EasyLAN 热加被 dist 拒绝且回滚干净（`Attempted to load class ... Screen for invalid dist DEDICATED_SERVER`）** | 2026-11-15 16:24：`./gradlew runServer [-PautoAdd=...]` |
-| **服务端热加（真实形态）** | **`@Mod constructed`；`replayed RegisterCommandsEvent; root commands 93 -> 94`；`ServerTickEvent received 100/200...`；`isLoaded=true, keyMappings -1 -> -1`；无重复注册异常** | 2026-11-15 17:12：`runServer -PautoAdd=/tmp/servertest2/servertest-2.0.0.jar`（[server-fixture](../experiments/server-fixture/README.md)） |
-| **塞入 → 删除 → 再拷回** | **放入后 pending；删除后不在 pending；同 size/mtime 拷回后又出现在 pending；`add(缺失路径)` → `stage=VALIDATE, kind=MISSING_FILE`；RESULT: PASS** | 2026-11-15 16:38：`runClient -PverifyDelete=true` |
-| **主菜单入口 + 忽略恢复** | **右上角 20×20 像素图标 + tooltip；待处理屏主操作等宽；忽略视图 `恢复/关闭/返回待处理`；恢复后 `ignoredCount 1 -> 0`；RESULT: PASS** | 2026-11-15 16:42：`runClient -PverifyMenu=true`；[menu-logo-entry.png](features/images/menu-logo-entry.png) |
-| **payload 适配（E1 / E2 / E3）** | **E1 建连接前热加：`adapted payloads [payloadfix:ping]` → 客户端收到；E2 连接后热加：`patched payload setup` → 3s 后收到；E3 跨进程：服务端 autoAdd + 客户端标题屏热加 → 连接 → `PING RECEIVED` → PASS** | 2026-11-15 17:39 / 18:12 / 20:20：`-PverifyPayload`（+`AfterJoin` / `Remote`） |
-| **payload 适配失败仍精确回滚** | **适配失败（`NETWORK_PAYLOAD`）时 mod list / module layer / event listeners 回滚 ok；命令夹具不受影响** | 2026-11-15 17:19–17:20 |
+| **服务端热加** | **T2 夹具可热加；命令重放 93→94；tick 到达；payload E1/E2/E3 通过；dist 门禁拦截并干净回滚；服务端 capabilities `resource_packs=n/a`** | 见 [server-hotadd.md](features/server-hotadd.md) |
 | **引擎边界（P0-2）** | **`hotadd` 不再 import `client`/`server`；`PlatformHooks` 由两侧 bootstrap 注册；客户端 add / 服务端热加 / payload E2 全 PASS** | 2026-11-15 20:34 / 21:02 / 21:04 |
 | **反射锚点守卫（P0-1）** | **client：`module_injection=ok modlist_rebuild=ok network_adaptation=ok mixin_hotadd=ok resource_packs=ok`；server：`resource_packs=n/a`；两端 add 仍 PASS** | 2026-11-15 21:06 / 21:08：`[ModReloader] capabilities:` |
 | **Java 单测（P2-8）** | **3 passed**：i18n 键集 + `%s` 占位符一致、每个 `FailureKind` 都有 summary/suggestion、两者成对 | `./gradlew test`；[LangKeysTest.java](../src/test/java/dev/modreloader/LangKeysTest.java) |
@@ -63,7 +55,7 @@
 - **A0**：dev client 热加 `EasyLAN`（T2，无 mixin）；`ModList.isLoaded=true`、容器存在、`@Mod` 构造 + 客户端事件无异常；资源包选中并重载。详见 [a0-hot-add.md](features/a0-hot-add.md)。
 - **A1.0 / A1.1 / A1.2**：probe → spike → 全流水线；`lsp.mixins.json` 运行时注册、JBR redefine 已加载 target、首载织入未加载 target、`postInitialise` 修复接口合并、LAN 屏控件可用。失败回滚覆盖 post-ModList / post-pack（module / ModList / config / 类的原始字节 / 资源包），post-ModList 重试成功。详见 [a1-mixin-hotadd.md](features/a1-mixin-hotadd.md)。
 - **监听 / 预检 / GUI**：后台轮询 `run/mods` + `run/modreloader/inbox`；稳定检测 + 基线；`ModInspector` 预测 T2–T5；主菜单弹窗、世界中只 toast；失败打开 `LoadFailureScreen`；配置与忽略/失败记录独立 JSON；i18n `en_us`/`zh_cn`（各 125 key，键集由单测核对）。详见 [gui-mod-watcher.md](features/gui-mod-watcher.md)。
-- **双端化**：dedicated server 加载、热加 T2 夹具、命令重放（93→94）、tick 事件到达；payload 适配 E1/E2/E3（含跨进程）。边界与副作用见已知问题 13/14。
+- **双端化**：dedicated server 加载、热加 T2 夹具、命令重放（93→94）、tick 事件到达；payload 适配 E1/E2/E3（含跨进程）。机制与证据见 [server-hotadd.md](features/server-hotadd.md)；边界与副作用见已知问题 13/14。
 - **架构收口（2026-11-15）**：
   - **P0-2 引擎边界**：`HotAddEngine` / `FmlEvents` / `ActiveConnections` 不再引用 `Minecraft`、`ServerCommands`、`ResourcePackLoader`、`ClientConnections`；改由 [PlatformHooks](../src/main/java/dev/modreloader/hotadd/PlatformHooks.java)（+ [ClientPlatformHooks](../src/main/java/dev/modreloader/client/ClientPlatformHooks.java) / [ServerPlatformHooks](../src/main/java/dev/modreloader/server/ServerPlatformHooks.java)）提供 key mapping、客户端生命周期、资源包、命令重放、本端额外连接。顺带修掉缺口：**客户端以前从不重放 `RegisterCommandsEvent`**，单人游戏里热加模组的命令根本不存在；现在集成服务器也重放（标题屏安静跳过）。
   - **P0-1 能力守卫**：[Capabilities](../src/main/java/dev/modreloader/capability/Capabilities.java) 启动时只读探测五组锚点并打一行报告；module/modlist/mixin 缺失时 `FailureKind.CAPABILITY` fail-fast，资源包只 warn + 跳过。局限见已知问题 16。

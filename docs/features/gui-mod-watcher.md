@@ -388,17 +388,16 @@ LSP + 强制 add 失败（验证失败屏 + 回滚集成）：
 
 - 中文：`run/options.txt` `lang:zh_cn` → `watch-prompt.png`；按钮/标题/toast 均为中文，无 key 泄漏。
 - 英文：切到 `lang:en_us` 后同样通过；截图 `watch-prompt-en.png`；测试后已恢复 `zh_cn`。
-- 键覆盖：`ModReloaderToasts`、`ModReloaderScreen`、`LoadFailureScreen`、`ReloaderCommands`、`ModReloaderI18n`、`FailureAnalyzer` 的可见文本均使用 `modreloader.*` key；语言文件各 103 key。
+- 键覆盖：`ModReloaderToasts`、`ModReloaderScreen`、`LoadFailureScreen`、`ReloaderCommands`、`ModReloaderI18n`、`FailureAnalyzer` 的可见文本均使用 `modreloader.*` key；语言文件各 125 key（键集与占位符由 `LangKeysTest` 核对）。
 - `FailureAnalyzer` 的 detail/剪贴板标签（jar/预检/依赖/阶段/分类/回滚/日志）也已 key 化；异常原始消息和枚举名保留英文，便于排查。
 - 技术值（异常消息、stage/kind 枚举、路径）保留原始英文；标签已本地化。
 
 ### 初版限制
 
-- 世界内只 toast 的路径尚未在真实世界跑过（代码已按此实现）。
+- 世界内 toast 路径已由 `-PverifyAddCommandWatchJar` 验证（只 toast、不弹窗）。
 - `/modreloader gui` / `scan` 命令未自动验证。
 - 忽略/失败 JSON 的持久化未手工验证；失败后“重试”按钮未自动验证。
 - 弹窗最多直接显示 7 个候选，没有滚动列表；失败屏只显示摘要/建议，完整详情走复制/日志。
 - T4/T5 只提示重启，不提供“仍然尝试”（按所有者决定）。
 - 没有自动加载（按所有者决定）。
 - T5 native/coremod 检测未用真实 T5 jar 校准。
-- 没有 i18n 资源文件，界面文字目前是硬编码中文/英文混合。
