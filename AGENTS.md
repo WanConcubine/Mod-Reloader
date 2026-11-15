@@ -146,7 +146,7 @@ docs/
 src/main/java/dev/modreloader/  # NeoForge 1.21.1 热加载器（A0 / A1.2）
 tools/analyzer/            # 只读分析器（Python）
 experiments/self-attach-poc/  # 自附加 + 类重定义最小验证（Java）
-experiments/server-fixture/   # 服务端夹具：命令+tick、payload（支付适配验证）
+experiments/server-fixture/   # 夹具：命令+tick、payload（payload 适配验证）
 ```
 
 ## 5. 记忆约定
