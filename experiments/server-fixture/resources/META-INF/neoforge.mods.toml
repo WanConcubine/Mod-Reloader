@@ -1,0 +1,26 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "MIT"
+
+[[mods]]
+modId = "servertest"
+version = "1.0.0"
+displayName = "Server Test Fixture"
+description = '''
+Minimal server-safe fixture for the hot-add success path: one @Mod class that
+logs on construction. No client classes, registries, mixins or payloads.
+'''
+
+[[dependencies.servertest]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21.1,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.servertest]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1,1.22)"
+ordering = "NONE"
+side = "BOTH"

@@ -7,7 +7,7 @@
 ## 1. 项目是什么
 
 - **目标**：让 Minecraft Java 版模组在游戏运行时**安全地增删 / 更新 / 热重载**。
-- **当前阶段**：只读分析器 v0 已完成；**A0（T2 模组热加）已验证**；**A1.2（T3/Mixin + 布局变更）主路径已在 dev client 验证**：`lanserverproperties` 热加后进世界打开 Open to LAN，LSP 控件可用；**失败回滚已覆盖 post-ModList / post-pack**（恢复 ModList/module/config/类/资源包，post-ModList 重试成功）。构造后事件监听器无法注销、存档回读未做，按 §6 尚不算完成。**mods/inbox 监听 + 预检 + toast/弹窗 + 失败分析初版已实现**（EasyLAN 检测→加载、坏 jar 失败屏、T4 不可加载）。T4 软重启未开始。剩余人工：点 EasyLAN 的 GUI 按钮（`/modreloader add` 已由 `-PverifyAddCommand` 自动化）。
+- **当前阶段**：只读分析器 v0 已完成；**A0（T2 模组热加）已验证**；**A1.2（T3/Mixin + 布局变更）主路径已在 dev client 验证**：`lanserverproperties` 热加后进世界打开 Open to LAN，LSP 控件可用；**失败回滚已覆盖 post-ModList / post-pack**（恢复 ModList/module/config/类/资源包，post-ModList 重试成功）。构造后事件监听器无法注销、存档回读未做，按 §6 尚不算完成。**mods/inbox 监听 + 预检 + toast/弹窗 + 失败分析初版已实现**（EasyLAN 检测→加载、坏 jar 失败屏、T4 不可加载）。T4 软重启未开始。剩余人工：点 EasyLAN 的 GUI 按钮（`/modreloader add` 已由 `-PverifyAddCommand` 自动化）。**服务端**：runtime 已能在 dedicated server 加载并热加「纯构造型」T2（夹具 `servertest` 验证）；启动期事件（`RegisterCommandsEvent`、`ServerStartingEvent`）无法重放，带这类依赖的服务端 mod 不支持（ADR-0007）。
 - **目标版本**：**Minecraft 1.21.1**；分析器支持 Fabric + NeoForge，语料与校准锁 1.21.1。
 - **运行时首发**：**NeoForge 1.21.1**（原因见 [ADR-0001](docs/decisions/0001-target-1.21.1-neoforge.md)）。
 - **首个 dogfood**：`../Ex-Nihilo-Satellitium`（NeoForge 1.21.1，T4 内容模组）。
@@ -83,6 +83,7 @@ python3 tools/analyzer/run.py scan ~/Projects/Ex-Nihilo-Satellitium/build/libs/e
 ```
 
 - 游戏内入口：`/modreloader add <jar>`（已注册；自动触发路径与世界内执行均由 harness 验证）。
+- **服务端**：`./gradlew runServer -PautoAdd=<jar>`；服务端安全夹具见 [experiments/server-fixture](experiments/server-fixture/README.md)（`./build.sh` 生成 `servertest-1.0.0.jar`，用于验证服务端热加成功路径）。
 - 测试目标：`EasyLAN`（T2、无 mixin）、`lanserverproperties`（T3、A1.2）。日志与限制见 [docs/features/a0-hot-add.md](docs/features/a0-hot-add.md) / [a1-mixin-hotadd.md](docs/features/a1-mixin-hotadd.md)。
 
 ### 自附加 PoC（JDK 17+）
@@ -142,6 +143,7 @@ docs/
 src/main/java/dev/modreloader/  # NeoForge 1.21.1 热加载器（A0 / A1.2）
 tools/analyzer/            # 只读分析器（Python）
 experiments/self-attach-poc/  # 自附加 + 类重定义最小验证（Java）
+experiments/server-fixture/   # 服务端安全的最小 @Mod 夹具（验证服务端热加成功路径）
 ```
 
 ## 5. 记忆约定

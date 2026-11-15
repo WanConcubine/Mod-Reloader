@@ -67,3 +67,4 @@
   说明 **side 字段不可信**；服务端可行性必须扫字节码（`net/minecraft/client/**`）判断，且仍需运行期兜底。
 - **客户端回归**：双端化后 `runClient -PverifyAddCommand=...` → `AddCmdCheck RESULT: PASS`。
 - **未验证**：服务端热加**成功**路径（还没找到真正服务端安全的 T2 样例）；双端握手（尚未实现）。
+- **服务端热加（正向）**：2026-11-15 17:05，`experiments/server-fixture/` 的 `servertest`（纯构造型 T2）在 dedicated server 上热加成功：`hot-added [servertest]`、`isLoaded=true`、`keyMappings -1 -> -1`。**边界**：夹具不注册服务器命令/事件——`RegisterCommandsEvent`、`ServerStartingEvent` 在启动期已发射，热加的 mod 收不到；这类服务端 mod 仍未验证。

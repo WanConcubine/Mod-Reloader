@@ -5,7 +5,7 @@
 
 ## 一句话
 
-只读分析器 v0 可用；**A0（T2 模组热加）已验证**；**A1.2 主路径已在 NeoForge 1.21.1 dev client 验证**：热加 `lanserverproperties`（4 mixin、布局变更）后进世界打开 Open to LAN，LSP 的端口/在线模式/最大玩家数控件可用。**A1.2 失败回滚已实现并跑通**：post-ModList / post-pack 强制失败后，ModList、container、module、mixin config、4 个 target 类、资源包均恢复；重试 add 成功。仍差：构造后事件监听器无法注销、存档回读未验证，因此按契约尚未完成。**mods/inbox 监听 + 预检 + toast/弹窗 + 失败分析（Phase 1/2）已实现并验证**：EasyLAN 检测→弹窗→加载 PASS；坏 jar 失败屏 PASS；Ex Nihilo T4 只提示需要重启。T4 / 软重启未开始。目标锁定 **Minecraft 1.21.1 + NeoForge 1.21.1**。
+只读分析器 v0 可用；**A0（T2 模组热加）已验证**；**A1.2 主路径已在 NeoForge 1.21.1 dev client 验证**：热加 `lanserverproperties`（4 mixin、布局变更）后进世界打开 Open to LAN，LSP 的端口/在线模式/最大玩家数控件可用。**A1.2 失败回滚已实现并跑通**：post-ModList / post-pack 强制失败后，ModList、container、module、mixin config、4 个 target 类、资源包均恢复；重试 add 成功。仍差：构造后事件监听器无法注销、存档回读未验证，因此按契约尚未完成。**mods/inbox 监听 + 预检 + toast/弹窗 + 失败分析（Phase 1/2）已实现并验证**：EasyLAN 检测→弹窗→加载 PASS；坏 jar 失败屏 PASS；Ex Nihilo T4 只提示需要重启。T4 / 软重启未开始。目标锁定 **Minecraft 1.21.1 + NeoForge 1.21.1**。**双端化第一步已完成**：runtime 可在 dedicated server 加载，并成功热加服务端安全的 T2 夹具 `servertest`（`isLoaded=true`、`keyMappings -1 -> -1`）；服务端热加仍受限于启动期事件无法重放（已知问题 14）。
 
 ## 当前目标
 
@@ -49,6 +49,7 @@
 | **服务端热加 T2：被 dist 拦住（回滚干净）** | **EasyLAN 失败：`Attempted to load class net/minecraft/client/gui/screens/Screen for invalid dist DEDICATED_SERVER`；event listeners / mod list / module layer 回滚 ok** | 2026-11-15 16:24：`runServer -PautoAdd=/tmp/lanmods/EasyLAN-...jar` |
 | **塞入 → 删除 → 再拷回** | **放入后 pending；删除后不在 pending；用 `COPY_ATTRIBUTES`（同 size/mtime）重新拷回后**又出现在 pending**（`seen` 不再遮蔽）；`add(缺失路径)` → `stage=VALIDATE, kind=MISSING_FILE`；RESULT: PASS** | 2026-11-15 16:38：`runClient -PverifyDelete=true` |
 | **主菜单入口 + 待处理列表 + 忽略恢复** | **右上角 20×20 像素风槽位图标（⇄ + 草方块配色，含悬停贴图）+ tooltip；待处理屏：主操作行 `加载/忽略/关闭` 等宽对齐、次行 `查看已忽略（N）`；忽略视图 `恢复/关闭/返回待处理`；恢复后 `ignoredCount 1 -> 0`；RESULT: PASS** | 2026-11-15 16:42：`runClient -PverifyMenu=true`；截图 [menu-logo-entry.png](features/images/menu-logo-entry.png) |
+| **服务端热加成功（夹具）** | **`hot-adding [servertest]` → `[ServerTest] @Mod constructed; modListIsLoaded=true`；`server side: skipping resource pack injection`；`verify servertest: isLoaded=true, container=true, keyMappings -1 -> -1`；`hot-added [servertest]`；无异常** | 2026-11-15 17:05：`runServer -PautoAdd=/tmp/servertest/servertest-1.0.0.jar`（夹具源码 [experiments/server-fixture](../experiments/server-fixture/README.md)） |
 | **双端化后客户端回归** | **`loaded on client`；`AddCmdCheck RESULT: PASS`** | 2026-11-15 16:25：`runClient -PverifyAddCommand=/tmp/lanmods/EasyLAN-...jar` |
 
 ## 验证状态
@@ -96,7 +97,7 @@
 11. **GUI/监听初版限制**：只提供 `zh_cn` / `en_us`；异常消息/技术值仍是原始英文（标签已本地化）；最多直接显示 7 个候选；世界内 toast 与主菜单入口/忽略恢复已自动化，`/modreloader gui`/`scan`、失败重试未自动验证；T4/T5 只提示重启，不尝试加载。
 12. **MixinRuntime 是 T3 的第三方前置，已改为可选依赖**（2026-11-15）：`mr` 从 `required` 改成 `type="optional"`，因此缺它时**游戏能启动、T2 照常可用**，由我们给出人话提示（主菜单 toast + 日志 warn + 预检 + 失败屏，文案统一 `MixinRuntime (mr)`）。改的理由：`required` 时 FML `ModSorter#formatDependencyError` 只打印原始 modId（格式 `Mod ID: '%s', Requested by: '%s', Expected range: '%s', Actual version: '%s'`，缺失打印 `[MISSING]`，`[[dependencies]]` 无显示名字段），且加载阶段即终止，我方代码不执行、无法提示。为让「无 mr」真正可用，`MixinSupport`（直接 import mr 类型）被隔离在 [MixinStage](../src/main/java/dev/modreloader/hotadd/MixinStage.java) 之后，`HotAddEngine` 不再引用它；`HotAddEngine` 在 mixin 阶段前用 `MixinRuntimeSupport` 探测，缺失则 `FailureKind.MIXIN_RUNTIME` 失败并回滚。**构建仍需要** `libs/` 的 jar（`compileOnly`），而 `libs/` 被忽略 → **fresh clone 无法编译**（移走 jar 实测 24 个符号错误）；尚未反射化。代码只用它 5 个能力：取 transformer、`transformClassBytes`、`getClassBytes`（前两者有等价 public API，第三者可用自有 `Instrumentation`），以及 `MixinConfig.prepare/onSelect` 与 `MixinProcessor` 的 `configs/pendingConfigs`（包私有 + private，需反射）。`MixinEnvironment.getActiveTransformer()` 在 NeoForge 1.21.1 下是否可用**未验证**。**无 mr 启动路径已验证**：2026-11-15 15:32 移走 `run/mods` 的 mr 启动，无 FML 依赖报错，warn + toast 出现，EasyLAN（T2）热加 `isLoaded=true`；15:33 放回 mr 后 lanserverproperties（T3）回归通过。
 13. **`mods.toml` 的 side 字段不可信**（2026-11-15 实测）：EasyLAN 声明 `side="BOTH"`，但它的 `@Mod` 构造器里注册了 `ScreenEvent` 监听，在专用服上直接抛 `Attempted to load class net/minecraft/client/gui/screens/Screen for invalid dist DEDICATED_SERVER`。NeoForge 在服务端是**主动拒绝**加载客户端类，不是"没有这个类"。所以判断"能否上服务端"必须扫字节码里的 `net/minecraft/client/**` 引用（含 provider 类本身），不能只看 metadata；且扫描只能减少误判，不能保证，仍需运行期兜底（我们已有回滚）。
-14. **服务端尚无"成功"样例**：目前只验证了服务端**加载** runtime、以及热加被 dist 拒绝并干净回滚；还没找到一个真正服务端安全的 T2 mod 来证明服务端热加成功路径。
+14. **服务端热加成功后仍需启动期事件**：夹具 `servertest` 证明「纯构造型」T2 能在专用服上热加成功（`isLoaded=true`、`keyMappings -1 -> -1`）；但夹具不注册服务器命令/事件，因为 `RegisterCommandsEvent`、`ServerStartingEvent` 等**在启动期已经发射过**，热加的 mod 收不到。带这类依赖的服务端 mod 仍未验证。
 
 ## 下一步
 
@@ -133,3 +134,4 @@
 - **2026-11-15（入口改为 Minecraft 风格图标）**：用户反馈原 logo 过于扁平。改为 20×20 像素图：带斜面的石头槽位（1px 黑边 + 左上浅/右下深 + 青色高光）+ 草方块，另附 `modreloader_logo_hovered.png` 悬停态；`LogoButton` 改成 1:1 绘制（不再缩放），键盘焦点额外画 1px 白框；尺寸从 24 改为 20。实测 16:50：`-PverifyMenu=true` PASS，截图确认右上角渲染正确。注：期间我的批量替换脚本误把 `LogoButton.java` 写坏（把每个 `}` 替换成整段方法），已整文件重写修复。
 - **2026-11-15（屏幕语义重排）**：用户指出按钮布局不合理且有重复语义。删除「稍后」（与「关闭」行为完全相同）、不再把「不可加载」做成按钮（保留「加载」并置灰，原因显示在详情行）；主操作统一一行等宽（加载/忽略/关闭），视图切换独立一行（查看已忽略（N）／返回待处理）；忽略后立即从列表移除；空列表只保留「关闭」+ 提示「把 jar 放进 mods/ 或 modreloader/inbox」。i18n 121 key（两语言一致）。实测 16:57：布局截图 + RESULT: PASS。logo 已按所有者要求改为「⇄ 形状 + 草方块配色」，2026-11-15 经所有者确认。
 - **2026-11-15（logo 定稿）**：按所有者要求「⇄ 形状 + 草方块配色」重画 20×20 图标：石头槽位（黑边 + 青色斜面）内含绿色「→」与棕色「←」，配 `modreloader_logo_hovered.png` 悬停态；曾试过草方块、等距方块、环形箭头、徽标叠加等方案，环形箭头在 20px 下无法画干净（成 "C/Q" 带刺），最终改用 ⇄。所有者确认后提交。
+- **2026-11-15（服务端热加成功路径）**：新增最小服务端安全夹具 `experiments/server-fixture/`（`@Mod` + 构造日志，无客户端类/注册表/mixin/payload；`build.sh` 用 `serverLegacyClasspath.txt` 编译并打包）。实测 17:05：`runServer -PautoAdd=...servertest-1.0.0.jar` → `hot-added [servertest]`、`isLoaded=true`、`keyMappings -1 -> -1`（客户端专用路径被正确跳过）。已知问题 14 收窄为「启动期事件无法重放」。
