@@ -41,6 +41,13 @@ public interface PlatformHooks {
     /** Connections only this side knows about: on a client, the link to the server. */
     List<Connection> extraConnections();
 
+    /**
+     * Called after registry content was committed (T4). The client rebuilds the
+     * creative tabs so freshly added items show up without reopening the game;
+     * a dedicated server has nothing to do.
+     */
+    void afterRegistryContent();
+
     static void install(PlatformHooks hooks) {
         if (hooks == null) {
             throw new IllegalArgumentException("hooks must not be null");

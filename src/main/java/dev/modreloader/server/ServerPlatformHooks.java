@@ -42,4 +42,9 @@ public final class ServerPlatformHooks implements PlatformHooks {
     public List<Connection> extraConnections() {
         return List.of();
     }
+
+    @Override
+    public void afterRegistryContent() {
+        // No creative tabs on a dedicated server.
+    }
 }

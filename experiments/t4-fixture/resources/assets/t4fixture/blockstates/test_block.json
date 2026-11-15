@@ -1,0 +1,5 @@
+{
+  "variants": {
+    "": { "model": "t4fixture:block/test_block" }
+  }
+}

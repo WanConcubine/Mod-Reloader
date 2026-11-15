@@ -240,6 +240,13 @@ public final class HotAddEngine {
             if (registryContent) {
                 stage = Stage.REGISTRY;
                 RegistryStage.commit(containers);
+                try {
+                    // Cosmetic refresh (creative tabs); never fail a committed add for it.
+                    hooks.afterRegistryContent();
+                } catch (Throwable t) {
+                    ModReloader.LOGGER.warn(
+                            "[ModReloader] post-registry client refresh failed", t);
+                }
             }
             stage = Stage.EVENT;
             for (ModContainer container : containers) {

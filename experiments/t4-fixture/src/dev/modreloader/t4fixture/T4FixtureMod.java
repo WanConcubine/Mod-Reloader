@@ -5,6 +5,9 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.CreativeModeTabs;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockBehaviour;
@@ -13,7 +16,7 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredItem;
@@ -56,6 +59,7 @@ public final class T4FixtureMod {
         BLOCKS.register(modBus);
         ITEMS.register(modBus);
         modBus.addListener(T4FixtureMod::onCommonSetup);
+        modBus.addListener(T4FixtureMod::onBuildCreativeTab);
         NeoForge.EVENT_BUS.addListener(T4FixtureMod::onServerTick);
         LOGGER.info("[T4Fixture] constructed");
     }
@@ -68,6 +72,14 @@ public final class T4FixtureMod {
                 Block.BLOCK_STATE_REGISTRY.getId(block.defaultBlockState()),
                 BuiltInRegistries.ITEM.getKey(TEST_ITEM.get()),
                 BuiltInRegistries.ITEM.getId(TEST_ITEM.get()));
+    }
+
+    private static void onBuildCreativeTab(BuildCreativeModeTabContentsEvent event) {
+        if (event.getTabKey().equals(CreativeModeTabs.BUILDING_BLOCKS)) {
+            event.accept(new ItemStack(TEST_ITEM.get()));
+            LOGGER.info("[T4Fixture] added item to creative tab {}",
+                    event.getTabKey().location());
+        }
     }
 
     private static void onServerTick(ServerTickEvent.Post event) {

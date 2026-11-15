@@ -5,6 +5,8 @@ import dev.modreloader.hotadd.PlatformHooks;
 import dev.modreloader.hotadd.Rollback;
 import dev.modreloader.server.ServerCommands;
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.network.Connection;
 import net.neoforged.fml.DeferredWorkQueue;
 import net.neoforged.fml.ModContainer;
@@ -58,5 +60,28 @@ public final class ClientPlatformHooks implements PlatformHooks {
     @Override
     public List<Connection> extraConnections() {
         return ClientConnections.current();
+    }
+
+    @Override
+    public void afterRegistryContent() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft == null || minecraft.level == null || minecraft.player == null) {
+            // At the title screen the tabs are built later, when the player opens
+            // the creative inventory; nothing is stale yet.
+            return;
+        }
+        net.neoforged.neoforge.common.CreativeModeTabRegistry.sortTabs();
+        CreativeModeTab.ItemDisplayParameters parameters =
+                new CreativeModeTab.ItemDisplayParameters(
+                        minecraft.level.enabledFeatures(),
+                        minecraft.player.hasPermissions(2),
+                        minecraft.level.registryAccess());
+        int rebuilt = 0;
+        for (CreativeModeTab tab : CreativeModeTabs.allTabs()) {
+            tab.buildContents(parameters);
+            rebuilt++;
+        }
+        ModReloader.LOGGER.info(
+                "[ModReloader] rebuilt {} creative tab(s) after registry content", rebuilt);
     }
 }
