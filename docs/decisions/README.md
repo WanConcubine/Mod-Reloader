@@ -10,6 +10,7 @@
 | [0003](0003-analyzer-first.md) | 先只读分析器，再游戏内解释，最后 T4 软重启 | Accepted |
 | [0004](0004-no-paper-short-term.md) | 短期不做论文，先做工具 | Accepted |
 | [0005](0005-runtime-not-a-mod.md) | 我们是 runtime，不是 mod；A 优先，B 仅 fallback | Accepted |
+| [0006](0006-t4-managed-relaunch.md) | T4 走 managed relaunch，不注入注册表 | Accepted |
 
 ## 模板
 

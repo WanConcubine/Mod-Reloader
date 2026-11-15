@@ -1,5 +1,6 @@
 package dev.modreloader.hotadd;
 
+import dev.modreloader.Platform;
 import net.minecraft.client.Minecraft;
 import net.neoforged.fml.DeferredWorkQueue;
 import net.neoforged.fml.ModContainer;
@@ -43,11 +44,14 @@ public final class FmlEvents {
         container.acceptEvent(new FMLCommonSetupEvent(container, commonQueue));
         commonQueue.runTasks();
 
-        DeferredWorkQueue clientQueue = queue(container, "client");
-        container.acceptEvent(new FMLClientSetupEvent(container, clientQueue));
-        clientQueue.runTasks();
+        // Client-only events: a dedicated server must not replay these.
+        if (Platform.isClient()) {
+            DeferredWorkQueue clientQueue = queue(container, "client");
+            container.acceptEvent(new FMLClientSetupEvent(container, clientQueue));
+            clientQueue.runTasks();
 
-        container.acceptEvent(new RegisterKeyMappingsEvent(Minecraft.getInstance().options));
+            container.acceptEvent(new RegisterKeyMappingsEvent(Minecraft.getInstance().options));
+        }
 
         DeferredWorkQueue completeQueue = queue(container, "complete");
         container.acceptEvent(new FMLLoadCompleteEvent(container, completeQueue));

@@ -1,9 +1,9 @@
 package dev.modreloader.watch;
 
 import dev.modreloader.ModReloader;
+import dev.modreloader.Platform;
 import dev.modreloader.inspect.ModInspection;
 import dev.modreloader.inspect.ModInspector;
-import net.minecraft.client.Minecraft;
 import net.neoforged.fml.loading.FMLPaths;
 
 import java.io.IOException;
@@ -141,11 +141,9 @@ public final class ModsFolderWatcher {
         }
         ModReloader.LOGGER.info("[ModReloader] watcher candidates: {}",
                 candidates.stream().map(candidate -> candidate.path().getFileName().toString()).toList());
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft == null) {
-            return;
-        }
-        minecraft.execute(() -> listener.accept(candidates));
+        // Hop to the client render thread when there is one; a dedicated server
+        // has no such thread, so the callback runs inline.
+        Platform.runOnMainThread(() -> listener.accept(candidates));
     }
 
     private List<Candidate> scan() {

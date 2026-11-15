@@ -2,6 +2,7 @@ package dev.modreloader.hotadd;
 
 import cpw.mods.jarhandling.JarContents;
 import dev.modreloader.ModReloader;
+import dev.modreloader.Platform;
 import dev.modreloader.inspect.MixinRuntimeSupport;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.packs.PackType;
@@ -186,18 +187,26 @@ public final class HotAddEngine {
                                     + "unregistered; only ModList/module/mixin state is restored");
                 }
             });
-            int keysBefore = Minecraft.getInstance().options.keyMappings.length;
+            int keysBefore = Platform.isClient()
+                    ? Minecraft.getInstance().options.keyMappings.length : -1;
             List<String> loaded = new ArrayList<>();
             for (ModContainer container : containers) {
                 FmlEvents.constructAndInit(container);
                 constructed[0] = true;
                 loaded.add(container.getModId());
             }
-            int keysAfter = Minecraft.getInstance().options.keyMappings.length;
+            int keysAfter = Platform.isClient()
+                    ? Minecraft.getInstance().options.keyMappings.length : -1;
 
             // 5. resource packs, after the mod had a chance to register content.
+            //    A dedicated server has no resource pack repository.
             stage = Stage.PACK;
-            injectResourcePack(modFile, newFileInfo, ids, rollback);
+            if (Platform.isClient()) {
+                injectResourcePack(modFile, newFileInfo, ids, rollback);
+            } else {
+                ModReloader.LOGGER.info(
+                        "[ModReloader] server side: skipping resource pack injection for {}", ids);
+            }
             if (Boolean.getBoolean("modreloader.failAfterPack")) {
                 return fail(rollback, Stage.PACK, FailureKind.UNKNOWN, "injected failure after resource pack");
             }

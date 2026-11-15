@@ -88,6 +88,13 @@ neoForge {
         }
         server {
             server()
+            // Server-side hot-add checks reuse the same properties as the client.
+            if (autoAddJar) {
+                systemProperty 'modreloader.autoAdd', autoAddJar
+            }
+            if (probeJar) {
+                systemProperty 'modreloader.probe', probeJar
+            }
         }
     }
 
