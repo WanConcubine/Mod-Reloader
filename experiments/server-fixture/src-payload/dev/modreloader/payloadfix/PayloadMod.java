@@ -4,13 +4,25 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/** Fixture that registers a custom payload, to prove hot-add rejects it precisely. */
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+/**
+ * Payload fixture: registers a custom payload, sends it to a player when they
+ * join, and writes a marker file on the receiving side. Used to prove that a
+ * hot-added mod's network channel actually works.
+ */
 @Mod(PayloadMod.MOD_ID)
 public final class PayloadMod {
     public static final String MOD_ID = "payloadfix";
@@ -18,13 +30,33 @@ public final class PayloadMod {
 
     public PayloadMod(IEventBus modBus) {
         modBus.addListener(PayloadMod::onPayloads);
+        NeoForge.EVENT_BUS.addListener(PayloadMod::onLogin);
         LOGGER.info("[PayloadFix] @Mod constructed");
     }
 
     private static void onPayloads(RegisterPayloadHandlersEvent event) {
-        event.registrar("1").playBidirectional(Ping.TYPE, Ping.CODEC, (payload, context) -> {
-        });
+        event.registrar("1").playBidirectional(Ping.TYPE, Ping.CODEC, PayloadMod::onPing);
         LOGGER.info("[PayloadFix] payload registered");
+    }
+
+    private static void onPing(Ping payload, IPayloadContext context) {
+        boolean client = context.player().level().isClientSide();
+        LOGGER.info("[PayloadFix] PING RECEIVED on side {}", client ? "client" : "server");
+        if (!client) {
+            return;
+        }
+        try {
+            Files.writeString(Path.of("payload-received.txt"), "ok " + System.currentTimeMillis());
+        } catch (Exception e) {
+            LOGGER.warn("[PayloadFix] cannot write the marker file", e);
+        }
+    }
+
+    private static void onLogin(PlayerEvent.PlayerLoggedInEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            LOGGER.info("[PayloadFix] sending ping to {}", player.getName().getString());
+            PacketDistributor.sendToPlayer(player, new Ping());
+        }
     }
 
     public record Ping() implements CustomPacketPayload {

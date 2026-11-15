@@ -7,7 +7,7 @@
 ## 1. 项目是什么
 
 - **目标**：让 Minecraft Java 版模组在游戏运行时**安全地增删 / 更新 / 热重载**。
-- **当前阶段**：只读分析器 v0 已完成；**A0（T2 模组热加）已验证**；**A1.2（T3/Mixin + 布局变更）主路径已在 dev client 验证**：`lanserverproperties` 热加后进世界打开 Open to LAN，LSP 控件可用；**失败回滚已覆盖 post-ModList / post-pack**（恢复 ModList/module/config/类/资源包，post-ModList 重试成功）。构造后事件监听器无法注销、存档回读未做，按 §6 尚不算完成。**mods/inbox 监听 + 预检 + toast/弹窗 + 失败分析初版已实现**（EasyLAN 检测→加载、坏 jar 失败屏、T4 不可加载）。T4 软重启未开始。剩余人工：点 EasyLAN 的 GUI 按钮（`/modreloader add` 已由 `-PverifyAddCommand` 自动化）。**服务端**：runtime 能在 dedicated server 加载并热加 T2；命令注册通过重放 `RegisterCommandsEvent` 生效（根命令 93→94），重复触发的 `ServerTickEvent` 也能到达；payload 会被**显式拒绝**（`NETWORK_PAYLOAD`，NeoForge 禁止启动后注册）；一次性启动事件 / 注册表仍不支持（ADR-0007）。
+- **当前阶段**：只读分析器 v0 已完成；**A0（T2 模组热加）已验证**；**A1.2（T3/Mixin + 布局变更）主路径已在 dev client 验证**：`lanserverproperties` 热加后进世界打开 Open to LAN，LSP 控件可用；**失败回滚已覆盖 post-ModList / post-pack**（恢复 ModList/module/config/类/资源包，post-ModList 重试成功）。构造后事件监听器无法注销、存档回读未做，按 §6 尚不算完成。**mods/inbox 监听 + 预检 + toast/弹窗 + 失败分析初版已实现**（EasyLAN 检测→加载、坏 jar 失败屏、T4 不可加载）。T4 软重启未开始。剩余人工：点 EasyLAN 的 GUI 按钮（`/modreloader add` 已由 `-PverifyAddCommand` 自动化）。**服务端**：runtime 能在 dedicated server 加载并热加 T2；命令注册通过重放 `RegisterCommandsEvent` 生效（根命令 93→94），重复触发的 `ServerTickEvent` 也能到达；payload 可通过 `NetworkAdaptation` 解冻注册表后注册（E1 已验证：单人、热加在建连接前，客户端确实收到包）；「连接后再热加」与跨进程未验证；一次性启动事件 / 注册表仍不支持（ADR-0007）。
 - **目标版本**：**Minecraft 1.21.1**；分析器支持 Fabric + NeoForge，语料与校准锁 1.21.1。
 - **运行时首发**：**NeoForge 1.21.1**（原因见 [ADR-0001](docs/decisions/0001-target-1.21.1-neoforge.md)）。
 - **首个 dogfood**：`../Ex-Nihilo-Satellitium`（NeoForge 1.21.1，T4 内容模组）。
@@ -68,6 +68,9 @@ python3 tools/analyzer/run.py scan ~/Projects/Ex-Nihilo-Satellitium/build/libs/e
 # 塞入/删除语义：放入 → 删除 → 同字节拷回，断言 pending 列表与 MISSING_FILE（`-PverifyDelete`）
 ./gradlew runClient -PverifyDelete=true
 
+# payload 端到端：热加会发包的 mod，断言客户端收到（`-PverifyPayload`）
+./gradlew runClient -PverifyPayload=/tmp/payloadfix/payloadfix-1.0.0.jar
+
 # 主菜单入口与「已忽略」恢复（`-PverifyMenu`）
 ./gradlew runClient -PverifyMenu=true
 
@@ -83,7 +86,7 @@ python3 tools/analyzer/run.py scan ~/Projects/Ex-Nihilo-Satellitium/build/libs/e
 ```
 
 - 游戏内入口：`/modreloader add <jar>`（已注册；自动触发路径与世界内执行均由 harness 验证）。
-- **服务端**：`./gradlew runServer -PautoAdd=<jar>`；夹具见 [experiments/server-fixture](experiments/server-fixture/README.md)：`./build.sh` → `servertest-1.0.0.jar`（命令+tick，应成功）、`./build-payload.sh` → `payloadfix-1.0.0.jar`（payload，应被拒）。
+- **服务端**：`./gradlew runServer -PautoAdd=<jar>`；夹具见 [experiments/server-fixture](experiments/server-fixture/README.md)：`./build.sh` → `servertest-1.0.0.jar`（命令+tick，应成功）、`./build-payload.sh` → `payloadfix-1.0.0.jar`（payload，应成功，配 `-PverifyPayload` 使用）。
 - 测试目标：`EasyLAN`（T2、无 mixin）、`lanserverproperties`（T3、A1.2）。日志与限制见 [docs/features/a0-hot-add.md](docs/features/a0-hot-add.md) / [a1-mixin-hotadd.md](docs/features/a1-mixin-hotadd.md)。
 
 ### 自附加 PoC（JDK 17+）
@@ -143,7 +146,7 @@ docs/
 src/main/java/dev/modreloader/  # NeoForge 1.21.1 热加载器（A0 / A1.2）
 tools/analyzer/            # 只读分析器（Python）
 experiments/self-attach-poc/  # 自附加 + 类重定义最小验证（Java）
-experiments/server-fixture/   # 服务端夹具：命令+tick（应成功）与 payload（应被拒）
+experiments/server-fixture/   # 服务端夹具：命令+tick、payload（支付适配验证）
 ```
 
 ## 5. 记忆约定

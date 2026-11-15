@@ -23,7 +23,7 @@
 | 脚本 | 产物 | 用途 |
 |---|---|---|
 | `./build.sh` | `servertest-1.0.0.jar` | 注册 `/servertest` + 监听 `ServerTickEvent`：应**成功** |
-| `./build-payload.sh` | `payloadfix-1.0.0.jar` | 注册自定义 payload：应被**拒绝**（`NETWORK_PAYLOAD`） |
+| `./build-payload.sh` | `payloadfix-1.0.0.jar` | 注册自定义 payload 并在玩家加入时发一条包；客户端收到后写 `payload-received.txt` |
 
 ## 构建与使用
 
@@ -51,22 +51,27 @@ cd ../.. && ./gradlew runServer -PautoAdd=/tmp/servertest/servertest-1.0.0.jar
 `keyMappings -1 -> -1` 是服务端的关键证据：客户端专用的按键统计被跳过，
 引擎没有在专用服上碰 `Minecraft`。
 
-## payload 反例（应失败）
+## payload 正向验证（`-PverifyPayload`）
 
 ```bash
 cd experiments/server-fixture && ./build-payload.sh   # -> /tmp/payloadfix/payloadfix-1.0.0.jar
-cd ../.. && ./gradlew runServer -PautoAdd=/tmp/payloadfix/payloadfix-1.0.0.jar
+cd ../.. && ./gradlew runClient -PverifyPayload=/tmp/payloadfix/payloadfix-1.0.0.jar
 ```
 
-期望日志（热加被拒并回滚）：
+热加后由 `NetworkAdaptation` 解冻网络注册表、重放 `RegisterPayloadHandlersEvent`、再重新冻结，
+之后新建的连接会协商到这条通道。期望日志：
 
 ```text
-[PayloadFix] @Mod constructed
-[ModReloader] payloadfix registers network payloads, which NeoForge forbids after startup:
-  ... java.lang.UnsupportedOperationException: Cannot register payload payloadfix:ping after registration phase.
-[ModReloader] rollback: mod list ok
-[ModReloader] rollback: module layer ok
+[PayloadFix] payload registered
+[ModReloader] adapted payloads for payloadfix: [payloadfix:ping] (only connections opened after this add can use them)
+[PayloadFix] sending ping to Dev
+[PayloadFix] PING RECEIVED on side client
+[PayloadCheck] marker written: .../run/payload-received.txt
+[PayloadCheck] RESULT: PASS
 ```
+
+限制：只在**单 JVM**（单人）验证过；跨进程的专用服 + 独立客户端仍待验证；
+在**已经连接之后**才热加的 payload 还需要修补连接的 `PayloadSetup`（未实现）。
 
 ## 反例对照
 

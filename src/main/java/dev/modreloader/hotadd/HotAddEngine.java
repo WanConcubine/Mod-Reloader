@@ -200,14 +200,21 @@ public final class HotAddEngine {
             int keysAfter = Platform.isClient()
                     ? Minecraft.getInstance().options.keyMappings.length : -1;
 
-            // 4a. payloads: NeoForge forbids registering them after startup, so a
-            //     mod that needs them would load but never talk to clients.
+            // 4a. payloads: NeoForge closes its network registry after start-up, so
+            //     reopen it for this mod only. Connections that already exist keep
+            //     their stale setup and cannot use the new channels.
             for (ModContainer container : containers) {
-                String payloadError = FmlEvents.probeNetworkPayloads(container);
-                if (payloadError != null) {
+                NetworkAdaptation.Result payloads = NetworkAdaptation.adapt(container);
+                if (!payloads.ok()) {
                     return fail(rollback, Stage.CONSTRUCT, FailureKind.NETWORK_PAYLOAD,
-                            container.getModId() + " registers network payloads, which NeoForge "
-                                    + "forbids after startup: " + payloadError);
+                            container.getModId() + " needs network payloads but they could not "
+                                    + "be adapted: " + payloads.error());
+                }
+                if (!payloads.added().isEmpty()) {
+                    ModReloader.LOGGER.info(
+                            "[ModReloader] adapted payloads for {}: {} (only connections opened "
+                                    + "after this add can use them)",
+                            container.getModId(), payloads.added());
                 }
             }
 
