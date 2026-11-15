@@ -68,3 +68,4 @@
 - **客户端回归**：双端化后 `runClient -PverifyAddCommand=...` → `AddCmdCheck RESULT: PASS`。
 - **未验证**：服务端热加**成功**路径（还没找到真正服务端安全的 T2 样例）；双端握手（尚未实现）。
 - **服务端热加（正向）**：2026-11-15 17:05，`experiments/server-fixture/` 的 `servertest`（纯构造型 T2）在 dedicated server 上热加成功：`hot-added [servertest]`、`isLoaded=true`、`keyMappings -1 -> -1`。**边界**：夹具不注册服务器命令/事件——`RegisterCommandsEvent`、`ServerStartingEvent` 在启动期已发射，热加的 mod 收不到；这类服务端 mod 仍未验证。
+- **命令重放（2026-11-15 17:12）**：夹具升级为真实形态（注册命令 + tick 监听）后实测：tick 能到、命令收不到（`RegisterCommandsEvent` 早于热加发射）。新增 `server/ServerCommands` 重放该事件，命令随即注册成功（根命令 `93 -> 94`）。**代价**：重放是全局事件，所有 mod 的命令监听器会再次执行；Brigadier 合并节点使实测幂等，但需在文档中说明。payload / 一次性事件 / 注册表仍不支持。

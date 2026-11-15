@@ -29,6 +29,7 @@ public final class ServerBootstrap {
         }
         installed = true;
         NeoForge.EVENT_BUS.addListener(ReloaderCommands::registerServer);
+        ServerCommands.install();
         NeoForge.EVENT_BUS.addListener(ServerStartedEvent.class, event -> onServerStarted());
     }
 

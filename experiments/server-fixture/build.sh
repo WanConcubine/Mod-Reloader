@@ -31,9 +31,12 @@ if [ -z "$JDK_HOME" ] || [ ! -x "$JDK_HOME/bin/javac" ]; then
   exit 1
 fi
 
-CP="$(paste -sd: "$CP_FILE")"
+# The merged jar holds the game classes; it also embeds sources, so point
+# -sourcepath elsewhere or javac tries to compile them.
+CP="$ROOT/build/moddev/artifacts/neoforge-21.1.265-merged.jar:$(paste -sd: "$CP_FILE")"
 rm -rf "$OUT/classes" && mkdir -p "$OUT/classes"
-"$JDK_HOME/bin/javac" -proc:none -cp "$CP" -d "$OUT/classes" \
+mkdir -p "$OUT/emptysrc"
+"$JDK_HOME/bin/javac" -proc:none -sourcepath "$OUT/emptysrc" -cp "$CP" -d "$OUT/classes" \
   "$(dirname "$0")"/src/dev/modreloader/servertest/ServerTestMod.java
 "$JDK_HOME/bin/jar" cf "$OUT/servertest-1.0.0.jar" \
   -C "$OUT/classes" . -C "$(dirname "$0")/resources" .

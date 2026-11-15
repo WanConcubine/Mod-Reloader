@@ -4,11 +4,11 @@ license = "MIT"
 
 [[mods]]
 modId = "servertest"
-version = "1.0.0"
+version = "2.0.0"
 displayName = "Server Test Fixture"
 description = '''
-Minimal server-safe fixture for the hot-add success path: one @Mod class that
-logs on construction. No client classes, registries, mixins or payloads.
+Realistic server-side fixture: registers a command and a repeating tick listener
+in its constructor, like real server mods do.
 '''
 
 [[dependencies.servertest]]

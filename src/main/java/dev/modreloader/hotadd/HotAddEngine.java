@@ -4,6 +4,7 @@ import cpw.mods.jarhandling.JarContents;
 import dev.modreloader.ModReloader;
 import dev.modreloader.Platform;
 import dev.modreloader.inspect.MixinRuntimeSupport;
+import dev.modreloader.server.ServerCommands;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.repository.Pack;
@@ -198,6 +199,12 @@ public final class HotAddEngine {
             }
             int keysAfter = Platform.isClient()
                     ? Minecraft.getInstance().options.keyMappings.length : -1;
+
+            // 4b. commands: the server fired RegisterCommandsEvent long ago, so a
+            //     hot-added mod's listener never ran. Re-fire it now.
+            if (ServerCommands.available()) {
+                ServerCommands.replay();
+            }
 
             // 5. resource packs, after the mod had a chance to register content.
             //    A dedicated server has no resource pack repository.
