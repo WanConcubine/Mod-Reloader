@@ -47,6 +47,7 @@
 | **世界内 toast（不弹窗）** | **`new mod(s) detected in world; toast only`；toast 队列命中 1（按 `toast.detected.title` 断言）；`screen=null`、`promptOpened=false`；in-world RESULT: PASS** | 2026-11-15 15:43：`-PverifyAddCommand=...EasyLAN... -PverifyAddCommandWatchJar=...mcwifipnp...`（世界内把 jar 丢进 inbox） |
 | **专用服务端加载（双端化）** | **`loaded on dedicated server`；watcher 起在 Server thread；`Done (7.060s)`；无 `NoClassDefFoundError`** | 2026-11-15 16:24：`./gradlew runServer`（`run/eula.txt` 本地接受） |
 | **服务端热加 T2：被 dist 拦住（回滚干净）** | **EasyLAN 失败：`Attempted to load class net/minecraft/client/gui/screens/Screen for invalid dist DEDICATED_SERVER`；event listeners / mod list / module layer 回滚 ok** | 2026-11-15 16:24：`runServer -PautoAdd=/tmp/lanmods/EasyLAN-...jar` |
+| **塞入 → 删除 → 再拷回** | **放入后 pending；删除后不在 pending；用 `COPY_ATTRIBUTES`（同 size/mtime）重新拷回后**又出现在 pending**（`seen` 不再遮蔽）；`add(缺失路径)` → `stage=VALIDATE, kind=MISSING_FILE`；RESULT: PASS** | 2026-11-15 16:38：`runClient -PverifyDelete=true` |
 | **主菜单入口 + 待处理列表 + 忽略恢复** | **标题屏入口 (4,216) → 待处理屏列出未加载 jar `▶ [T2] menutest-...`；已忽略视图列出条目；恢复后 `ignoredCount 1 -> 0`；RESULT: PASS** | 2026-11-15 16:34：`runClient -PverifyMenu=true` |
 | **双端化后客户端回归** | **`loaded on client`；`AddCmdCheck RESULT: PASS`** | 2026-11-15 16:25：`runClient -PverifyAddCommand=/tmp/lanmods/EasyLAN-...jar` |
 
@@ -73,6 +74,7 @@
 - ~~**世界内 toast 路径**~~：**已自动化验证**（2026-11-15 15:43）：世界里丢 jar 进 inbox → 检测到 → toast 进队列（按标题断言）、`screen=null`、未弹窗。见表尺「世界内 toast」。
 - **`/modreloader gui` / `scan` 命令**：已注册，未自动验证。
 - **忽略/失败 JSON 跨重启持久化**：GUI 内 ignore → restore 已自动验证（`-PverifyMenu`），但重启客户端后是否仍记住未验证。
+- **已加载后删除 jar**：行为已知（mod 仍留在 ModList，没有卸载路径，也不会再成为候选），但没有跑过专门检查。
 - **T4（注册表内容）**：未开始。
 - **Tier 预测 vs 人工标注**——还没有 ground truth，准确率未知。
 - **Fabric intermediary 映射**——`class_XXX` 目标识别仍退化。
@@ -126,3 +128,4 @@
 - **2026-11-15（T4 路线 / ADR-0006）**：所有者决定 T4 走 **managed relaunch** 优先，不注入注册表；实测确认 `MappedRegistry.unfreeze()` 为 public，但它只解除写保护，`Block.BLOCK_STATE_REGISTRY`/创造栏/`BlockEntityType` 绑定/数据包/资源包/存档 palette 全不重建。后续顺序：managed relaunch → dedicated server「一代重建」PoC → 才评估客户端软重启。另：side 门禁按所有者决定做**只警告不拦**；双端（client+server）热加列为方向性目标。
 - **2026-11-15（双端化第一步）**：拆出 `Platform`（不引用客户端类型）、`client/ClientBootstrap`（UI/toast/资源包/tick/dev 检查）、`client/ClientCommands`（`gui` 节点）、`server/ServerBootstrap`（控制台命令 + `ServerStartedEvent` 触发）、`ClientThreads`；`ModReloader` 去掉 `dist = Dist.CLIENT`，mods.toml 依赖改 `side = "BOTH"`；`FmlEvents`/`HotAddEngine`/`ModsFolderWatcher` 加 side 守卫；`runServer` 增加 `autoAdd`/`probe` 属性。实测：服务端加载 PASS、客户端回归 PASS、服务端热加 EasyLAN 被 dist 拒绝并干净回滚（新增已知问题 13/14）。
 - **2026-11-15（待处理入口 + 忽略恢复）**：新增 `client/MenuEntry`（`ScreenEvent.Init.Post` 在 TitleScreen / PauseScreen 左下角挂「模组热加载」按钮）；`ModReloaderScreen` 增加「已忽略」视图与恢复（`ModWatcherConfig.unignore` / `ignoredEntries`），解决「点了忽略就再也找不到」；`scanNow()` 改为走不过滤 `seen` 指纹的 `scanPending()`，所以点过「稍后」的 jar 也仍留在待处理列表里；新增 `dev/MenuEntryCheck`（`-PverifyMenu`）。实测 16:32：入口按钮 (4,216) → 待处理屏 → 已忽略（1）视图 → 恢复后 `ignoredCount 1 -> 0`，RESULT: PASS。
+- **2026-11-15（塞入/删除语义）**：新增 `dev/DeleteCheck`（`-PverifyDelete`）覆盖「放入→删除→同字节拷回」；修掉两个粗糙点：`seen` 指纹在文件消失后未清理（会遮蔽之后同 size/mtime 的重新拷入）→ `scan()` 现在按 `present` 同步清理；加载已消失的 jar 之前只会报 `unknown`（"原因无法分类"）→ 新增 `FailureKind.MISSING_FILE` 与中英文案，且不再写 failed 记录。实测 16:38：四条断言全 PASS。

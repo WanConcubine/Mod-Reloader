@@ -65,6 +65,9 @@ python3 tools/analyzer/run.py scan ~/Projects/Ex-Nihilo-Satellitium/build/libs/e
   -PverifyAddCommandModId=lanserverproperties \
   -PverifyAddCommandExpectFailure=true
 
+# 塞入/删除语义：放入 → 删除 → 同字节拷回，断言 pending 列表与 MISSING_FILE（`-PverifyDelete`）
+./gradlew runClient -PverifyDelete=true
+
 # 主菜单入口与「已忽略」恢复（`-PverifyMenu`）
 ./gradlew runClient -PverifyMenu=true
 

@@ -216,6 +216,8 @@ public final class ModsFolderWatcher {
             }
         }
         stable.keySet().removeIf(path -> !present.contains(path));
+        // A deleted jar must not shadow a later copy of the same bytes/mtime.
+        seen.keySet().removeIf(path -> !present.contains(path));
         return candidates;
     }
 

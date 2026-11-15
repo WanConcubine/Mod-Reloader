@@ -116,5 +116,7 @@
   "modreloader.gui.ignored_hint": "选中一条后点「恢复」，它会重新出现在待处理列表里。",
   "modreloader.gui.restore": "恢复",
   "modreloader.toast.restored.title": "已恢复",
-  "modreloader.toast.restored.message": "%s 已重新成为候选"
+  "modreloader.toast.restored.message": "%s 已重新成为候选",
+  "modreloader.failure.missing_file.summary": "那个 jar 已经不在原路径了。",
+  "modreloader.failure.missing_file.suggestion": "它在被检测到之后被移动或删除了；重新扫描文件夹即可。"
 }

@@ -46,7 +46,7 @@ public final class HotAddEngine {
     }
 
     public enum FailureKind {
-        NONE, NOT_A_MOD, INVALID_METADATA, ALREADY_LOADED, MISSING_DEPENDENCY, JBR_REQUIRED,
+        NONE, MISSING_FILE, NOT_A_MOD, INVALID_METADATA, ALREADY_LOADED, MISSING_DEPENDENCY, JBR_REQUIRED,
         MIXIN_RUNTIME, UNSUPPORTED_TIER, MIXIN_CONFIG, MIXIN_TARGET, REDEFINE, MODULE, MODLIST,
         CONSTRUCT, EVENT, RESOURCE_PACK, ROLLBACK_PARTIAL, UNKNOWN
     }
@@ -68,7 +68,8 @@ public final class HotAddEngine {
     public static Result add(Path rawPath) {
         Path jar = rawPath.toAbsolutePath().normalize();
         if (!Files.isRegularFile(jar)) {
-            return new Result(false, "not a file: " + jar);
+            return new Result(false, "not a file: " + jar, Stage.VALIDATE,
+                    FailureKind.MISSING_FILE, List.of());
         }
         if (!jar.getFileName().toString().endsWith(".jar")) {
             return new Result(false, "not a jar: " + jar);

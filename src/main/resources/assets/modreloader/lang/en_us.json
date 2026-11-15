@@ -116,5 +116,7 @@
   "modreloader.gui.ignored_hint": "Select an entry and click Restore to make it a candidate again.",
   "modreloader.gui.restore": "Restore",
   "modreloader.toast.restored.title": "Restored",
-  "modreloader.toast.restored.message": "%s is a candidate again"
+  "modreloader.toast.restored.message": "%s is a candidate again",
+  "modreloader.failure.missing_file.summary": "The jar no longer exists at that path.",
+  "modreloader.failure.missing_file.suggestion": "It was moved or deleted after it was detected; rescan the folder."
 }

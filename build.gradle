@@ -35,6 +35,7 @@ def watchJar = providers.gradleProperty('watchJar').orNull
 def watchExpectFailure = providers.gradleProperty('watchExpectFailure').orNull
 def verifyAddCommand = providers.gradleProperty('verifyAddCommand').orNull
 def verifyMenu = providers.gradleProperty('verifyMenu').orNull
+def verifyDelete = providers.gradleProperty('verifyDelete').orNull
 
 neoForge {
     version = project.neo_version
@@ -68,6 +69,9 @@ neoForge {
             }
             if (watchExpectFailure) {
                 systemProperty 'modreloader.watchExpectFailure', 'true'
+            }
+            if (verifyDelete) {
+                systemProperty 'modreloader.verifyDelete', 'true'
             }
             if (verifyMenu) {
                 systemProperty 'modreloader.verifyMenu', 'true'

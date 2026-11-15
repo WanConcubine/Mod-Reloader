@@ -41,7 +41,9 @@ public final class LoadController {
                 ModReloaderToasts.success(Component.literal(candidate.path().getFileName().toString()));
                 ModReloader.LOGGER.info("[ModReloader] UI load succeeded: {}", result.message());
             } else {
-                if (ModReloader.WATCHER_CONFIG != null) {
+                // A file that vanished between detection and Load cannot be retried.
+                if (result.kind() != HotAddEngine.FailureKind.MISSING_FILE
+                        && ModReloader.WATCHER_CONFIG != null) {
                     ModReloader.WATCHER_CONFIG.markFailed(candidate.path(), candidate.size(),
                             candidate.mtime(), result.kind().name(), result.message());
                 }

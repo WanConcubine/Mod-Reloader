@@ -80,6 +80,7 @@ public final class FailureAnalyzer {
 
     private static String failureKey(HotAddEngine.Result result) {
         return switch (result.rollbackPartial() ? HotAddEngine.FailureKind.ROLLBACK_PARTIAL : result.kind()) {
+            case MISSING_FILE -> "missing_file";
             case NOT_A_MOD -> "not_a_mod";
             case INVALID_METADATA -> "invalid_metadata";
             case ALREADY_LOADED -> "already_loaded";
