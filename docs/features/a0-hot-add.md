@@ -87,7 +87,7 @@ A0 直接对目标 `ModFile` 做 `identifyMods()` / `identifyLanguage()` / `comp
 
 ## 3. 已验证 / 未验证
 
-> A0 代码侧收尾完成。`/modreloader add` 已由 `dev/AddCommandCheck` 自动化验证（`-PverifyAddCommand`，
+> A0 代码侧收尾完成。`/modreloader add` 已由 `src/dev/java/.../AddCommandCheck` 自动化验证（`-PverifyAddCommand`，
 > 2026-11-15：命令返回 1、`isLoaded=true`）；剩下的人工项是点一次 EasyLAN 的 GUI 按钮。
 
 ### 已验证

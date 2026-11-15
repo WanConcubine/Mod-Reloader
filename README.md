@@ -2,7 +2,7 @@
 
 让 Minecraft 模组在游戏运行时**安全地增删 / 更新 / 热重载**。
 
-> 状态（2026-11-15）：**分析器 v0 已可运行**；**A0（T2）已验证**；**A1.2（T3/Mixin + 布局变更）主路径已在 NeoForge 1.21.1 dev client 验证**：热加 `lanserverproperties` 后进世界打开 Open to LAN。**A1.2 失败回滚已跑通**（post-ModList / post-pack 强制失败，恢复 ModList/module/config/类/资源包；post-ModList 重试 add 成功）。构造后事件监听器无法注销、存档回读未验证，按契约 A1.2 尚不算完成。**mods/inbox 监听 + 预检 + toast/弹窗 + 失败分析初版已跑通**（EasyLAN 检测→加载、坏 jar 失败屏、T4 不可加载）。T4 / 软重启尚未开始。
+> 状态（2026-11-15）：**分析器 v0 已可运行**；**A0（T2）已验证**；**A1.2（T3/Mixin + 布局变更）主路径已在 NeoForge 1.21.1 dev client 验证**：热加 `lanserverproperties` 后进世界打开 Open to LAN。**A1.2 失败回滚已跑通**（post-ModList / post-pack 强制失败，恢复 ModList/module/config/类/资源包；post-ModList 重试 add 成功）。构造后事件监听器无法注销、存档回读未验证，按契约 A1.2 尚不算完成。**mods/inbox 监听 + 预检 + toast/弹窗 + 失败分析初版已跑通**（EasyLAN 检测→加载、坏 jar 失败屏、T4 不可加载）。**双端**：dedicated server 能热加 T2，命令靠重放生效，payload 适配 E1/E2/E3（含跨进程）已验证。**工程侧**：引擎与两端解耦（`PlatformHooks`）、启动有 `Capabilities` 锚点守卫、`dev/` 不进发布 jar、3 个无游戏 Java 单测。T4 / 软重启尚未开始。
 > 短期目标是把工具做出来给社区用，论文/研究输出留到以后。
 >
 > **先读顺序**：[AGENTS.md](AGENTS.md) → [docs/status.md](docs/status.md)。状态只写在 status.md。
@@ -67,7 +67,7 @@ Missing or unsupported mandatory dependencies:
 `runClient` 会自动使用 JBR 21（`~/Library/Java/JavaVirtualMachines/jbr-21.jdk`）并开启
 `-XX:+AllowEnhancedClassRedefinition`；启动日志会打印 `enhancedRedefinition=true`。
 
-实现与限制见 [A0 文档](docs/features/a0-hot-add.md)。A0 只支持 **T2**（无 mixin、无注册表）；资源包已选中并重载；EasyLAN 的 GUI 按钮和 `/modreloader add` 还需人工进世界验证一次。
+实现与限制见 [A0 文档](docs/features/a0-hot-add.md)。A0 只支持 **T2**（无 mixin、无注册表）；资源包已选中并重载；EasyLAN 的 GUI 按钮还需人工点一次（`/modreloader add` 已由 `-PverifyAddCommand` 验证）。
 
 ## A1.2 也跑通了（Mixin + 布局变更）
 

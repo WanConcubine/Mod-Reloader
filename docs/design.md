@@ -93,7 +93,7 @@ mods/*.jar
 
 失败回滚：`Rollback` LIFO undo；module / ModList / mixin config / target 原始字节 / 资源包各自注册 undo。post-ModList 与 post-pack 强制失败已验证；构造后的 `@Mod` 构造器/事件监听器不能注销，JVM 不能 undefine module（Module 对象缓存供重试）。
 
-限制：只验证了 `lanserverproperties`（1 个 T3 模组）；需要 JBR + dev-only MixinRuntime；构造后 listener 回滚、存档回读、依赖校验、注册表内容未做。详见 [features/a1-mixin-hotadd.md](features/a1-mixin-hotadd.md)。
+限制：只验证了 `lanserverproperties`（1 个 T3 模组）；需要 JBR + MixinRuntime（第三方前置、`mr` 为 optional）；构造后 listener 回滚、存档回读、依赖校验、注册表内容未做。详见 [features/a1-mixin-hotadd.md](features/a1-mixin-hotadd.md)。
 
 ### Watcher / GUI（dev 初版）
 

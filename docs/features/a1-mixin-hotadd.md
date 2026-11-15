@@ -260,7 +260,7 @@ ModList / constructMod / 客户端事件
 ### 6.3 还没验证 / 限制（按 AGENTS §6，A1.2 尚不算契约完成）
 
 - **JBR only**：需要 `-XX:+AllowEnhancedClassRedefinition`；stock JVM 的 sidecar 路线未做。
-- **MixinRuntime dev-only**：`run/mods` 里的 1.0.2-mc1.21；产品化要 vendor 或自己实现。
+- **MixinRuntime 是第三方前置**：`run/mods` 里的 1.0.2-mc1.21；`mr` 在 mods.toml 里已改为 `type="optional"`（缺它 T2 照常、T3 被拦），产品化要 vendor 或自己实现。
 - **失败回滚（部分）**：已覆盖 post-ModList 和 post-pack 失败（见 6.4）；构造后的 `@Mod` 构造器/事件监听器无法注销，存档回读未验证，因此仍不是契约意义的“完成”。
 - **存档回读**：测试世界已创建并保存，但没有重新启动并打开它；存档可读性未独立验证。
 - **eager load**：未加载 target 用 `Class.forName(..., false)` 立即加载；只验证了 LSP 的 4 个 target，不能推断任意 T3。
@@ -331,7 +331,7 @@ ModList / constructMod / 客户端事件
 1. **A1 先走 JBR 路线：已确认。** `runClient` 已切到 JBR 21.0.11 + `-XX:+AllowEnhancedClassRedefinition`。
 2. **JBR 是否已安装：已完成。** 路径 `~/Library/Java/JavaVirtualMachines/jbr-21.jdk/Contents/Home`；Gradle 编译仍用 Temurin 21。
 3. **A1 的验收只做 `ShareToLanScreen` 一个 target 是否够？** A1.2 处理了全部 4 个 config target：`ShareToLanScreen`、`UUIDUtil`、`AbstractWidget`、`PlayerList`。
-4. **`-PverifyLan` 是 dev-only**：它用真实建世界 + `ShareToLanScreen` 自动检查，不是产品 UI；游戏内 `/modreloader add` 已由 `-PverifyAddCommand`（`dev/AddCommandCheck`）自动化，同样 dev-only。
+4. **`-PverifyLan` 是 dev-only**：它用真实建世界 + `ShareToLanScreen` 自动检查，不是产品 UI；游戏内 `/modreloader add` 已由 `-PverifyAddCommand`（`src/dev/java/.../AddCommandCheck`）自动化，同样 dev-only。
 5. **`-PverifyRollback` 是 dev-only**：`-PfailAfterModList` / `-PfailAfterPack` 强制失败，`RollbackCheck` 验证状态并（post-ModList）重试；不要在产品启动里使用。
 
 ## 9. 代码落点
@@ -345,7 +345,7 @@ src/main/java/dev/modreloader/hotadd/
   ModuleInjector.java   # 复用
   ModListInjector.java  # 复用
   FmlEvents.java        # 复用
-src/main/java/dev/modreloader/dev/
+src/dev/java/dev/modreloader/dev/   # 独立 source set，不进发布 jar
   LanScreenCheck.java   # dev-only：-PverifyLan 自动建世界 / 打开 LAN 屏 / 截图
   RollbackCheck.java    # dev-only：-PverifyRollback 强制失败 / 状态检查 / 重试
 ```

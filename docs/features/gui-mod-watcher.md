@@ -107,7 +107,7 @@ dev.modreloader.config/        # 客户端配置
 
 - 扫描在 daemon `ScheduledExecutorService`（2s 轮询），不触碰游戏对象。
 - 发现稳定候选后 `Minecraft.getInstance().execute(() -> ui.onCandidates(...))`。
-- `HotAddEngine.add` 仍只在客户端线程调用；UI 单飞锁避免并发。
+- `HotAddEngine.add` 在对应端的主线程调用（客户端渲染线程 / 服务端 Server thread）；客户端 UI 单飞锁避免并发。
 - 加载期间 watcher 继续扫描但只入队，不并发 add。
 
 ## 4. 检测策略
@@ -325,7 +325,7 @@ allowT5 = false
 - `LoadController` 单飞；失败 `LoadFailureScreen`（原因/建议/回滚/复制/打开日志/重试）。
 - `config/modreloader/watcher.json`：独立 JSON，含 ignored/failed；永不自动加载。
 - `/modreloader scan`、`/modreloader gui` 已注册。
-- **i18n**：`assets/modreloader/lang/en_us.json` + `zh_cn.json`（各 103 key）；GUI/按钮/toast/命令/预检/失败摘要/复制详情的标签全部走翻译 key。
+- **i18n**：`assets/modreloader/lang/en_us.json` + `zh_cn.json`（现各 125 key，键集与占位符由单测核对）；GUI/按钮/toast/命令/预检/失败摘要/复制详情的标签全部走翻译 key。
 - dev 检查：`-PverifyWatch=true -PwatchJar=<jar>`；`-PwatchExpectFailure=true`。
 
 ### 实测

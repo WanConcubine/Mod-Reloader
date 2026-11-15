@@ -89,3 +89,16 @@
 | **Datapack registry** | 由数据包加载的注册表（附魔、伤害类型、纹饰等），`/reload` 可重建。 |
 | **Freeze** | 注册表在 bootstrap 后冻结；再注册会抛异常。 |
 | **Numeric ID** | 注册表条目的整数 ID；会进存档和网络包，删除条目会让后面的 ID 前移。 |
+
+## 运行时架构 / 工程
+
+| 术语 | 含义 |
+|---|---|
+| **Runtime** | 本项目的热加载器本身：加载用户已信任的第三方模组，不替代它们的功能（ADR-0005）。 |
+| **Side bootstrap** | 端侧接线：`ClientBootstrap`（UI/toast/资源包/tick）与 `ServerBootstrap`（控制台命令/启动触发）。 |
+| **PlatformHooks** | 引擎唯一的端相关出口（key mapping、客户端生命周期、资源包、命令重放、本端额外连接）；客户端与服务端各一个实现，由 side bootstrap 注册。 |
+| **Capability / 锚点（anchor）** | 引擎依赖的私有 FML/JDK 字段、方法、构造器。启动时 `Capabilities` 只读探测并打 `capabilities:` 报告；锚点缺失时对应阶段 fail-fast，而不是静默跳过。 |
+| **Integration server** | 单人游戏内的服务端；它同样会触发 `RegisterCommandsEvent`，所以客户端也安装命令捕获。 |
+| **Dev source set / DevEntry** | `src/dev/java`：游戏内验证 harness。不进发布 jar；主源集只能按名字反射 `DevEntry.install()`，编译期无法引用。 |
+| **Harness** | 自动化游戏内验证入口（`-PverifyXxx`）：建世界/连服、执行动作、断言并打 `RESULT: PASS/FAIL`。 |
+| **History** | [history.md](history.md)：追加式过程记录（做了什么、证据、为什么）。状态只看 [status.md](status.md)。 |
