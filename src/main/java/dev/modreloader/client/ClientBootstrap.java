@@ -7,6 +7,7 @@ import dev.modreloader.dev.DeleteCheck;
 import dev.modreloader.dev.LanScreenCheck;
 import dev.modreloader.dev.MenuEntryCheck;
 import dev.modreloader.dev.PayloadCheck;
+import dev.modreloader.dev.RemotePayloadCheck;
 import dev.modreloader.dev.RollbackCheck;
 import dev.modreloader.dev.WatchCheck;
 import dev.modreloader.hotadd.HotAddEngine;
@@ -109,6 +110,10 @@ public final class ClientBootstrap {
         }
         if (Boolean.getBoolean("modreloader.verifyDelete")) {
             DeleteCheck.start();
+        }
+        String verifyPayloadRemote = System.getProperty("modreloader.verifyPayloadRemote", "").trim();
+        if (!verifyPayloadRemote.isEmpty()) {
+            RemotePayloadCheck.start(Path.of(verifyPayloadRemote));
         }
         String verifyPayload = System.getProperty("modreloader.verifyPayload", "").trim();
         if (!verifyPayload.isEmpty()) {

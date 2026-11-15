@@ -83,8 +83,25 @@ cd ../.. && ./gradlew runClient -PverifyPayload=/tmp/payloadfix/payloadfix-1.0.0
 [PayloadFix] PING RECEIVED on side client
 ```
 
-限制：只在**单 JVM**（单人）验证过；跨进程的专用服 + 独立客户端仍待验证
-（两端必须各自适配）。夹具用 `NetworkRegistry.hasChannel` 守卫发包，避免在
+跨进程（E3）：专用服热加 + 独立客户端热加后连接：
+
+```bash
+./gradlew runServer -PautoAdd=/tmp/payloadfix/payloadfix-1.0.0.jar
+./gradlew runClient -PverifyPayloadRemote=/tmp/payloadfix/payloadfix-1.0.0.jar
+```
+
+期望客户端日志：
+
+```text
+[RemotePayloadCheck] hot-add result: ok=true
+[RemotePayloadCheck] connecting to 127.0.0.1:25565
+[RemotePayloadCheck] joined 127.0.0.1:25565; waiting for the payload
+[PayloadFix] PING RECEIVED on side client
+[RemotePayloadCheck] RESULT: PASS
+```
+
+限制：跨进程验证依赖 `run/server.properties` 的 `online-mode=false`（dev client 是离线身份）；
+两端装的必须是**同一个 jar**——目前靠人工保证，握手还没做。夹具用 `NetworkRegistry.hasChannel` 守卫发包，避免在
 未协商的通道上发送导致连接异常。
 
 ## 反例对照

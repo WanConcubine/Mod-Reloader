@@ -50,7 +50,8 @@ public final class PayloadMod {
             return;
         }
         try {
-            Files.writeString(Path.of("payload-received.txt"), "ok " + System.currentTimeMillis());
+            String marker = System.getProperty("modreloader.remoteMarker", "payload-received.txt");
+            Files.writeString(Path.of(marker), "ok " + System.currentTimeMillis());
         } catch (Exception e) {
             LOGGER.warn("[PayloadFix] cannot write the marker file", e);
         }
