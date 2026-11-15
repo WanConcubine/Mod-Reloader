@@ -22,7 +22,7 @@ import java.nio.file.StandardCopyOption;
  * the mod is loaded.
  */
 public final class WatchCheck {
-    private static final String MOD_ID = "easylan";
+    private static final String MOD_ID = System.getProperty("modreloader.watchModId", "easylan");
     private static final boolean EXPECT_FAILURE = Boolean.getBoolean("modreloader.watchExpectFailure");
 
     private static boolean started;

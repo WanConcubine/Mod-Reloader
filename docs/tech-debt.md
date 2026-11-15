@@ -11,7 +11,7 @@
 | `dev/` 夹具 | **9 文件 / 2101 行 ≈ 30%**，独立 `src/dev/java` source set；**不在发布 jar 里**（jar 内 0 条 `dev/modreloader/dev/`） |
 | 反射 / Unsafe 站点 | 8 个文件（mixin、ModList、module、网络、资源包、JVM） |
 | Java 单测 | **3**（`./gradlew test`，不需要游戏） |
-| 语言文件 | `en_us` / `zh_cn` 各 **125 key**，键集与 `%s` 占位符由单测核对 |
+| 语言文件 | `en_us` / `zh_cn` 各 **128 key**，键集与 `%s` 占位符由单测核对 |
 | 包依赖 | `hotadd` **不再**依赖 `client` / `server`；剩 `command ↔ client`、`client → server`（集成服务器的命令重放）、`diagnose → ui`（文案） |
 
 ## P0：会让我们「悄悄说错话」的

@@ -325,7 +325,7 @@ allowT5 = false
 - `LoadController` 单飞；失败 `LoadFailureScreen`（原因/建议/回滚/复制/打开日志/重试）。
 - `config/modreloader/watcher.json`：独立 JSON，含 ignored/failed；永不自动加载。
 - `/modreloader scan`、`/modreloader gui` 已注册。
-- **i18n**：`assets/modreloader/lang/en_us.json` + `zh_cn.json`（现各 125 key，键集与占位符由单测核对）；GUI/按钮/toast/命令/预检/失败摘要/复制详情的标签全部走翻译 key。
+- **i18n**：`assets/modreloader/lang/en_us.json` + `zh_cn.json`（现各 128 key，键集与占位符由单测核对）；GUI/按钮/toast/命令/预检/失败摘要/复制详情的标签全部走翻译 key。
 - dev 检查：`-PverifyWatch=true -PwatchJar=<jar>`；`-PwatchExpectFailure=true`。
 
 ### 实测
@@ -388,7 +388,7 @@ LSP + 强制 add 失败（验证失败屏 + 回滚集成）：
 
 - 中文：`run/options.txt` `lang:zh_cn` → `watch-prompt.png`；按钮/标题/toast 均为中文，无 key 泄漏。
 - 英文：切到 `lang:en_us` 后同样通过；截图 `watch-prompt-en.png`；测试后已恢复 `zh_cn`。
-- 键覆盖：`ModReloaderToasts`、`ModReloaderScreen`、`LoadFailureScreen`、`ReloaderCommands`、`ModReloaderI18n`、`FailureAnalyzer` 的可见文本均使用 `modreloader.*` key；语言文件各 125 key（键集与占位符由 `LangKeysTest` 核对）。
+- 键覆盖：`ModReloaderToasts`、`ModReloaderScreen`、`LoadFailureScreen`、`ReloaderCommands`、`ModReloaderI18n`、`FailureAnalyzer` 的可见文本均使用 `modreloader.*` key；语言文件各 128 key（键集与占位符由 `LangKeysTest` 核对）。
 - `FailureAnalyzer` 的 detail/剪贴板标签（jar/预检/依赖/阶段/分类/回滚/日志）也已 key 化；异常原始消息和枚举名保留英文，便于排查。
 - 技术值（异常消息、stage/kind 枚举、路径）保留原始英文；标签已本地化。
 
@@ -396,8 +396,9 @@ LSP + 强制 add 失败（验证失败屏 + 回滚集成）：
 
 - 世界内 toast 路径已由 `-PverifyAddCommandWatchJar` 验证（只 toast、不弹窗）。
 - `/modreloader gui` / `scan` 命令未自动验证。
+- T4 提示屏的“不可加载”旧证据已过时：现在 T4 可加载（实验性，见 [t4-registry-hotadd.md](t4-registry-hotadd.md)）。
 - 忽略/失败 JSON 的持久化未手工验证；失败后“重试”按钮未自动验证。
 - 弹窗最多直接显示 7 个候选，没有滚动列表；失败屏只显示摘要/建议，完整详情走复制/日志。
-- T4/T5 只提示重启，不提供“仍然尝试”（按所有者决定）。
+- T5 只提示重启；T4 在 2026-11-15 后走实验性 add-only 热加（提示屏有警告，见 [t4-registry-hotadd.md](t4-registry-hotadd.md)）。
 - 没有自动加载（按所有者决定）。
 - T5 native/coremod 检测未用真实 T5 jar 校准。

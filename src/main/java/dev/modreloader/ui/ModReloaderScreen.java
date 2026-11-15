@@ -128,7 +128,7 @@ public final class ModReloaderScreen extends Screen {
         }
         if (loadButton != null) {
             loadButton.active = selected >= 0 && selected < candidates.size()
-                    && candidates.get(selected).inspection().canHotLoad();
+                    && candidates.get(selected).inspection().canHotLoad(registryContentHotAdd());
         }
         if (ignoreButton != null) {
             ignoreButton.active = selected >= 0 && selected < candidates.size();
@@ -136,6 +136,11 @@ public final class ModReloaderScreen extends Screen {
         if (restoreButton != null) {
             restoreButton.active = selected >= 0 && selected < ignoredEntries().size();
         }
+    }
+
+    private static boolean registryContentHotAdd() {
+        return dev.modreloader.capability.Capabilities.available(
+                dev.modreloader.capability.Capabilities.Capability.REGISTRY_ADAPTATION);
     }
 
     private void loadSelected() {
@@ -203,7 +208,8 @@ public final class ModReloaderScreen extends Screen {
         if (selected >= 0 && selected < candidates.size()) {
             var candidate = candidates.get(selected);
             MutableComponent text = ModReloaderI18n.summary(candidate.inspection()).copy();
-            text.append(Component.literal("\n")).append(ModReloaderI18n.blockReason(candidate.inspection()));
+            text.append(Component.literal("\n"))
+                    .append(ModReloaderI18n.blockReason(candidate.inspection(), registryContentHotAdd()));
             MultiLineLabel label = MultiLineLabel.create(font, width - 60, text);
             label.renderLeftAligned(guiGraphics, 30,
                     TOP + Math.min(candidates.size(), MAX_ROWS) * ROW_HEIGHT + 14, 11, 0xCCCCCC);

@@ -1,6 +1,7 @@
 package dev.modreloader.ui;
 
 import dev.modreloader.ModReloader;
+import dev.modreloader.capability.Capabilities;
 import dev.modreloader.diagnose.FailureAnalyzer;
 import dev.modreloader.hotadd.HotAddEngine;
 import dev.modreloader.watch.ModsFolderWatcher;
@@ -26,7 +27,7 @@ public final class LoadController {
             return;
         }
         var inspection = candidate.inspection();
-        if (!inspection.canHotLoad()) {
+        if (!inspection.canHotLoad(Capabilities.available(Capabilities.Capability.REGISTRY_ADAPTATION))) {
             minecraft.setScreen(new LoadFailureScreen(null, candidate,
                     FailureAnalyzer.preflight(inspection)));
             return;

@@ -75,6 +75,7 @@ def failAfterPack = providers.gradleProperty('failAfterPack').orNull
 def verifyWatch = providers.gradleProperty('verifyWatch').orNull
 def watchJar = providers.gradleProperty('watchJar').orNull
 def watchExpectFailure = providers.gradleProperty('watchExpectFailure').orNull
+def watchModId = providers.gradleProperty('watchModId').orNull
 def verifyAddCommand = providers.gradleProperty('verifyAddCommand').orNull
 def verifyMenu = providers.gradleProperty('verifyMenu').orNull
 def verifyDelete = providers.gradleProperty('verifyDelete').orNull
@@ -119,6 +120,9 @@ neoForge {
             }
             if (watchExpectFailure) {
                 systemProperty 'modreloader.watchExpectFailure', 'true'
+            }
+            if (watchModId) {
+                systemProperty 'modreloader.watchModId', watchModId
             }
             if (verifyPayload) {
                 systemProperty 'modreloader.verifyPayload', verifyPayload

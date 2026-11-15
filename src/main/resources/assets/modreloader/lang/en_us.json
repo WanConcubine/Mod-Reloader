@@ -30,6 +30,7 @@
   "modreloader.preflight.invalid": "Preflight failed: %s",
   "modreloader.preflight.already_loaded": "Already loaded; updating requires a restart",
   "modreloader.preflight.t4": "Registry content: requires restart/soft restart",
+  "modreloader.preflight.t4_loadable": "T4 registry content: EXPERIMENTAL hot-add (add-only). The save will require this mod afterwards and cannot be rolled back.",
   "modreloader.preflight.t5": "Native/coremod: requires full restart",
   "modreloader.preflight.missing_dependency": "Missing required dependency: %s %s",
   "modreloader.preflight.jbr": "T3 layout change requires JBR 21 + -XX:+AllowEnhancedClassRedefinition",

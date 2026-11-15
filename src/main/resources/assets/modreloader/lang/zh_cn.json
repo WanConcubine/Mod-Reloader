@@ -30,6 +30,7 @@
   "modreloader.preflight.invalid": "预检失败：%s",
   "modreloader.preflight.already_loaded": "已加载；更新需要重启",
   "modreloader.preflight.t4": "注册表内容：需要重启/软重启",
+  "modreloader.preflight.t4_loadable": "T4 注册表内容：实验性热加（仅新增）。之后存档会依赖此模组，且不可回滚。",
   "modreloader.preflight.t5": "native/coremod：需要完整重启",
   "modreloader.preflight.missing_dependency": "缺少必需依赖：%s %s",
   "modreloader.preflight.jbr": "T3 布局变更需要 JBR 21 + -XX:+AllowEnhancedClassRedefinition",

@@ -70,7 +70,9 @@ public final class ReloaderCommands {
                                         .append(Component.literal(" · "))
                                         .append(ModReloaderI18n.summary(candidate.inspection()))
                                         .append(Component.literal(" · "))
-                                        .append(ModReloaderI18n.blockReason(candidate.inspection()));
+                                        .append(ModReloaderI18n.blockReason(candidate.inspection(),
+                                                dev.modreloader.capability.Capabilities.available(
+                                                        dev.modreloader.capability.Capabilities.Capability.REGISTRY_ADAPTATION)));
                                 ctx.getSource().sendSuccess(() -> line, false);
                             }
                             return candidates.size();

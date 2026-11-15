@@ -1,6 +1,6 @@
 # T4 注册表热加（实验性，server-only）
 
-> 状态：**实验性能力，已在 dedicated server 端到端验证**（2026-11-15）。
+> 状态：**实验性能力**，已在 dedicated server 端到端验证，GUI 路径也已放行（2026-11-15）。
 > 范围：built-in 注册表的 **add-only**（方块 / 物品）；不含删除、更新、datapack 内容。
 > 背景与取舍见 [research-t4-registry.md](../research-t4-registry.md) 与 [ADR-0008](../decisions/0008-t4-registry-adaptation-poc.md)。
 
@@ -57,7 +57,18 @@ commit  → for registry in GameData.getRegistrationOrder():
 
 结论：add-only 的方块/物品在服务端可以热加，id 稳定，放置后存盘、重启读档仍然正确。
 
-## 3. 复现
+## 3. GUI 路径（2026-11-15 22:18）
+
+watcher 把 fixture 丢进 inbox 后，提示屏显示 `[T4]` 与警告文案（实验性 / 仅新增 / 存档依赖 / 不可回滚），
+Load 可用；点击后走同一个引擎，`WatchCheck RESULT: PASS`。截图：
+
+![T4 提示屏](images/t4-registry-prompt.png)
+
+```bash
+./gradlew runClient -PverifyWatch=true -PwatchJar=/tmp/t4fixture-ui.jar -PwatchModId=t4fixture
+```
+
+## 4. 复现
 
 ```bash
 # 1) 构建夹具（需要先 ./gradlew build 生成 build/moddev/*LegacyClasspath.txt）
@@ -72,7 +83,7 @@ cp /tmp/t4fixture/t4fixture-1.0.0.jar run/mods/
 rm run/mods/t4fixture-1.0.0.jar
 ```
 
-## 4. 限制（按当前实现）
+## 5. 限制（按当前实现）
 
 - **只有服务端验证**：客户端资源包（模型/blockstates/语言）、创造栏重建、登录同步还没接。
 - **add-only**：没有删除/更新；删掉 mod 会让存档里的条目变成 missing entries（NeoForge 提示并丢弃）。
@@ -80,13 +91,11 @@ rm run/mods/t4fixture-1.0.0.jar
 - **不支持 mod 自建注册表**：`NewRegistryEvent` 在启动后关闭（`pendingModdedRegistries = null`）。
 - **post-register 事件未重放**：`BlockEntityTypeAddBlocksEvent` / spawn placements / attribute modifications
   还没有接；方块 + 物品之外的实体类内容暂时不要指望。
-- **UI 仍把 T4 标为不可加载**：`ModInspection.canHotLoad()` 仍拒绝 T4；目前只能通过
-  `/modreloader add` 或 `-PautoAdd` 走到引擎。放行 UI 是下一步。
+- **UI 已放行，但只有警告、没有确认框**：Load 一次点击即提交，且不可回滚。
 - **提交后失败不可回滚**：运行时被标记 dirty，只能重启。
 
-## 5. 下一步
+## 6. 下一步
 
-1. UI 放行 T4（加载前明确警告：实验性、存档绑定该 mod、不可回滚）。
-2. 客户端：资源包注入 + 创造栏重建 + 登录前热加（复用 `ClientResourcePacks`）。
-3. 失败语义：construct 抛异常时确认 abort 能恢复 canonical id，并把 dirty 状态暴露给用户。
-4. datapack：评估数据包重建；不可行就写死边界。
+1. 客户端：资源包注入（方块模型/blockstates/语言）+ 创造栏重建 + 登录前热加（复用 `ClientResourcePacks`）。
+2. 失败语义：construct 抛异常时确认 abort 能恢复 canonical id，并把 dirty 状态暴露给用户。
+3. datapack：评估数据包重建；不可行就写死边界。

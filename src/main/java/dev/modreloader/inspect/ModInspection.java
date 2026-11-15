@@ -29,7 +29,18 @@ public record ModInspection(Path jar, String fileName, List<Mod> mods, Tier tier
     }
 
     public boolean canHotLoad() {
-        if (!ok() || alreadyLoaded || tier == Tier.T4 || tier == Tier.T5) {
+        return canHotLoad(false);
+    }
+
+    /**
+     * @param allowT4 true when the registry-adaptation path is available; T4 is
+     *                still experimental and add-only, so callers decide.
+     */
+    public boolean canHotLoad(boolean allowT4) {
+        if (!ok() || alreadyLoaded || tier == Tier.T5) {
+            return false;
+        }
+        if (tier == Tier.T4 && !allowT4) {
             return false;
         }
         for (Dependency dependency : dependencies) {
@@ -37,7 +48,10 @@ public record ModInspection(Path jar, String fileName, List<Mod> mods, Tier tier
                 return false;
             }
         }
-        return tier != Tier.T3 || (JbrSupport.available() && MixinRuntimeSupport.available());
+        if (tier == Tier.T3 || (tier == Tier.T4 && mixins)) {
+            return JbrSupport.available() && MixinRuntimeSupport.available();
+        }
+        return true;
     }
 
     /** T3 needs MixinRuntime to reopen Mixin's frozen config list. */

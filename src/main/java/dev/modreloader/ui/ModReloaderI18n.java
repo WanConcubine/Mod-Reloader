@@ -14,6 +14,11 @@ public final class ModReloaderI18n {
     }
 
     public static Component blockReason(ModInspection inspection) {
+        return blockReason(inspection, false);
+    }
+
+    /** @param allowT4 true when registry content can be hot-added (experimental). */
+    public static Component blockReason(ModInspection inspection, boolean allowT4) {
         if (!inspection.ok()) {
             String error = inspection.error() == null ? "" : inspection.error();
             if (error.contains("not a valid jar")) {
@@ -39,7 +44,7 @@ public final class ModReloaderI18n {
         if (inspection.alreadyLoaded()) {
             return Component.translatable("modreloader.preflight.already_loaded");
         }
-        if (inspection.tier() == ModInspection.Tier.T4) {
+        if (inspection.tier() == ModInspection.Tier.T4 && !allowT4) {
             return Component.translatable("modreloader.preflight.t4");
         }
         if (inspection.tier() == ModInspection.Tier.T5) {
@@ -51,12 +56,17 @@ public final class ModReloaderI18n {
                         dependencyName(dependency.modId()), dependency.versionRange());
             }
         }
-        if (inspection.tier() == ModInspection.Tier.T3 && !JbrSupport.available()) {
+        boolean mixinTier = inspection.tier() == ModInspection.Tier.T3
+                || (inspection.tier() == ModInspection.Tier.T4 && inspection.mixins());
+        if (mixinTier && !JbrSupport.available()) {
             return Component.translatable("modreloader.preflight.jbr");
         }
-        if (inspection.mixinRuntimeMissing()) {
+        if (mixinTier && !MixinRuntimeSupport.available()) {
             return Component.translatable("modreloader.preflight.mixin_runtime",
                     MixinRuntimeSupport.name());
+        }
+        if (inspection.tier() == ModInspection.Tier.T4) {
+            return Component.translatable("modreloader.preflight.t4_loadable");
         }
         return Component.translatable("modreloader.preflight.can_load");
     }
