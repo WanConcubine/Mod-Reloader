@@ -22,7 +22,7 @@ import java.util.Map;
  * Guifei-tier stage: lets a hot-added mod register content (blocks / items / …) into the
  * already-frozen built-in registries.
  *
- * <p>Shape of the operation — deliberately different from T2/T3:
+ * <p>Shape of the operation — deliberately different from the pin/fei tiers:
  *
  * <ol>
  *   <li><b>begin</b>: {@code GameData.unfreezeData()} <em>before</em> the mod is

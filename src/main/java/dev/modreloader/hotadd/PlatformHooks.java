@@ -42,7 +42,7 @@ public interface PlatformHooks {
     List<Connection> extraConnections();
 
     /**
-     * Called after registry content was committed (T4). The client rebuilds the
+     * Called after registry content (guifei tier) was committed. The client rebuilds the
      * creative tabs so freshly added items show up without reopening the game;
      * a dedicated server has nothing to do.
      */

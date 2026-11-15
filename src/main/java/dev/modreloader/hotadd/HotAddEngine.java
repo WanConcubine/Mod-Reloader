@@ -34,7 +34,8 @@ import java.util.Set;
  * {@link ModList} → construct the mod and replay client events → inject its
  * resource pack.
  *
- * <p>Still out of scope: registry content (T4/T5) and soft restart.
+ * <p>Still out of scope: datapack registries, guifei/huanghou content that needs a
+ * full restart, and soft restart.
  */
 public final class HotAddEngine {
     public enum Stage {

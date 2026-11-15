@@ -50,7 +50,7 @@ public final class Capabilities {
         MODLIST_REBUILD("mod list rebuild", true),
         NETWORK_ADAPTATION("network payload adaptation", false),
         MIXIN_HOTADD("mixin hot-add", false),
-        REGISTRY_ADAPTATION("registry content hot-add (T4)", false),
+        REGISTRY_ADAPTATION("registry content hot-add (guifei)", false),
         RESOURCE_PACKS("resource pack injection", false);
 
         private final String label;

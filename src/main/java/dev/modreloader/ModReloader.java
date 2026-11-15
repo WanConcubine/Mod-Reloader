@@ -65,7 +65,7 @@ public final class ModReloader {
             LOGGER.info("[ModReloader] {} detected; fei-tier (mixin) hot-add enabled",
                     MixinRuntimeSupport.name());
         } else {
-            LOGGER.warn("[ModReloader] {} is not installed: T2 hot-add works, T3 (mixins) is "
+            LOGGER.warn("[ModReloader] {} is not installed: pin-tier hot-add works, fei-tier (mixins) is "
                             + "blocked. Install it into mods/ (version >= 1.0.2) and restart.",
                     MixinRuntimeSupport.name());
         }

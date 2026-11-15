@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Read-only T4 research probe ({@code -PverifyRegistryProbe=true}).
+ * Read-only guifei-tier research probe ({@code -PverifyRegistryProbe=true}).
  *
  * <p>Reports the facts a registry adaptation would depend on: registry sizes and
  * freeze state, whether the per-world {@code RegistryAccess} is the same object as
