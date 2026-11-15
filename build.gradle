@@ -1,0 +1,97 @@
+plugins {
+    id 'java'
+    id 'net.neoforged.moddev' version '2.0.148'
+}
+
+version = mod_version
+group = mod_group_id
+
+base {
+    archivesName = "${mod_id}-${minecraft_version}"
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
+}
+
+repositories {
+    maven { name = 'BMCLAPI'; url = uri('https://bmclapi2.bangbang93.com/maven/') }
+    mavenCentral()
+}
+
+dependencies {
+    // A1.2 dev dependency; the runtime jar is placed in run/mods for dev.
+    compileOnly files('libs/MixinRuntime-1.0.2-mc1.21.jar')
+}
+
+def autoAddJar = providers.gradleProperty('autoAdd').orNull
+def probeJar = providers.gradleProperty('probe').orNull
+def verifyLan = providers.gradleProperty('verifyLan').orNull
+def verifyRollback = providers.gradleProperty('verifyRollback').orNull
+def failAfterModList = providers.gradleProperty('failAfterModList').orNull
+def failAfterPack = providers.gradleProperty('failAfterPack').orNull
+def verifyWatch = providers.gradleProperty('verifyWatch').orNull
+def watchJar = providers.gradleProperty('watchJar').orNull
+def watchExpectFailure = providers.gradleProperty('watchExpectFailure').orNull
+
+neoForge {
+    version = project.neo_version
+
+    runs {
+        client {
+            client()
+            if (autoAddJar) {
+                systemProperty 'modreloader.autoAdd', autoAddJar
+            }
+            if (probeJar) {
+                systemProperty 'modreloader.probe', probeJar
+            }
+            if (verifyLan) {
+                systemProperty 'modreloader.verifyLan', 'true'
+            }
+            if (verifyRollback) {
+                systemProperty 'modreloader.verifyRollback', 'true'
+            }
+            if (failAfterModList) {
+                systemProperty 'modreloader.failAfterModList', 'true'
+            }
+            if (failAfterPack) {
+                systemProperty 'modreloader.failAfterPack', 'true'
+            }
+            if (verifyWatch) {
+                systemProperty 'modreloader.verifyWatch', 'true'
+            }
+            if (watchJar) {
+                systemProperty 'modreloader.watchJar', watchJar
+            }
+            if (watchExpectFailure) {
+                systemProperty 'modreloader.watchExpectFailure', 'true'
+            }
+        }
+        server {
+            server()
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+// A1 needs JBR's enhanced class redefinition. If JBR 21 is installed in the
+// standard user JDK location, runClient uses it and enables the flag.
+def jbrJava = file("${System.getProperty('user.home')}/Library/Java/JavaVirtualMachines/jbr-21.jdk/Contents/Home/bin/java")
+tasks.named('runClient', JavaExec).configure {
+    if (jbrJava.exists()) {
+        doFirst {
+            executable = jbrJava.absolutePath
+        }
+        jvmArgs '-XX:+AllowEnhancedClassRedefinition'
+    }
+}

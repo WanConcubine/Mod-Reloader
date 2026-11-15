@@ -1,0 +1,109 @@
+# 项目状态
+
+> **唯一状态源。** 每次会话先读这里；改状态只改这里，不要在各处复制。
+> 最后更新：2026-11-15
+
+## 一句话
+
+只读分析器 v0 可用；**A0（T2 模组热加）已验证**；**A1.2 主路径已在 NeoForge 1.21.1 dev client 验证**：热加 `lanserverproperties`（4 mixin、布局变更）后进世界打开 Open to LAN，LSP 的端口/在线模式/最大玩家数控件可用。**A1.2 失败回滚已实现并跑通**：post-ModList / post-pack 强制失败后，ModList、container、module、mixin config、4 个 target 类、资源包均恢复；重试 add 成功。仍差：构造后事件监听器无法注销、存档回读未验证，因此按契约尚未完成。**mods/inbox 监听 + 预检 + toast/弹窗 + 失败分析（Phase 1/2）已实现并验证**：EasyLAN 检测→弹窗→加载 PASS；坏 jar 失败屏 PASS；Ex Nihilo T4 只提示需要重启。T4 / 软重启未开始。目标锁定 **Minecraft 1.21.1 + NeoForge 1.21.1**。
+
+## 当前目标
+
+| 项 | 值 |
+|---|---|
+| Minecraft | 1.21.1 |
+| 分析器 | Fabric + NeoForge，语料与校准锁 1.21.1 |
+| 运行时首发 | NeoForge 1.21.1 |
+| 首个 dogfood | `../Ex-Nihilo-Satellitium`（T4 内容模组） |
+| 身份 | **runtime，不是 mod**：热加载第三方模组，不替代它们的功能（ADR-0005） |
+| 产品锚点 | 热加载缺失的客户端工具模组；LAN 是第一个场景（[use-cases.md](use-cases.md)） |
+| 论文 | 短期不做（ADR-0004） |
+
+原因见 [ADR-0001](decisions/0001-target-1.21.1-neoforge.md)：作者自有项目是 NeoForge 1.21.1；其 dev 整合包 9 个模组里 6 个是 T4/T5；T3 工具价值有限。
+
+## 表尺（可复现）
+
+| 项 | 结果 | 命令 / 来源 |
+|---|---|---|
+| 分析器单测 | **9 passed** | `cd tools/analyzer && python3 -m unittest discover -s tests -v` |
+| 合成 jar | 2 classes / 1 mixin → **T3, 0.65** | 临时合成样本（不入库，可按 tests 规则重建） |
+| 公开 7-jar 语料 | Fabric 5 + NeoForge 2；**T3 3 / T4 1 / T5 3**；1.9 s | `/tmp/corpus_stable`（临时，不入库） |
+| Ex Nihilo 1.5.0 | **T4, 0.78**；0.11 s | `../Ex-Nihilo-Satellitium/build/libs/exnihilosatellitium-1.21.1-1.5.0.jar` |
+| `run/mods` 9 个模组 | **T2 2 / T3 1 / T4 4 / T5 2**；5.1 s | `~/Projects/Ex-Nihilo-Satellitium/run/mods` |
+| LAN 3 个模组 | **T2 1 / T3 2**；0.05 s | `lanserverproperties`、`mcwifipnp`、`EasyLAN`（1.21.1 NeoForge） |
+| 启动到进世界 | **约 83 s**（dev 环境） | `run/logs/latest.log`：23:19:57.701 ModLauncher → 23:21:20.791 世界加载 |
+| **A0 热加 EasyLAN** | **isLoaded=true, container=true；resource pack `mod/easylan` 选中并重载；keyMappings 34→34；JBR 下复测通过；无异常** |
+| **A1.0 probe** | **4 mixins / 4 targets / 2 loaded；+1 field / +16 methods；verdict=JBR_REDEFINE；只读** |
+| **A1.1 spike** | **MixinRuntime + JBR：config 注册成功；ShareToLanScreen 字段/方法可见；UUIDUtil redefined 9155 bytes**。spike 未检查接口合并；A1.2 修正 | 历史 spike；`-Pa1` 入口已移除 |
+| **A1.2 全流水线（主路径）** | **isLoaded/container=true；4 mixins；UUIDUtil/AbstractWidget redefine；ShareToLanScreen/PlayerList 首载织入；接口合并；LAN 屏打开，port=25565；3 个 EditBox；截图** | `./gradlew runClient -PautoAdd=/tmp/lanmods/lanserverproperties-1.13.2-neoforge.jar -PverifyLan=true`；`run/screenshots/a1-lan-screen.png` |
+| **A1.2 失败回滚** | **post-ModList 失败：ModList/container/module/config/4 classes/资源包恢复；retry add PASS；post-pack 失败：pack 移除 + classes 恢复；构造 listener 不可注销** | `-PverifyRollback=true -PfailAfterModList=true` / `-PfailAfterPack=true`；`RollbackCheck` |
+| **mods 监听 / 预检 / 弹窗** | **run/mods + run/modreloader/inbox；EasyLAN 检测 T2→弹窗→加载 PASS；坏 jar 失败屏 PASS；Ex Nihilo T4→不可加载；LSP + failAfterModList→失败屏 + 回滚 PASS；i18n zh_cn/en_us 无 key 泄漏** | `-PverifyWatch=true -PwatchJar=...`；`run/screenshots/watch-prompt.png` / `watch-failure.png` |
+| 系统 JDK | 17 / 8；**Gradle toolchain JDK 21** 在 `~/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x/jdk-21.0.12.1+1/Contents/Home` | `java -version`；Gradle foojay |
+| **JBR 21** | **JBR-21.0.11+10-1163.125-nomod**；`enhancedRedefinition=true` | `~/Library/Java/JavaVirtualMachines/jbr-21.jdk/Contents/Home`；`runClient` 自动使用 |
+
+## 验证状态
+
+### 已验证
+
+- **自附加 + 类重定义**（JDK 17，macOS arm64）：不依赖 `-javaagent` / `-Djdk.attach.allowAttachSelf` 拿到 `Instrumentation`；方法体替换 0.7–5 ms；新增方法被 JVM 拒绝。见 [PoC](../experiments/self-attach-poc/README.md)。
+- **分析器**：合成 jar、公开 7-jar、Ex Nihilo 1.5.0、`run/mods` 都能跑；JSON / Markdown 输出可用。
+- **Java 21 存在**：Gradle 为 Ex Nihilo 下载的 Temurin 21.0.12.1；`java_home` 看不到它。
+- **A0 热加**：NeoForge 1.21.1 dev client 中热加 `EasyLAN`（T2，无 mixin）；`ModList.isLoaded=true`、容器存在、`@Mod` 构造 + 客户端事件无异常；资源包 `mod/easylan` 已选中并重载；JBR 下复测通过。详见 [a0-hot-add.md](features/a0-hot-add.md)。
+- **JBR 21 + enhanced redefinition**：`runClient` 自动使用 JBR 21.0.11，启动日志 `enhancedRedefinition=true`。
+- **A1.0 probe**：只读解析 `lanserverproperties`；4 个 mixin、4 个 target、2 个已加载；布局 +1 字段/+16 方法；JBR 可 redefine。详见 [a1-mixin-hotadd.md](features/a1-mixin-hotadd.md)。
+- **A1.1 spike**：运行时注册 `lsp.mixins.json`；未加载的 `ShareToLanScreen` 字段/方法可见；已加载的 `UUIDUtil` 用 JBR redefine 新增方法成功。**限制**：只检查了字段/方法，没有检查接口合并；`postInitialise` 缺失导致接口没织入，A1.2 修正。详见 [a1-mixin-hotadd.md](features/a1-mixin-hotadd.md)。
+- **mods 监听 / 预检 / 弹窗**：后台轮询 `run/mods` + `run/modreloader/inbox`；稳定检测 + 基线；`ModInspector` 读元数据/依赖/mixin/registry/native 预测 T2–T5；主菜单自动弹 `ModReloaderScreen`，世界中只 toast；加载走 `LoadController`，失败打开 `LoadFailureScreen`，带原因/建议/回滚/复制/日志。EasyLAN T2 检测→加载 PASS；坏 jar 预检失败屏 PASS；Ex Nihilo T4 显示“不可加载/需要重启”；LSP + `failAfterModList` 走失败屏并回滚成功。GUI/按钮/toast/命令/失败摘要已走 `Component.translatable`，`en_us` / `zh_cn` 都实测无 key 泄漏。配置在 `config/modreloader/watcher.json`，忽略/失败记录独立 JSON。详见 [gui-mod-watcher.md](features/gui-mod-watcher.md)。
+- **A1.2 失败回滚**：新增 `Rollback` LIFO 事务；每个阶段先注册 undo。强制 post-ModList 失败后恢复 module / ModList / mixin config（deactivate，保留对象供重试）/ 4 个 target 类字节（JBR redefine 回原字节）/ 资源包；`RollbackCheck` 重试 add 成功。强制 post-pack 失败后资源包选中项移除、类/ModList 恢复；构造后的监听器无法注销。详见 [a1-mixin-hotadd.md](features/a1-mixin-hotadd.md)。
+- **A1.2 全流水线（主路径）**：`module → mixin → ModList → construct → events → 资源包` 合并进 `HotAddEngine`；`lsp.mixins.json` 运行时注册（config / mod id 从 jar 元数据读取，不再硬编码）；`UUIDUtil`、`AbstractWidget` 用 JBR redefine；`ShareToLanScreen` / `PlayerList` 用 `Class.forName(..., false)` 首载织入；补齐 `MixinConfig.postInitialise` 后 `IShareToLanScreenParamAccessor` 接口合并；进世界打开 LAN 屏，`getPort()=25565`、3 个 EditBox、LSP 的在线模式/PvP/最大玩家数控件可见；资源包选中并 `reloadResourcePacks()`，翻译生效。详见 [a1-mixin-hotadd.md](features/a1-mixin-hotadd.md)。
+
+### 未验证
+
+- **EasyLAN 的真实 GUI**：`@Mod` 构造器已注册 `ScreenEvent.Opening` 监听器，但没有人工点过界面按钮；`keyMappings` 未增加。A1.2 的 LAN 屏验证只覆盖 `lanserverproperties`。
+- **游戏内 `/modreloader add` 命令**：已注册，但主菜单没有 player，dispatcher 为 null；需进世界手动执行一次。
+- **生产 jar / 第三方启动器**：只在 dev client 测过。
+- **世界内 toast 路径**：代码只在世界中 toast、不自动弹窗，但还没有在真实世界里跑过检测。
+- **`/modreloader gui` / `scan` 命令**：已注册，未自动验证。
+- **忽略/失败 JSON**：写入逻辑已实现，未手工验证持久化。
+- **T4（注册表内容）**：未开始。
+- **Tier 预测 vs 人工标注**——还没有 ground truth，准确率未知。
+- **Fabric intermediary 映射**——`class_XXX` 目标识别仍退化。
+- **多版本 / 多加载器**——1.21.1 之外未测试。
+- **存档一致性**——还没有写操作，谈不上验证。
+
+## 已知问题 / 坑
+
+1. **静态分析会漏**：`mekanismgenerators` 被标成 T2，但它通过 Mekanism API 注册内容——跨模组注册抓不到。
+2. **T5 可能过保守**：AE2 因渲染 model mixin 被判 T5；是否真的必须完整重启，需要运行时验证。
+3. **Fabric 生产 jar 是 intermediary 名**：`net.minecraft.class_310`，核心类识别退化。
+4. **Jar-in-Jar 只拆一层**；更深 bundle 不展开。
+5. **Python 分析器 vs 未来 Java 模组**：规则需要抽成声明式配置，避免两份逻辑漂移。
+6. **LAN 模组是 T3 布局变更**：会给 `MinecraftServer` / `PauseScreen` / `ShareToLanScreen` 加字段；需要 JBR 或 sidecar；`online-mode` 可能要重启集成服务器才生效。详见 [use-cases.md](use-cases.md)。
+7. **A1.2 仍未产品化**：依赖 JBR + `-XX:+AllowEnhancedClassRedefinition`；依赖 dev-only 的 MixinRuntime（`run/mods`）。失败回滚只覆盖 post-ModList / post-pack：构造后的 `@Mod` 构造器和事件监听器无法注销；JVM 不能 undefine module，回滚把 Module 对象留在缓存里供重试；被移除的 mixin config 对象保留但 inactive。存档回读、第二个 T3 模组、真实 jar 启动仍未验证。
+8. **Git 仓库已建立**（2026-11-15）：`main`、首次 commit、`origin` → `github.com/WanConcubine/Mod-Reloader`；尚未加 CI、tag、release，证据截图仍只在 `run/`（被忽略）。
+9. **没有人工标注集**：规则准确率、混淆矩阵都还没有。
+10. **没有删/更新路径**：A1.2 只实现了 add；运行时删除/卸载/更新未实现、未测试。已加载的类（尤其已织入 mixin 的 `ShareToLanScreen` / `AbstractWidget`）无法靠删 jar 卸载；需要 classloader 隔离或 T4 软重启。
+11. **GUI/监听初版限制**：只提供 `zh_cn` / `en_us`；异常消息/技术值仍是原始英文（标签已本地化）；最多直接显示 7 个候选；世界内 toast、`/modreloader gui`/`scan`、忽略/重试持久化未自动验证；T4/T5 只提示重启，不尝试加载。
+
+## 下一步
+
+0. **Git 收尾**：加 CI（分析器单测 + `./gradlew build`）；证据截图从 `run/screenshots` 复制进 `docs/`（`run/` 被忽略）；首个 tag `v0.1.0` 待功能稳定。
+1. **人工收尾**：进世界执行 `/modreloader add`；点一次 EasyLAN 的 GUI 按钮。
+2. **A1 产品化**：构造后 listener 回滚 / 存档回读；第二个 T3 模组（如 `mcwifipnp`）；把 MixinRuntime 从 dev-only 依赖换成可分发实现。
+3. **GUI / 文件夹监听完善**：Phase 3/4——世界内 toast 实测、忽略/重试持久化、批量/依赖排序、i18n 收尾、`-PverifyGui` 自动化；见 [gui-mod-watcher.md](features/gui-mod-watcher.md)。
+4. **分析器校准**：50 个 1.21.1 模组，人工标注 tier；算准确率；修 `mekanismgenerators` 类漏判。
+5. **游戏内 `/modreload why <mod>`**：NeoForge 1.21.1，只读。
+6. **T4 软重启 PoC**：NeoForge 1.21.1，dogfood Ex Nihilo。
+7. **B fallback**：只在 A 失败时提供 offline/republish；不是主线。
+
+## 最近变更
+
+- **2026-11-14**：分析器 v0（class 文件解析、`@Mixin` target、注册调用检测、JiJ、TOML）；9 个单测；目标锁定 1.21.1 + NeoForge；文档重组（AGENTS / status / design / glossary / use-cases / ADR）。
+- **2026-11-14（补）**：修复 CLASS-retention 注解解析（`@Mixin` 在 `RuntimeInvisibleAnnotations`，之前漏读）；LAN 三个模组实测 T2/T3。
+- **2026-11-14（定位）**：ADR-0005 确认“我们是 runtime，不是 mod”；主线回到 A（热加载 LAN 模组），B 降级为 fallback。
+- **2026-11-14（A0）**：NeoForge 1.21.1 热加 `EasyLAN` 验证通过；自附加 agent、module 注入、ModList 重建、客户端事件、资源包注入全部跑通。详见 [a0-hot-add.md](features/a0-hot-add.md)。
+- **2026-11-14（A1）**：A1 设计落地；JBR 21.0.11 已安装并接入 `runClient`；**A1.0 probe 完成**（4 mixins / +1 field / +16 methods / JBR_REDEFINE）；**A1.1 spike 完成**（MixinRuntime 注册 config；`ShareToLanScreen` 字段/方法可见；`UUIDUtil` JBR redefine 9155 bytes）；见 [a1-mixin-hotadd.md](features/a1-mixin-hotadd.md)。
+- **2026-11-15（A1.2）**：`A1Spike` 合并进 `HotAddEngine`，去掉硬编码 config/mod id；发现并修复 `postInitialise` 缺失（接口合并）、config `compatibilityLevel=JAVA_17` 降级、已 mixed 类重复 transform、资源包未选中/未重载四个问题；dev client 进世界打开 Open to LAN 验证通过（port=25565，LSP 控件 + 翻译 + 截图）。
+- **2026-11-15（A1.2 回滚）**：新增 `Rollback` LIFO 事务与 `RollbackCheck`；post-ModList 强制失败后恢复 module / ModList / config / 4 个 target 类 / 资源包，重试 add 成功；post-pack 失败后资源包移除 + 类恢复通过。构造后事件监听器仍无法注销，存档回读未验证。
+- **2026-11-15（GUI 初版）**：实现 mods/inbox 监听、Java 预检（T2–T5）、toast + 主菜单弹窗、加载/失败屏、独立 watcher JSON；EasyLAN 检测→加载、坏 jar 失败屏、T4 不可加载均验证。详见 [gui-mod-watcher.md](features/gui-mod-watcher.md)。
+- **2026-11-15（i18n）**：新增 `en_us` / `zh_cn` 语言文件（各 103 key）；GUI、按钮、toast、命令、预检/失败摘要、复制详情标签全部走翻译 key；中英文截图验证无 key 泄漏；异常原始消息保留英文。
+- **2026-11-15（git / 许可 / 作者）**：`git init -b main`，`.gitignore` 覆盖 `.gradle/`、`build/`、`run/`、`libs/`、`*.class`、`__pycache__/`，78 文件 + `LICENSE` 共 79 文件首次 commit 并推到 `origin`（GitHub `WanConcubine/Mod-Reloader`）。许可证由 Apache-2.0 改为 **MIT**：新增 `LICENSE`，`mod_license`、`neoforge.mods.toml`、README、roadmap 同步。作者改为 **Liu_Mei**（`mod_authors` / `authors` / git 提交身份）。

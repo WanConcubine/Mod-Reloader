@@ -1,0 +1,5 @@
+[agent] agentmain called, redefineSupported=true
+instrumentation = sun.instrument.InstrumentationImpl@2ff4acd0
+before: V1 add=5
+after : V2-hotswapped add=105  redefine took 5.420417 ms
+schema change rejected: java.lang.UnsupportedOperationException: class redefinition failed: attempted to add a method

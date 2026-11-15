@@ -1,0 +1,34 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "MIT"
+
+[[mods]]
+modId = "modreloader"
+version = "0.1.0"
+displayName = "Mod Reloader"
+description = '''
+Runtime hot-add of NeoForge client mods.
+A0: T2 mods (no mixins). A1.2 (dev/JBR): mixins + layout changes.
+'''
+authors = "Liu_Mei"
+
+[[dependencies.modreloader]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21.1,)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.modreloader]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1,1.22)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.modreloader]]
+modId = "mr"
+type = "required"
+versionRange = "[1.0.2,)"
+ordering = "NONE"
+side = "CLIENT"

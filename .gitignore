@@ -1,0 +1,12 @@
+experiments/self-attach-poc/out/
+*.class
+__pycache__/
+*.pyc
+
+# Gradle / Minecraft
+.gradle/
+build/
+run/
+*.iml
+
+libs/
