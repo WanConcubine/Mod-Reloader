@@ -11,13 +11,17 @@ import net.minecraft.resources.ResourceLocation;
 /**
  * Brand-logo button for the title/pause screens.
  *
- * <p>Renders the mod's icon instead of text (the tooltip and narration still
- * carry the name), and sits in a corner that vanilla screens leave empty.
+ * <p>Drawn in Minecraft's GUI language: a beveled stone slot holding a grass
+ * block, as pixel art at 1:1 so it stays crisp at every GUI scale. The hover
+ * state uses a second texture; keyboard focus gets an outline. The tooltip and
+ * narration still carry the name.
  */
 public final class LogoButton extends AbstractButton {
     private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(
             ModReloader.MOD_ID, "textures/gui/modreloader_logo.png");
-    private static final int TEXTURE_SIZE = 64;
+    private static final ResourceLocation TEXTURE_HOVERED = ResourceLocation.fromNamespaceAndPath(
+            ModReloader.MOD_ID, "textures/gui/modreloader_logo_hovered.png");
+    private static final int TEXTURE_SIZE = 20;
 
     private final Runnable action;
 
@@ -39,18 +43,13 @@ public final class LogoButton extends AbstractButton {
 
     @Override
     protected void renderWidget(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        if (isHoveredOrFocused()) {
-            guiGraphics.fill(getX() - 2, getY() - 2, getX() + width + 2, getY() + height + 2,
-                    0x40FFFFFF);
+        if (isFocused()) {
+            // Keyboard focus needs its own marker: the hover texture only covers
+            // the mouse case.
+            guiGraphics.fill(getX() - 1, getY() - 1, getX() + width + 1, getY() + height + 1,
+                    0xFFFFFFFF);
         }
-        // blit() samples 1:1 and does not scale, so draw the 64x64 source through a
-        // pose transform instead of sampling its top-left corner.
-        var pose = guiGraphics.pose();
-        pose.pushPose();
-        pose.translate(getX(), getY(), 0f);
-        pose.scale((float) width / TEXTURE_SIZE, (float) height / TEXTURE_SIZE, 1f);
-        guiGraphics.blit(TEXTURE, 0, 0, 0f, 0f, TEXTURE_SIZE, TEXTURE_SIZE,
-                TEXTURE_SIZE, TEXTURE_SIZE);
-        pose.popPose();
+        guiGraphics.blit(isHoveredOrFocused() ? TEXTURE_HOVERED : TEXTURE,
+                getX(), getY(), 0f, 0f, width, height, TEXTURE_SIZE, TEXTURE_SIZE);
     }
 }

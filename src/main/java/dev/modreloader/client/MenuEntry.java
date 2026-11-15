@@ -21,7 +21,7 @@ import java.util.List;
  * be unreachable unless the user edited {@code watcher.json} by hand.
  */
 public final class MenuEntry {
-    private static final int SIZE = 24;
+    private static final int SIZE = 20;
     private static final int MARGIN = 4;
 
     private MenuEntry() {
