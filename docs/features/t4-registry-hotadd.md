@@ -124,7 +124,7 @@ rm run/mods/t4fixture-1.0.0.jar
 
 ## 7. 限制（按当前实现）
 
-- **只有服务端验证**：客户端资源包（模型/blockstates/语言）、创造栏重建、登录同步还没接。
+- **单人多端验证**：客户端资源包、创造栏重建已在单人/集成服务器验证；多人登录同步未验证。
 - **add-only**：没有删除/更新；删掉 mod 会让存档里的条目变成 missing entries（NeoForge 提示并丢弃）。
 - **不支持 datapack 内容**：biome / dimension / enchantment / damage type / recipe / loot / tag 仍需重生。
 - **不支持 mod 自建注册表**：`NewRegistryEvent` 在启动后关闭（`pendingModdedRegistries = null`）。
@@ -137,6 +137,6 @@ rm run/mods/t4fixture-1.0.0.jar
 
 ## 8. 下一步
 
-1. 多人：两端在连接前热加 → 登录快照包含新条目；连接后热加则明确拒绝/提示。需要一个跨进程 harness。
-2. 失败语义：construct 抛异常时确认 abort 能恢复 canonical id，并把 dirty 状态暴露给用户。
-3. datapack：评估数据包重建；不可行就写死边界。
+1. **datapack 热加载（当前主线）**：见 [research-t4-datapack-reload.md](../research-t4-datapack-reload.md)。
+2. 多人：两端在连接前热加 → 登录快照包含新条目；连接后热加则明确拒绝/提示。需要一个跨进程 harness。
+3. 失败语义：construct 抛异常时确认 abort 能恢复 canonical id，并把 dirty 状态暴露给用户。

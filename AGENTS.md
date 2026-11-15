@@ -160,6 +160,7 @@ docs/
   decisions/               # ADR：为什么这样定
   research-hot-mod-reload.md  # 2026-11 调研报告；历史背景，结论以 status 为准
   research-t4-registry.md    # 贵妃级注册表适配调研（机制/边界/实验计划）
+  research-t4-datapack-reload.md # 下一步：datapack 热加载（配方/战利品/标签）调研与 PoC 计划
   roadmap.md               # 长期路线；短期执行以 status 为准
   tech-debt.md             # 结构性技术债与架构升级点（P0/P1/P2）
   history.md               # 追加式变更历史（做了什么/证据/为什么）；状态只看 status.md

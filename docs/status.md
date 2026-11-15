@@ -114,7 +114,7 @@
 3. **GUI / 文件夹监听完善**：Phase 3/4——忽略/重试持久化、批量/依赖排序、`-PverifyGui` 自动化；见 [gui-mod-watcher.md](features/gui-mod-watcher.md)。
 4. **分析器校准**：50 个 1.21.1 模组，人工标注 tier；算准确率；修 `mekanismgenerators` 类漏判。
 5. **游戏内 `/modreload why <mod>`**：NeoForge 1.21.1，只读。
-6. **贵妃级（ADR-0008 已接受）**：add-only 的注册表热加已跑通（服务端闭环 + GUI + 单人客户端资源/创造栏 + 真实 dogfood 注册层，见 [t4-registry-hotadd.md](features/t4-registry-hotadd.md)）；**datapack 已成为明确的硬阻塞**（众星捧月 299 配方/77 战利品/标签不加载）。后续按顺序：① datapack 内容能否在运行中重建；② 多人登录前热加与跨进程同步；③ 失败语义（dirty 暴露）。managed relaunch（ADR-0006）仍是不支持内容的兜底。硬约束：建连接前完成、BlockState id 先清空重建、提交后不可回滚。
+6. **贵妃级下一步：datapack 热加载 PoC（新会话从这里开始）**：注册层已跑通（服务端 + GUI + 单人客户端资源/创造栏 + 众星捧月 dogfood），**datapack 是硬阻塞**（299 配方 / 77 战利品表 / 标签 / 机器数据不加载）。计划、候选方案（A：注入 pack + `MinecraftServer.reloadResources`；B：重建 `ReloadableServerResources`；C：明确不支持）、源码锚点与一次性世界实验步骤见 [research-t4-datapack-reload.md](research-t4-datapack-reload.md)。成功标准：**不重启**让众星捧月的一条配方或 loot 生效。通过后再做多人登录前热加、失败语义（dirty）。managed relaunch（ADR-0006）仍是不支持内容的兜底；硬约束：建连接前完成、BlockState id 先清空重建、提交后不可回滚。
 7. **B fallback**：只在 A 失败时提供 offline/republish；不是主线。
 
 ## 最近变更
