@@ -9,4 +9,8 @@ build/
 run/
 *.iml
 
+# macOS
+.DS_Store
+
+# 编译依赖 MixinRuntime，不随仓库分发（见 docs/status.md 已知问题 12）
 libs/
