@@ -108,7 +108,37 @@ Missing or unsupported mandatory dependencies:
 [RollbackCheck] RESULT: PASS
 ```
 
-`-PfailAfterPack=true` 也验证了资源包回滚。限制：仅 dev client + JBR；依赖 dev-only MixinRuntime；构造后事件监听器无法注销、存档回读未验证，A1.2 仍不算契约完成；只验证了 `lanserverproperties`，不等于通用 T3 支持。
+`-PfailAfterPack=true` 也验证了资源包回滚。
+
+世界内命令（新建世界后由 harness 执行 `/modreloader add`，不再需要人工）：
+
+```bash
+./gradlew runClient -PverifyAddCommand=/tmp/lanmods/EasyLAN-neoforge-1.21.1-v1.6a.jar
+```
+
+```text
+[AddCmdCheck] dispatcher has /modreloader=true
+[AddCmdCheck] /modreloader add /tmp/lanmods/EasyLAN-neoforge-1.21.1-v1.6a.jar returned 1
+[AddCmdCheck] ModList easylan: isLoaded=true, container=true
+[AddCmdCheck] RESULT: PASS
+```
+
+负向回归：缺 MixinRuntime 时 add 一个 T3 模组必须被拒且不污染状态：
+
+```bash
+./gradlew runClient \
+  -PverifyAddCommand=/tmp/lanmods/lanserverproperties-1.13.2-neoforge.jar \
+  -PverifyAddCommandModId=lanserverproperties \
+  -PverifyAddCommandExpectFailure=true
+```
+
+```text
+[ModReloader] [lanserverproperties] declares mixins but MixinRuntime (mr) is not installed
+[AddCmdCheck] ModList lanserverproperties: isLoaded=false, container=false
+[AddCmdCheck] RESULT: PASS
+```
+
+限制：仅 dev client + JBR；MixinRuntime 现在是**可选**依赖（缺它时 T3 被拦、T2 照常），但**构建**仍需要 `libs/` 里的 jar；构造后事件监听器无法注销、存档回读未验证，A1.2 仍不算契约完成；只验证了 `lanserverproperties`，不等于通用 T3 支持。
 
 ## mods 文件夹监听与弹窗（初版）
 

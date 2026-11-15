@@ -33,6 +33,7 @@ def failAfterPack = providers.gradleProperty('failAfterPack').orNull
 def verifyWatch = providers.gradleProperty('verifyWatch').orNull
 def watchJar = providers.gradleProperty('watchJar').orNull
 def watchExpectFailure = providers.gradleProperty('watchExpectFailure').orNull
+def verifyAddCommand = providers.gradleProperty('verifyAddCommand').orNull
 
 neoForge {
     version = project.neo_version
@@ -66,6 +67,17 @@ neoForge {
             }
             if (watchExpectFailure) {
                 systemProperty 'modreloader.watchExpectFailure', 'true'
+            }
+            if (verifyAddCommand) {
+                // In-world /modreloader add end-to-end check (creates a world).
+                systemProperty 'modreloader.verifyAddCommand', verifyAddCommand
+            }
+            if (providers.gradleProperty('verifyAddCommandModId').orNull) {
+                systemProperty 'modreloader.verifyAddCommandModId',
+                        providers.gradleProperty('verifyAddCommandModId').get()
+            }
+            if (providers.gradleProperty('verifyAddCommandExpectFailure').orNull) {
+                systemProperty 'modreloader.verifyAddCommandExpectFailure', 'true'
             }
         }
         server {

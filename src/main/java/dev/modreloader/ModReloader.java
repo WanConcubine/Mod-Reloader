@@ -2,6 +2,7 @@ package dev.modreloader;
 
 import com.mojang.logging.LogUtils;
 import dev.modreloader.command.ReloaderCommands;
+import dev.modreloader.dev.AddCommandCheck;
 import dev.modreloader.dev.LanScreenCheck;
 import dev.modreloader.dev.RollbackCheck;
 import dev.modreloader.dev.WatchCheck;
@@ -103,6 +104,11 @@ public final class ModReloader {
             } else {
                 WatchCheck.start(Path.of(watchJar));
             }
+        }
+
+        String verifyAddCommand = System.getProperty("modreloader.verifyAddCommand", "").trim();
+        if (!verifyAddCommand.isEmpty()) {
+            AddCommandCheck.start(Path.of(verifyAddCommand));
         }
 
         String probe = System.getProperty("modreloader.probe", "").trim();

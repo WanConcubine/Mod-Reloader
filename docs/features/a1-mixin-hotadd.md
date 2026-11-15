@@ -331,7 +331,7 @@ ModList / constructMod / 客户端事件
 1. **A1 先走 JBR 路线：已确认。** `runClient` 已切到 JBR 21.0.11 + `-XX:+AllowEnhancedClassRedefinition`。
 2. **JBR 是否已安装：已完成。** 路径 `~/Library/Java/JavaVirtualMachines/jbr-21.jdk/Contents/Home`；Gradle 编译仍用 Temurin 21。
 3. **A1 的验收只做 `ShareToLanScreen` 一个 target 是否够？** A1.2 处理了全部 4 个 config target：`ShareToLanScreen`、`UUIDUtil`、`AbstractWidget`、`PlayerList`。
-4. **`-PverifyLan` 是 dev-only**：它用真实建世界 + `ShareToLanScreen` 自动检查，不是产品 UI；游戏内 `/modreloader add` 仍需人工验证。
+4. **`-PverifyLan` 是 dev-only**：它用真实建世界 + `ShareToLanScreen` 自动检查，不是产品 UI；游戏内 `/modreloader add` 已由 `-PverifyAddCommand`（`dev/AddCommandCheck`）自动化，同样 dev-only。
 5. **`-PverifyRollback` 是 dev-only**：`-PfailAfterModList` / `-PfailAfterPack` 强制失败，`RollbackCheck` 验证状态并（post-ModList）重试；不要在产品启动里使用。
 
 ## 9. 代码落点

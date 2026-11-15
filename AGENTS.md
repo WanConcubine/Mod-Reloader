@@ -7,7 +7,7 @@
 ## 1. 项目是什么
 
 - **目标**：让 Minecraft Java 版模组在游戏运行时**安全地增删 / 更新 / 热重载**。
-- **当前阶段**：只读分析器 v0 已完成；**A0（T2 模组热加）已验证**；**A1.2（T3/Mixin + 布局变更）主路径已在 dev client 验证**：`lanserverproperties` 热加后进世界打开 Open to LAN，LSP 控件可用；**失败回滚已覆盖 post-ModList / post-pack**（恢复 ModList/module/config/类/资源包，post-ModList 重试成功）。构造后事件监听器无法注销、存档回读未做，按 §6 尚不算完成。**mods/inbox 监听 + 预检 + toast/弹窗 + 失败分析初版已实现**（EasyLAN 检测→加载、坏 jar 失败屏、T4 不可加载）。T4 软重启未开始。剩余人工：进世界跑 `/modreloader add`、点 EasyLAN 按钮。
+- **当前阶段**：只读分析器 v0 已完成；**A0（T2 模组热加）已验证**；**A1.2（T3/Mixin + 布局变更）主路径已在 dev client 验证**：`lanserverproperties` 热加后进世界打开 Open to LAN，LSP 控件可用；**失败回滚已覆盖 post-ModList / post-pack**（恢复 ModList/module/config/类/资源包，post-ModList 重试成功）。构造后事件监听器无法注销、存档回读未做，按 §6 尚不算完成。**mods/inbox 监听 + 预检 + toast/弹窗 + 失败分析初版已实现**（EasyLAN 检测→加载、坏 jar 失败屏、T4 不可加载）。T4 软重启未开始。剩余人工：点 EasyLAN 的 GUI 按钮（`/modreloader add` 已由 `-PverifyAddCommand` 自动化）。
 - **目标版本**：**Minecraft 1.21.1**；分析器支持 Fabric + NeoForge，语料与校准锁 1.21.1。
 - **运行时首发**：**NeoForge 1.21.1**（原因见 [ADR-0001](docs/decisions/0001-target-1.21.1-neoforge.md)）。
 - **首个 dogfood**：`../Ex-Nihilo-Satellitium`（NeoForge 1.21.1，T4 内容模组）。
@@ -56,13 +56,22 @@ python3 tools/analyzer/run.py scan ~/Projects/Ex-Nihilo-Satellitium/build/libs/e
   -PautoAdd=/tmp/lanmods/lanserverproperties-1.13.2-neoforge.jar \
   -PverifyRollback=true -PfailAfterPack=true
 
+# 世界内 /modreloader add 自动验证：新建世界后执行命令并断言 ModList
+./gradlew runClient -PverifyAddCommand=/tmp/lanmods/EasyLAN-neoforge-1.21.1-v1.6a.jar
+
+# 负向回归：缺 MixinRuntime 时 add 一个 T3 模组必须被拒且不污染状态
+./gradlew runClient \
+  -PverifyAddCommand=/tmp/lanmods/lanserverproperties-1.13.2-neoforge.jar \
+  -PverifyAddCommandModId=lanserverproperties \
+  -PverifyAddCommandExpectFailure=true
+
 # GUI / 文件夹监听初版验证（把 jar 放进 inbox，等待弹窗并加载）
 ./gradlew runClient \
   -PverifyWatch=true \
   -PwatchJar=/tmp/lanmods/EasyLAN-neoforge-1.21.1-v1.6a.jar
 ```
 
-- 游戏内入口：`/modreloader add <jar>`（已注册；自动触发路径已验证；世界内手动执行仍待人工）。
+- 游戏内入口：`/modreloader add <jar>`（已注册；自动触发路径与世界内执行均由 harness 验证）。
 - 测试目标：`EasyLAN`（T2、无 mixin）、`lanserverproperties`（T3、A1.2）。日志与限制见 [docs/features/a0-hot-add.md](docs/features/a0-hot-add.md) / [a1-mixin-hotadd.md](docs/features/a1-mixin-hotadd.md)。
 
 ### 自附加 PoC（JDK 17+）
@@ -103,8 +112,8 @@ Gradle 编译仍用 Temurin 21 toolchain，只有游戏运行用 JBR。
 7. **没跑过就不要写“已验证”**：静态分析结果不等于真实切换成功；区分“预测”和“验证”。
 8. **不跨界改 Ex Nihilo**：它只是 dogfood / 语料；除非所有者明确要求，否则只读。
 9. **不要夸大 A0**：A0 只支持 T2（无 mixin、无注册表）；不要在文档/UI 里写成“支持任意模组”。
-10. **不要夸大 A1**：A1.2 只验证了 `lanserverproperties` + JBR + dev client；MixinRuntime 仍是 dev-only；失败回滚只覆盖 post-ModList/post-pack，构造后事件监听器和存档回读未解决；不等于通用 T3 支持。
-11. **不要夸大 GUI/监听**：只验证了 EasyLAN、坏 jar、Ex Nihilo T4 三个场景；世界内 toast、命令、忽略/重试持久化未自动验证；T4/T5 只提示重启，不热加。
+10. **不要夸大 A1**：A1.2 只验证了 `lanserverproperties` + JBR + dev client；MixinRuntime 是**可选**依赖（缺它 T3 被拦、T2 照常，但构建仍需 `libs/` 的 jar）；失败回滚只覆盖 post-ModList/post-pack，构造后事件监听器和存档回读未解决；不等于通用 T3 支持。
+11. **不要夸大 GUI/监听**：只验证了 EasyLAN、坏 jar、Ex Nihilo T4 三个场景；世界内 toast、`scan`/`gui` 命令、忽略/重试持久化未自动验证（`add` 命令已自动化）；T4/T5 只提示重启，不热加。
 
 ## 4. 目录
 

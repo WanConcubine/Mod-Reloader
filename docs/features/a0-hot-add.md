@@ -87,7 +87,8 @@ A0 直接对目标 `ModFile` 做 `identifyMods()` / `identifyLanguage()` / `comp
 
 ## 3. 已验证 / 未验证
 
-> A0 代码侧收尾完成；剩下是人工验证：进世界后执行一次 `/modreloader add`，以及在世界选择/Open to LAN 界面点一次 EasyLAN 的按钮。
+> A0 代码侧收尾完成。`/modreloader add` 已由 `dev/AddCommandCheck` 自动化验证（`-PverifyAddCommand`，
+> 2026-11-15：命令返回 1、`isLoaded=true`）；剩下的人工项是点一次 EasyLAN 的 GUI 按钮。
 
 ### 已验证
 

@@ -18,11 +18,19 @@ import java.nio.file.Path;
 import java.util.List;
 
 public final class ReloaderCommands {
+    /** Dev-only: captured so {@code AddCommandCheck} can execute without a chat round-trip. */
+    private static CommandDispatcher<CommandSourceStack> lastDispatcher;
+
     private ReloaderCommands() {
+    }
+
+    public static CommandDispatcher<CommandSourceStack> dispatcher() {
+        return lastDispatcher;
     }
 
     public static void register(RegisterClientCommandsEvent event) {
         CommandDispatcher<CommandSourceStack> dispatcher = event.getDispatcher();
+        lastDispatcher = dispatcher;
         dispatcher.register(Commands.literal("modreloader")
                 .then(Commands.literal("ping")
                         .executes(ctx -> {
