@@ -138,6 +138,23 @@ Missing or unsupported mandatory dependencies:
 [AddCmdCheck] RESULT: PASS
 ```
 
+世界内 toast 路径（已经在世界里时把 jar 丢进 inbox，必须只 toast、不弹窗）：
+
+```bash
+./gradlew runClient \
+  -PverifyAddCommand=/tmp/lanmods/EasyLAN-neoforge-1.21.1-v1.6a.jar \
+  -PverifyAddCommandWatchJar=/tmp/lanmods/mcwifipnp-1.9.0-1.21-neoforge.jar
+```
+
+```text
+[ModReloader] new mod(s) detected in world; toast only (run /modreloader gui to open)
+[AddCmdCheck] detection toast queued/visible: 1
+[AddCmdCheck] in-world detection: screen=null, promptOpened=false
+[AddCmdCheck] in-world RESULT: PASS (toast only, no prompt)
+```
+
+断言的是 toast 队列本身（`ToastComponent.visible`/`queued` 里按标题匹配），不是只看日志。
+
 限制：仅 dev client + JBR；MixinRuntime 现在是**可选**依赖（缺它时 T3 被拦、T2 照常），但**构建**仍需要 `libs/` 里的 jar；构造后事件监听器无法注销、存档回读未验证，A1.2 仍不算契约完成；只验证了 `lanserverproperties`，不等于通用 T3 支持。
 
 ## mods 文件夹监听与弹窗（初版）

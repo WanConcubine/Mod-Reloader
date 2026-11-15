@@ -65,6 +65,11 @@ python3 tools/analyzer/run.py scan ~/Projects/Ex-Nihilo-Satellitium/build/libs/e
   -PverifyAddCommandModId=lanserverproperties \
   -PverifyAddCommandExpectFailure=true
 
+# 世界内 toast 路径：已在世界时把 jar 丢进 inbox，断言只 toast、不弹窗
+./gradlew runClient \
+  -PverifyAddCommand=/tmp/lanmods/EasyLAN-neoforge-1.21.1-v1.6a.jar \
+  -PverifyAddCommandWatchJar=/tmp/lanmods/mcwifipnp-1.9.0-1.21-neoforge.jar
+
 # GUI / 文件夹监听初版验证（把 jar 放进 inbox，等待弹窗并加载）
 ./gradlew runClient \
   -PverifyWatch=true \
@@ -113,7 +118,7 @@ Gradle 编译仍用 Temurin 21 toolchain，只有游戏运行用 JBR。
 8. **不跨界改 Ex Nihilo**：它只是 dogfood / 语料；除非所有者明确要求，否则只读。
 9. **不要夸大 A0**：A0 只支持 T2（无 mixin、无注册表）；不要在文档/UI 里写成“支持任意模组”。
 10. **不要夸大 A1**：A1.2 只验证了 `lanserverproperties` + JBR + dev client；MixinRuntime 是**可选**依赖（缺它 T3 被拦、T2 照常，但构建仍需 `libs/` 的 jar）；失败回滚只覆盖 post-ModList/post-pack，构造后事件监听器和存档回读未解决；不等于通用 T3 支持。
-11. **不要夸大 GUI/监听**：只验证了 EasyLAN、坏 jar、Ex Nihilo T4 三个场景；世界内 toast、`scan`/`gui` 命令、忽略/重试持久化未自动验证（`add` 命令已自动化）；T4/T5 只提示重启，不热加。
+11. **不要夸大 GUI/监听**：只验证了 EasyLAN、坏 jar、Ex Nihilo T4 三个场景；`scan`/`gui` 命令、忽略/重试持久化未自动验证（`add` 命令与世界内 toast 已有 harness）；T4/T5 只提示重启，不热加。
 
 ## 4. 目录
 

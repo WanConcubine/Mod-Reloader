@@ -79,6 +79,12 @@ neoForge {
             if (providers.gradleProperty('verifyAddCommandExpectFailure').orNull) {
                 systemProperty 'modreloader.verifyAddCommandExpectFailure', 'true'
             }
+            if (providers.gradleProperty('verifyAddCommandWatchJar').orNull) {
+                // Second phase: drop this jar into the inbox while in world,
+                // assert toast-only (no prompt screen).
+                systemProperty 'modreloader.verifyAddCommandWatchJar',
+                        providers.gradleProperty('verifyAddCommandWatchJar').get()
+            }
         }
         server {
             server()

@@ -44,6 +44,7 @@
 | **有 mr 回归（T3）** | **`MixinRuntime (mr) detected`；`registered=[lsp.mixins.json]`；redefined 2 / eager 2；`isLoaded=true`** | 2026-11-15 15:33：放回 mr → `runClient -PautoAdd=/tmp/lanmods/lanserverproperties-1.13.2-neoforge.jar` |
 | **世界内 add 命令** | **`dispatcher has /modreloader=true`；命令返回 1；`ModList easylan: isLoaded=true, container=true`；RESULT: PASS** | 2026-11-15 15:38：`runClient -PverifyAddCommand=/tmp/lanmods/EasyLAN-neoforge-1.21.1-v1.6a.jar`（新建世界后执行） |
 | **add T3 缺 mr 被拒** | **命令返回 0；`isLoaded=false`；错误「[lanserverproperties] declares mixins but MixinRuntime (mr) is not installed」；无 rollback 错误；RESULT: PASS** | 2026-11-15 15:39：`-PverifyAddCommand=...lanserverproperties... -PverifyAddCommandModId=lanserverproperties -PverifyAddCommandExpectFailure=true` |
+| **世界内 toast（不弹窗）** | **`new mod(s) detected in world; toast only`；toast 队列命中 1（按 `toast.detected.title` 断言）；`screen=null`、`promptOpened=false`；in-world RESULT: PASS** | 2026-11-15 15:43：`-PverifyAddCommand=...EasyLAN... -PverifyAddCommandWatchJar=...mcwifipnp...`（世界内把 jar 丢进 inbox） |
 
 ## 验证状态
 
@@ -65,7 +66,7 @@
 - **EasyLAN 的真实 GUI**：`@Mod` 构造器已注册 `ScreenEvent.Opening` 监听器，但没有人工点过界面按钮；`keyMappings` 未增加。A1.2 的 LAN 屏验证只覆盖 `lanserverproperties`。
 - ~~**游戏内 `/modreloader add` 命令**~~：**已自动化验证**（2026-11-15 15:38）；见表尺「世界内 add 命令」。注意验证走的是 dispatcher 直接执行，跳过聊天打包。
 - **生产 jar / 第三方启动器**：只在 dev client 测过。
-- **世界内 toast 路径**：代码只在世界中 toast、不自动弹窗，但还没有在真实世界里跑过检测。
+- ~~**世界内 toast 路径**~~：**已自动化验证**（2026-11-15 15:43）：世界里丢 jar 进 inbox → 检测到 → toast 进队列（按标题断言）、`screen=null`、未弹窗。见表尺「世界内 toast」。
 - **`/modreloader gui` / `scan` 命令**：已注册，未自动验证。
 - **忽略/失败 JSON**：写入逻辑已实现，未手工验证持久化。
 - **T4（注册表内容）**：未开始。
@@ -94,7 +95,7 @@
 0. **Git 收尾**：加 CI（分析器单测 + `./gradlew build`）；证据截图从 `run/screenshots` 复制进 `docs/`（`run/` 被忽略）；首个 tag `v0.1.0` 待功能稳定。**CI 会先撞上已知问题 12**：`libs/` 不随仓库分发，build 在 CI 上无 jar 可用，加 CI 前必须决定 jar 从哪来（下载脚本 / 提交 jar / 先只跑分析器单测）。
 1. **人工收尾**：点一次 EasyLAN 的 GUI 按钮（`/modreloader add` 已自动化，见表尺）。
 2. **A1 产品化**：构造后 listener 回滚 / 存档回读；第二个 T3 模组（如 `mcwifipnp`）；把 mr 的 5 个调用点反射化，去掉 `compileOnly` 依赖，让 fresh clone 能构建（已知问题 12）。
-3. **GUI / 文件夹监听完善**：Phase 3/4——世界内 toast 实测、忽略/重试持久化、批量/依赖排序、i18n 收尾、`-PverifyGui` 自动化；见 [gui-mod-watcher.md](features/gui-mod-watcher.md)。
+3. **GUI / 文件夹监听完善**：Phase 3/4——忽略/重试持久化、批量/依赖排序、i18n 收尾、`-PverifyGui` 自动化；世界内 toast 已有 harness；见 [gui-mod-watcher.md](features/gui-mod-watcher.md)。
 4. **分析器校准**：50 个 1.21.1 模组，人工标注 tier；算准确率；修 `mekanismgenerators` 类漏判。
 5. **游戏内 `/modreload why <mod>`**：NeoForge 1.21.1，只读。
 6. **T4 软重启 PoC**：NeoForge 1.21.1，dogfood Ex Nihilo。
@@ -113,5 +114,6 @@
 - **2026-11-15（i18n）**：新增 `en_us` / `zh_cn` 语言文件（各 103 key）；GUI、按钮、toast、命令、预检/失败摘要、复制详情标签全部走翻译 key；中英文截图验证无 key 泄漏；异常原始消息保留英文。
 - **2026-11-15（git / 许可 / 作者）**：`git init -b main`，`.gitignore` 覆盖 `.gradle/`、`build/`、`run/`、`libs/`、`*.class`、`__pycache__/`，78 文件 + `LICENSE` 共 79 文件首次 commit 并推到 `origin`（GitHub `WanConcubine/Mod-Reloader`）。许可证由 Apache-2.0 改为 **MIT**：新增 `LICENSE`，`mod_license`、`neoforge.mods.toml`、README、roadmap 同步。作者改为 **Liu_Mei**（`mod_authors` / `authors` / git 提交身份）。
 - **2026-11-15（记录更正）**：MixinRuntime 由「dev-only 依赖」更正为**第三方硬前置**（新增已知问题 12）：`libs/` 被忽略 + `compileOnly` 依赖 → fresh clone 编译失败（24 个符号错误）；`mr` 在 mods.toml 为 `required` → 缺它整个 mod 不加载。所有者决定保持现状。
-- **2026-11-15（世界内 add 自动化）**：新增 `dev/AddCommandCheck` + `-PverifyAddCommand` / `-PverifyAddCommandModId` / `-PverifyAddCommandExpectFailure`；`ReloaderCommands` 记录 dispatcher 供检查执行。实测：新建世界后 `/modreloader add EasyLAN` 返回 1、`isLoaded=true`（15:38）；缺 mr 时 add `lanserverproperties` 返回 0、`isLoaded=false`、错误写明 `MixinRuntime (mr)`、无回滚错误（15:39）。status「未验证」里那条 `/modreloader add` 由此转正，下一步只剩 EasyLAN GUI 按钮。
 - **2026-11-15（前置改为可选）**：`mr` 从 `required` 改为 `type="optional"`；新增 `inspect/MixinRuntimeSupport`（不引用 mr 类型）与 `hotadd/MixinStage`（把 `MixinSupport` 挡在引擎外）；缺 mr 时主菜单 toast + 日志 warn + 预检/失败屏文案统一 `MixinRuntime (mr)`；`HotAddEngine` 在 mixin 阶段前探测，缺失则 `FailureKind.MIXIN_RUNTIME` 失败并回滚；i18n `en_us`/`zh_cn` 各 **110 key**。**运行时已验证**：移走 mr 启动无 FML 报错、warn 出现、EasyLAN T2 热加 `isLoaded=true`；放回 mr 后 LSP T3 回归通过（`registered=[lsp.mixins.json]`，redefined 2，eager 2）。
+- **2026-11-15（世界内 add 自动化）**：新增 `dev/AddCommandCheck` + `-PverifyAddCommand` / `-PverifyAddCommandModId` / `-PverifyAddCommandExpectFailure`；`ReloaderCommands` 记录 dispatcher 供检查执行。实测：新建世界后 `/modreloader add EasyLAN` 返回 1、`isLoaded=true`（15:38）；缺 mr 时 add `lanserverproperties` 返回 0、`isLoaded=false`、错误写明 `MixinRuntime (mr)`、无回滚错误（15:39）。status「未验证」里那条 `/modreloader add` 由此转正，下一步只剩 EasyLAN GUI 按钮。
+- **2026-11-15（世界内 toast 自动化）**：`AddCommandCheck` 增加第二阶段 `-PverifyAddCommandWatchJar`：进世界后把 jar 丢进 inbox，断言**只 toast、不弹窗**。实测 15:43：`new mod(s) detected in world; toast only`；toast 队列按 `toast.detected.title` 命中 1（读 `ToastComponent.visible`/`queued`，因 `ToastInstance` 包私有，改走 `UnsafeAccess` 读字段）；`screen=null`、`promptOpened=false`；in-world RESULT: PASS。status「未验证」里的世界内 toast 一条转正。
