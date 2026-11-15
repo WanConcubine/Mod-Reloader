@@ -1,7 +1,7 @@
-# A0：热加一个 T2 模组（已验证）
+# A0：热加一个嫔级模组（已验证）
 
 > 状态：**已验证**（2026-11-14，NeoForge 1.21.1 dev client；2026-11-15 资源包改为选中并重载后复测）。
-> 目标：不重启游戏，把 `EasyLAN`（T2、无 mixin）从磁盘加载进来，让 `ModList` 认识它、`@Mod` 构造器和客户端事件跑起来。
+> 目标：不重启游戏，把 `EasyLAN`（嫔级、无 mixin）从磁盘加载进来，让 `ModList` 认识它、`@Mod` 构造器和客户端事件跑起来。
 
 ## 1. 验收结果
 
@@ -92,7 +92,7 @@ A0 直接对目标 `ModFile` 做 `identifyMods()` / `identifyLanguage()` / `comp
 
 ### 已验证
 
-- 运行中的 NeoForge 1.21.1 dev client 能加载一个 T2 jar。
+- 运行中的 NeoForge 1.21.1 dev client 能加载一个嫔级 jar。
 - 模块注入、`ModList` 重建、`@Mod` 构造、客户端生命周期事件全部跑通。
 - 资源包：`mod/easylan` 出现在可用包列表，并被选中/重载。
 - 自附加 agent 在游戏进程内可用（无 `-javaagent`、无 `-Djdk.attach.allowAttachSelf`）。
@@ -104,7 +104,7 @@ A0 直接对目标 `ModFile` 做 `identifyMods()` / `identifyLanguage()` / `comp
 - **生产 jar**：只在 dev client 测过；未在正式安装环境/第三方启动器测。
 - **资源包**：已选中/重载 EasyLAN 的 `assets/`；但 EasyLAN 的 GUI 仍未人工点过。
 - **依赖校验**：被绕过；缺依赖时会在构造阶段才炸。
-- **T3/T4**：A0 明确不支持 mixin 与注册表内容。
+- **妃级/贵妃级**：A0 明确不支持 mixin 与注册表内容。
 
 ## 4. 代码位置
 

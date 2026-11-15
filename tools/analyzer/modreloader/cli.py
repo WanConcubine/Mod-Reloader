@@ -30,7 +30,7 @@ def _fallback(path: Path, exc: Exception) -> ModReport:
         mod_id=path.stem,
         name=path.stem,
         version="?",
-        tier="T5",
+        tier="T?",
         confidence=0.0,
         verdict="analysis failed",
         reasons=["analyzer error: %s" % exc],

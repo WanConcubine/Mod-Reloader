@@ -1,11 +1,11 @@
-# A1：热加一个 T3 模组（Mixin + 布局变更）
+# A1：热加一个妃级模组（Mixin + 布局变更）
 
 > 状态：**A1.0 完成**（只读 probe）；**A1.1 spike 完成**（只验证字段/方法）；**A1.2 主路径验证通过**（lanserverproperties 全流水线，dev client 进世界打开 Open to LAN）。失败回滚已覆盖 post-ModList / post-pack；按仓库契约尚未完成：构造后事件监听器无法注销、存档回读未做。
 > 目标：`lanserverproperties` 1.13.2 NeoForge 1.21.1（4 个 mixin，给 `ShareToLanScreen` 加字段/接口）。
 
 ## 1. 为什么 A0 不够
 
-A0 能热加 `EasyLAN`（T2，无 mixin），但 `lanserverproperties` 是 T3：
+A0 能热加 `EasyLAN`（嫔级，无 mixin），但 `lanserverproperties` 是妃级：
 
 - 4 个 mixin 类；
 - `MixinOpenToLanScreen` 给 `ShareToLanScreen` 加 `port` / `portEdit` / `lsp_objects` 等字段；
@@ -59,7 +59,7 @@ A0 的流水线**完全绕过 Mixin**：
 
 - **A1 先用 A（JBR）**，把“re-mix + redefine + 生命周期”跑通；
 - **B 作为后续产品化**，A1 不阻塞；
-- 如果用户环境无法上 JBR，再评估 B 或退化为“只支持 T2”。
+- 如果用户环境无法上 JBR，再评估 B 或退化为“只支持嫔级”。
 
 ## 3. 流水线（JBR 路线）
 
@@ -100,7 +100,7 @@ ModList / constructMod / 客户端事件
 - 预估：能否直接 redefine，还是需要 sidecar；
 - go/no-go。
 
-验收：probe 报告与 Python 分析器（T3、4 mixins、`ShareToLanScreen` 字段）一致；不崩游戏、不改任何状态。
+验收：probe 报告与 Python 分析器（妃级、4 mixins、`ShareToLanScreen` 字段）一致；不崩游戏、不改任何状态。
 
 ### 4.1 实测结果（2026-11-14）
 
@@ -260,13 +260,13 @@ ModList / constructMod / 客户端事件
 ### 6.3 还没验证 / 限制（按 AGENTS §6，A1.2 尚不算契约完成）
 
 - **JBR only**：需要 `-XX:+AllowEnhancedClassRedefinition`；stock JVM 的 sidecar 路线未做。
-- **MixinRuntime 是第三方前置**：`run/mods` 里的 1.0.2-mc1.21；`mr` 在 mods.toml 里已改为 `type="optional"`（缺它 T2 照常、T3 被拦），产品化要 vendor 或自己实现。
+- **MixinRuntime 是第三方前置**：`run/mods` 里的 1.0.2-mc1.21；`mr` 在 mods.toml 里已改为 `type="optional"`（缺它嫔级照常、妃级被拦），产品化要 vendor 或自己实现。
 - **失败回滚（部分）**：已覆盖 post-ModList 和 post-pack 失败（见 6.4）；构造后的 `@Mod` 构造器/事件监听器无法注销，存档回读未验证，因此仍不是契约意义的“完成”。
 - **存档回读**：测试世界已创建并保存，但没有重新启动并打开它；存档可读性未独立验证。
-- **eager load**：未加载 target 用 `Class.forName(..., false)` 立即加载；只验证了 LSP 的 4 个 target，不能推断任意 T3。
+- **eager load**：未加载 target 用 `Class.forName(..., false)` 立即加载；只验证了 LSP 的 4 个 target，不能推断任意妃级。
 - **资源包重载**：`reloadResourcePacks()` 会短暂卡顿；真实玩家场景要评估。
-- **只测了一个模组**：`lanserverproperties` 1.13.2 NeoForge 1.21.1；不是“通用 T3 支持”。
-- **只有 add，没有 remove/update**：运行时删除/卸载/更新未实现，也没有测试。mixin 已经写进目标类，删 jar 不会撤销；需要 classloader 隔离或 T4 软重启。
+- **只测了一个模组**：`lanserverproperties` 1.13.2 NeoForge 1.21.1；不是“通用妃级支持”。
+- **只有 add，没有 remove/update**：运行时删除/卸载/更新未实现，也没有测试。mixin 已经写进目标类，删 jar 不会撤销；需要 classloader 隔离或贵妃级软重启。
 
 ### 6.4 失败回滚（2026-11-15）
 

@@ -19,23 +19,23 @@ def make(**kwargs):
 
 
 class RulesTest(unittest.TestCase):
-    def test_data_only_is_t1(self):
+    def test_data_only_is_data(self):
         report = classify(make(class_count=0, has_data=True))
-        self.assertEqual(report.tier, "T1")
+        self.assertEqual(report.tier, "DATA")
 
-    def test_native_is_t5(self):
+    def test_native_is_huanghou(self):
         report = classify(make(native_methods=2))
-        self.assertEqual(report.tier, "T5")
+        self.assertEqual(report.tier, "HUANGHOU")
 
-    def test_registration_is_t4(self):
+    def test_registration_is_guifei(self):
         report = classify(make(registration_refs={"net/minecraft/core/Registry#register"},
                                content_refs={"net/minecraft/world/item/Item"}))
-        self.assertEqual(report.tier, "T4")
+        self.assertEqual(report.tier, "GUIFEI")
 
-    def test_mixin_without_registration_is_t3(self):
+    def test_mixin_without_registration_is_fei(self):
         report = classify(make(mixin_class_count=2,
                                mixin_targets={"net/minecraft/client/gui/Gui"}))
-        self.assertEqual(report.tier, "T3")
+        self.assertEqual(report.tier, "FEI")
 
     def test_intermediary_targets_lower_confidence(self):
         named = classify(make(mixin_class_count=2,

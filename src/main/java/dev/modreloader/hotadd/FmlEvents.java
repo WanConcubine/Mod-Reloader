@@ -14,7 +14,7 @@ import java.lang.invoke.MethodType;
  * Constructs a hot-added mod and replays the client lifecycle events it missed.
  *
  * <p>A0 deliberately stops at client setup + key mappings. Registry events are
- * out of scope (T4 content mods are not supported yet).
+ * out of scope (registry content is handled by {@link RegistryStage}).
  */
 public final class FmlEvents {
     private FmlEvents() {
@@ -27,7 +27,7 @@ public final class FmlEvents {
 
     /**
      * Constructs the mod and fires {@code FMLConstructModEvent}. Split from
-     * {@link #finish(ModContainer)} so a T4 hot-add can replay registry events
+     * {@link #finish(ModContainer)} so a registry-content hot-add can replay registry events
      * between construction and common setup (that is the normal startup order).
      */
     public static void construct(ModContainer container) throws Throwable {

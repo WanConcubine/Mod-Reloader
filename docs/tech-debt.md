@@ -11,7 +11,7 @@
 | `dev/` 夹具 | **9 文件 / 2101 行 ≈ 30%**，独立 `src/dev/java` source set；**不在发布 jar 里**（jar 内 0 条 `dev/modreloader/dev/`） |
 | 反射 / Unsafe 站点 | 8 个文件（mixin、ModList、module、网络、资源包、JVM） |
 | Java 单测 | **3**（`./gradlew test`，不需要游戏） |
-| 语言文件 | `en_us` / `zh_cn` 各 **128 key**，键集与 `%s` 占位符由单测核对 |
+| 语言文件 | `en_us` / `zh_cn` 各 **132 key**，键集与 `%s` 占位符由单测核对 |
 | 包依赖 | `hotadd` **不再**依赖 `client` / `server`；剩 `command ↔ client`、`client → server`（集成服务器的命令重放）、`diagnose → ui`（文案） |
 
 ## P0：会让我们「悄悄说错话」的
@@ -48,7 +48,7 @@
    → 让客户端注册时装饰命令树（`ClientBootstrap` 里 `register(ClientCommands.withGui(tree()))`），
    `command` 只保留共享树。
 5. **一次性事件重放没有统一出口**：命令（`RegisterCommandsEvent`）已有，payload（`RegisterPayloadHandlersEvent`）
-   已用同样套路，T4 的 `RegisterEvent` 大概率还要用。三处各自处理"重放会让所有 mod 监听器再跑一遍"这个坑。
+   已用同样套路，贵妃级的 `RegisterEvent` 大概率还要用。三处各自处理"重放会让所有 mod 监听器再跑一遍"这个坑。
    → 一个 `OneShotReplay` 帮助类，集中记录这个副作用与降级策略。
 6. **harness 样板重复**：4 个检查各自复制"建世界 / 连服 / 等遮罩"逻辑（`AddCommandCheck`、`PayloadCheck`、
    `RemotePayloadCheck`、`MenuEntryCheck`），约 600 行里有大半是重复。现在它们都在 `src/dev`，抽取更安全。
@@ -71,11 +71,11 @@
 
 - 不引入 DI 容器、不抽象事件总线、不做通用插件系统。
 - 不把 `HotAddEngine.add` 拆成阶段框架：它是 360 行的顺序流程，但回滚与失败分类已经验证过，重写收益不抵风险。
-- 不为"未来可能支持任意 mod"预留适配器接口——等 T4 真的按 mod 写适配器时再抽。
+- 不为"未来可能支持任意 mod"预留适配器接口——等贵妃级真的按 mod 写适配器时再抽。
 
 ## 建议的动手顺序
 
 1. P1-4（`command ↔ client` 循环，客户端装饰命令树）
-2. P1-5（`OneShotReplay`，同时把 T4 的 `RegisterEvent` 重放位置留好）
+2. P1-5（`OneShotReplay`，同时把贵妃级的 `RegisterEvent` 重放位置留好）
 3. P1-6（harness 抽 `TestWorld` / `TestConnection`）
 4. P2-9 → P2-10（`libs/` 反射化，然后 CI 跑分析器单测 + `./gradlew build`）

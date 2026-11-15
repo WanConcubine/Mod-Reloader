@@ -17,8 +17,8 @@ public final class ModReloaderI18n {
         return blockReason(inspection, false);
     }
 
-    /** @param allowT4 true when registry content can be hot-added (experimental). */
-    public static Component blockReason(ModInspection inspection, boolean allowT4) {
+    /** @param allowRegistryContent true when registry content can be hot-added (experimental). */
+    public static Component blockReason(ModInspection inspection, boolean allowRegistryContent) {
         if (!inspection.ok()) {
             String error = inspection.error() == null ? "" : inspection.error();
             if (error.contains("not a valid jar")) {
@@ -44,11 +44,11 @@ public final class ModReloaderI18n {
         if (inspection.alreadyLoaded()) {
             return Component.translatable("modreloader.preflight.already_loaded");
         }
-        if (inspection.tier() == ModInspection.Tier.T4 && !allowT4) {
-            return Component.translatable("modreloader.preflight.t4");
+        if (inspection.tier() == ModInspection.Tier.GUIFEI && !allowRegistryContent) {
+            return Component.translatable("modreloader.preflight.guifei");
         }
-        if (inspection.tier() == ModInspection.Tier.T5) {
-            return Component.translatable("modreloader.preflight.t5");
+        if (inspection.tier() == ModInspection.Tier.HUANGHOU) {
+            return Component.translatable("modreloader.preflight.huanghou");
         }
         for (ModInspection.Dependency dependency : inspection.dependencies()) {
             if (dependency.required() && !dependency.satisfied()) {
@@ -56,8 +56,8 @@ public final class ModReloaderI18n {
                         dependencyName(dependency.modId()), dependency.versionRange());
             }
         }
-        boolean mixinTier = inspection.tier() == ModInspection.Tier.T3
-                || (inspection.tier() == ModInspection.Tier.T4 && inspection.mixins());
+        boolean mixinTier = inspection.tier() == ModInspection.Tier.FEI
+                || (inspection.tier() == ModInspection.Tier.GUIFEI && inspection.mixins());
         if (mixinTier && !JbrSupport.available()) {
             return Component.translatable("modreloader.preflight.jbr");
         }
@@ -65,8 +65,8 @@ public final class ModReloaderI18n {
             return Component.translatable("modreloader.preflight.mixin_runtime",
                     MixinRuntimeSupport.name());
         }
-        if (inspection.tier() == ModInspection.Tier.T4) {
-            return Component.translatable("modreloader.preflight.t4_loadable");
+        if (inspection.tier() == ModInspection.Tier.GUIFEI) {
+            return Component.translatable("modreloader.preflight.guifei_loadable");
         }
         return Component.translatable("modreloader.preflight.can_load");
     }
@@ -76,6 +76,10 @@ public final class ModReloaderI18n {
      * dependency we ship is mapped — everything else stays untouched rather
      * than guessing.
      */
+    public static Component tier(ModInspection.Tier tier) {
+        return Component.translatable(tier.key());
+    }
+
     public static String dependencyName(String modId) {
         if (MixinRuntimeSupport.MOD_ID.equals(modId)) {
             return MixinRuntimeSupport.name();
@@ -90,7 +94,7 @@ public final class ModReloaderI18n {
         if (ids.isEmpty()) {
             ids = inspection.fileName();
         }
-        MutableComponent result = Component.literal(ids + " · " + inspection.tier().name());
+        MutableComponent result = Component.literal(ids + " · ").append(tier(inspection.tier()));
         if (inspection.mixins()) {
             result.append(Component.literal(" · ")).append(Component.translatable("modreloader.preflight.mixins"));
         }

@@ -1,4 +1,4 @@
-# T4 注册表热加（实验性，server-only）
+# 贵妃级注册表热加（实验性）
 
 > 状态：**实验性能力**，已在 dedicated server 端到端验证，GUI 路径也已放行（2026-11-15）。
 > 范围：built-in 注册表的 **add-only**（方块 / 物品）；不含删除、更新、datapack 内容。
@@ -6,7 +6,7 @@
 
 ## 1. 机制
 
-`hotadd/RegistryStage` 把一次 T4 热加分三步（顺序与正常启动一致）：
+`hotadd/RegistryStage` 把一次贵妃级热加分三步（顺序与正常启动一致）：
 
 ```text
 begin   → GameData.unfreezeData()        // 在构造之前：有的 mod 在构造器里直接 Registry.register
@@ -76,10 +76,10 @@ registry commit: ... stoneId 1 -> 1 (stable)
 
 ## 4. GUI 路径（2026-11-15 22:18）
 
-watcher 把 fixture 丢进 inbox 后，提示屏显示 `[T4]` 与警告文案（实验性 / 仅新增 / 存档依赖 / 不可回滚），
+watcher 把 fixture 丢进 inbox 后，提示屏显示 `[贵妃]` 与警告文案（实验性 / 仅新增 / 存档依赖 / 不可回滚），
 Load 可用；点击后走同一个引擎，`WatchCheck RESULT: PASS`。截图：
 
-![T4 提示屏](images/t4-registry-prompt.png)
+![贵妃级提示屏](images/t4-registry-prompt.png)
 
 ```bash
 ./gradlew runClient -PverifyWatch=true -PwatchJar=/tmp/t4fixture-ui.jar -PwatchModId=t4fixture

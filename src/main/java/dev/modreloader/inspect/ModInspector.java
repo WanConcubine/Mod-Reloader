@@ -114,10 +114,10 @@ public final class ModInspector {
                     .orElse(false);
 
             ScanResult scan = scanJar(jar);
-            ModInspection.Tier tier = scan.nativeCode() ? ModInspection.Tier.T5
-                    : scan.registry() ? ModInspection.Tier.T4
-                    : mixins ? ModInspection.Tier.T3
-                    : ModInspection.Tier.T2;
+            ModInspection.Tier tier = scan.nativeCode() ? ModInspection.Tier.HUANGHOU
+                    : scan.registry() ? ModInspection.Tier.GUIFEI
+                    : mixins ? ModInspection.Tier.FEI
+                    : ModInspection.Tier.PIN;
 
             List<String> notes = new ArrayList<>();
             if (!mixinNames.isEmpty()) {
@@ -131,7 +131,7 @@ public final class ModInspector {
                     notes.add("missing dependency: " + dependency.modId() + " " + dependency.versionRange());
                 }
             }
-            if (tier == ModInspection.Tier.T3) {
+            if (tier == ModInspection.Tier.FEI) {
                 notes.add(JbrSupport.describe());
             }
             if (clientSideOnly) {
@@ -151,7 +151,7 @@ public final class ModInspector {
     }
 
     private static ModInspection failed(Path jar, String error) {
-        return new ModInspection(jar, jar.getFileName().toString(), List.of(), ModInspection.Tier.T2,
+        return new ModInspection(jar, jar.getFileName().toString(), List.of(), ModInspection.Tier.PIN,
                 false, false, false, false, false, List.of(), List.of(), error);
     }
 

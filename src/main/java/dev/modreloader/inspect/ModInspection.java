@@ -7,15 +7,37 @@ import java.util.List;
  * Lightweight, read-only preflight result for a candidate jar.
  *
  * <p>This is a prediction for the UI. It is not a proof that the mod can be
- * hot-added: T2/T3 can still fail, and T4/T5 are deliberately not attempted.
+ * hot-added: pin/fei can still fail, and guifei/huanghou are deliberately not attempted.
  */
 public record ModInspection(Path jar, String fileName, List<Mod> mods, Tier tier,
                             boolean mixins, boolean registry, boolean nativeCode,
                             boolean alreadyLoaded, boolean clientSideOnly,
                             List<Dependency> dependencies, List<String> notes, String error) {
 
+    /**
+     * Hot-add tiers. The names are the project's own ranks; there is no numeric
+     * tier id — T0/T1 (resources/data) are vanilla capabilities and not part of
+     * this model.
+     */
     public enum Tier {
-        T2, T3, T4, T5
+        PIN("pin"),
+        FEI("fei"),
+        GUIFEI("guifei"),
+        HUANGHOU("huanghou");
+
+        private final String id;
+
+        Tier(String id) {
+            this.id = id;
+        }
+
+        public String id() {
+            return id;
+        }
+
+        public String key() {
+            return "modreloader.tier." + id;
+        }
     }
 
     public record Mod(String modId, String name, String version) {
@@ -33,14 +55,14 @@ public record ModInspection(Path jar, String fileName, List<Mod> mods, Tier tier
     }
 
     /**
-     * @param allowT4 true when the registry-adaptation path is available; T4 is
-     *                still experimental and add-only, so callers decide.
+     * @param allowRegistryContent true when the registry-adaptation path is available;
+     *                             guifei content is still experimental and add-only.
      */
-    public boolean canHotLoad(boolean allowT4) {
-        if (!ok() || alreadyLoaded || tier == Tier.T5) {
+    public boolean canHotLoad(boolean allowRegistryContent) {
+        if (!ok() || alreadyLoaded || tier == Tier.HUANGHOU) {
             return false;
         }
-        if (tier == Tier.T4 && !allowT4) {
+        if (tier == Tier.GUIFEI && !allowRegistryContent) {
             return false;
         }
         for (Dependency dependency : dependencies) {
@@ -48,15 +70,15 @@ public record ModInspection(Path jar, String fileName, List<Mod> mods, Tier tier
                 return false;
             }
         }
-        if (tier == Tier.T3 || (tier == Tier.T4 && mixins)) {
+        if (tier == Tier.FEI || (tier == Tier.GUIFEI && mixins)) {
             return JbrSupport.available() && MixinRuntimeSupport.available();
         }
         return true;
     }
 
-    /** T3 needs MixinRuntime to reopen Mixin's frozen config list. */
+    /** Fei-tier mods need MixinRuntime to reopen Mixin's frozen config list. */
     public boolean mixinRuntimeMissing() {
-        return tier == Tier.T3 && !MixinRuntimeSupport.available();
+        return tier == Tier.FEI && !MixinRuntimeSupport.available();
     }
 
     public String blockReason() {
@@ -66,10 +88,10 @@ public record ModInspection(Path jar, String fileName, List<Mod> mods, Tier tier
         if (alreadyLoaded) {
             return "already loaded; updating requires a restart";
         }
-        if (tier == Tier.T4) {
+        if (tier == Tier.GUIFEI) {
             return "registry content: requires restart/soft restart";
         }
-        if (tier == Tier.T5) {
+        if (tier == Tier.HUANGHOU) {
             return "native/coremod: requires full restart";
         }
         for (Dependency dependency : dependencies) {
@@ -77,11 +99,11 @@ public record ModInspection(Path jar, String fileName, List<Mod> mods, Tier tier
                 return "missing dependency: " + dependency.modId() + " " + dependency.versionRange();
             }
         }
-        if (tier == Tier.T3 && !JbrSupport.available()) {
-            return "T3 layout changes require JBR 21 + -XX:+AllowEnhancedClassRedefinition";
+        if (tier == Tier.FEI && !JbrSupport.available()) {
+            return "fei-tier layout changes require JBR 21 + -XX:+AllowEnhancedClassRedefinition";
         }
         if (mixinRuntimeMissing()) {
-            return "T3 mixins require " + MixinRuntimeSupport.name() + " to be installed";
+            return "fei-tier mixins require " + MixinRuntimeSupport.name() + " to be installed";
         }
         return null;
     }
@@ -94,7 +116,7 @@ public record ModInspection(Path jar, String fileName, List<Mod> mods, Tier tier
                 .map(mod -> mod.modId() + " " + mod.version())
                 .reduce((a, b) -> a + ", " + b)
                 .orElse("?");
-        return ids + " · " + tier + (mixins ? " · mixins" : "")
+        return ids + " · " + tier.id() + (mixins ? " · mixins" : "")
                 + (registry ? " · registry" : "") + (nativeCode ? " · native" : "");
     }
 }

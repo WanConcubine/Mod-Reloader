@@ -87,11 +87,11 @@ public final class FailureAnalyzer {
             suggestion = Component.translatable("modreloader.preflight.suggestion.invalid");
         } else if (inspection.alreadyLoaded()) {
             suggestion = Component.translatable("modreloader.preflight.suggestion.restart");
-        } else if (inspection.tier() == ModInspection.Tier.T4) {
-            suggestion = Component.translatable("modreloader.preflight.suggestion.t4");
-        } else if (inspection.tier() == ModInspection.Tier.T5) {
-            suggestion = Component.translatable("modreloader.preflight.suggestion.t5");
-        } else if (inspection.tier() == ModInspection.Tier.T3 && !JbrSupport.available()) {
+        } else if (inspection.tier() == ModInspection.Tier.GUIFEI) {
+            suggestion = Component.translatable("modreloader.preflight.suggestion.guifei");
+        } else if (inspection.tier() == ModInspection.Tier.HUANGHOU) {
+            suggestion = Component.translatable("modreloader.preflight.suggestion.huanghou");
+        } else if (inspection.tier() == ModInspection.Tier.FEI && !JbrSupport.available()) {
             suggestion = Component.translatable("modreloader.preflight.suggestion.jbr");
         } else if (inspection.mixinRuntimeMissing()) {
             suggestion = Component.translatable("modreloader.preflight.suggestion.mixin_runtime",

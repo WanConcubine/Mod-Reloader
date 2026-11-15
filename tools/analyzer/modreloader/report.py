@@ -8,7 +8,7 @@ from typing import Iterable, List
 
 from .model import ModReport
 
-TIER_ORDER = ["T0", "T1", "T2", "T3", "T4", "T5", "T?"]
+TIER_ORDER = ["RESOURCE", "DATA", "PIN", "FEI", "GUIFEI", "HUANGHOU", "T?"]
 
 
 def _clip(text: str, width: int) -> str:
@@ -25,7 +25,7 @@ def _summary(reports: List[ModReport]) -> str:
     for report in reports:
         by_loader[report.loader] = by_loader.get(report.loader, 0) + 1
         by_tier[report.tier] = by_tier.get(report.tier, 0) + 1
-    hot = sum(by_tier[t] for t in ("T0", "T1", "T2", "T3"))
+    hot = sum(by_tier[t] for t in ("RESOURCE", "DATA", "PIN", "FEI"))
     failed = by_tier.get("T?", 0)
     total = len(reports) or 1
     loaders = "  ".join("%s: %d" % (k, v) for k, v in sorted(by_loader.items()))
@@ -34,8 +34,8 @@ def _summary(reports: List[ModReport]) -> str:
         "Scanned %d jars\n"
         "  loaders: %s\n"
         "  tiers:   %s\n"
-        "  hot-swappable (T0-T3): %d/%d (%.0f%%)\n"
-        "  needs restart (T4-T5):  %d/%d (%.0f%%)\n"
+        "  no restart needed (RESOURCE-DATA-PIN-FEI): %d/%d (%.0f%%)\n"
+        "  restart needed (GUIFEI-HUANGHOU):         %d/%d (%.0f%%)\n"
         "  analysis failed:        %d\n"
         % (len(reports), loaders, tiers, hot, total, 100.0 * hot / total,
            len(reports) - hot - failed, total, 100.0 * (len(reports) - hot - failed) / total,
@@ -45,12 +45,12 @@ def _summary(reports: List[ModReport]) -> str:
 
 def render_text(reports: List[ModReport], verbose: bool = False) -> str:
     lines = [_summary(reports)]
-    header = "%-26s %-10s %-8s %-4s %-5s %s" % ("MOD", "VERSION", "LOADER", "TIER", "CONF", "VERDICT")
+    header = "%-26s %-10s %-8s %-8s %-5s %s" % ("MOD", "VERSION", "LOADER", "TIER", "CONF", "VERDICT")
     lines.append("")
     lines.append(header)
     lines.append("-" * len(header))
     for report in sorted(reports, key=lambda r: (TIER_ORDER.index(r.tier), r.mod_id)):
-        lines.append("%-26s %-10s %-8s %-4s %-5.2f %s" % (
+        lines.append("%-26s %-10s %-8s %-8s %-5.2f %s" % (
             _clip(report.mod_id, 26),
             _clip(report.version, 10),
             _clip(report.loader, 8),
@@ -58,16 +58,16 @@ def render_text(reports: List[ModReport], verbose: bool = False) -> str:
             report.confidence,
             report.verdict,
         ))
-        if verbose or report.tier in ("T4", "T5"):
+        if verbose or report.tier in ("GUIFEI", "HUANGHOU"):
             for reason in report.reasons:
                 lines.append("    - %s" % reason)
 
-    attention = [r for r in reports if r.tier in ("T4", "T5")]
+    attention = [r for r in reports if r.tier in ("GUIFEI", "HUANGHOU")]
     if attention:
         lines.append("")
         lines.append("Needs a restart (%d):" % len(attention))
         for report in sorted(attention, key=lambda r: (TIER_ORDER.index(r.tier), r.mod_id)):
-            lines.append("  %-24s %-4s %s" % (
+            lines.append("  %-24s %-8s %s" % (
                 _clip(report.mod_id, 24), report.tier, report.reasons[0] if report.reasons else ""))
     return "\n".join(lines) + "\n"
 
@@ -94,10 +94,10 @@ def render_markdown(reports: List[ModReport]) -> str:
             reason,
         ))
     lines.append("")
-    lines.append("## Details (T4/T5)")
+    lines.append("## Details (GUIFEI/HUANGHOU)")
     lines.append("")
     for report in sorted(reports, key=lambda r: (TIER_ORDER.index(r.tier), r.mod_id)):
-        if report.tier not in ("T4", "T5"):
+        if report.tier not in ("GUIFEI", "HUANGHOU"):
             continue
         lines.append("### %s (%s) — %s" % (report.mod_id, report.version, report.tier))
         lines.append("")

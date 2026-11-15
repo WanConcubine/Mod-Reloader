@@ -6,26 +6,29 @@
 
 > **这个模组如果要在游戏运行时关掉/更新/加上，最低需要付到什么代价？**
 
-输出是一个分级（T0–T5）加理由，例如：
+输出是一个分级加理由：`RESOURCE` / `DATA` 是原版能力（资源/数据重载），`PIN` / `FEI` / `GUIFEI` / `HUANGHOU` = 嫔/妃/贵妃/皇后。例如：
 
 ```text
 Scanned 7 jars
   loaders: fabric: 5  neoforge: 2
-  tiers:   T3: 3  T4: 1  T5: 3
-  hot-swappable (T0-T3): 3/7 (43%)
-  needs restart (T4-T5): 4/7 (57%)
+  tiers:   RESOURCE: 0  DATA: 0  PIN: 0  FEI: 3  GUIFEI: 1  HUANGHOU: 3  T?: 0
+  no restart needed (RESOURCE-DATA-PIN-FEI): 3/7 (43%)
+  restart needed (GUIFEI-HUANGHOU):         4/7 (57%)
+  analysis failed:        0
 
-MOD                        VERSION    LOADER   TIER CONF  VERDICT
-appleskin                  3.0.6+mc1… fabric   T3   0.59  hot-swap with caveats
-jade                       15.10.6+n… neoforge T3   0.75  hot-swap with caveats
-jei                        19.70.0.4… fabric   T3   0.65  hot-swap with caveats
-sophisticatedbackpacks     3.26.21    neoforge T4   0.84  needs world/game-layer restart
-fabric-api                 0.116.18+… fabric   T5   0.85  needs full restart
-lithium                    0.15.4+mc… fabric   T5   0.95  needs full restart
-sodium                     0.8.13+mc… fabric   T5   0.85  needs full restart
+
+MOD                        VERSION    LOADER   TIER     CONF  VERDICT
+---------------------------------------------------------------------
+appleskin                  3.0.6+mc1… fabric   FEI      0.59  hot-swap with caveats
+jade                       15.10.6+n… neoforge FEI      0.75  hot-swap with caveats
+jei                        19.70.0.4… fabric   FEI      0.65  hot-swap with caveats
+sophisticatedbackpacks     3.26.21    neoforge GUIFEI   0.84  experimental add-only; restart for full effect
+fabric-api                 0.116.18+… fabric   HUANGHOU 0.85  needs full restart
+lithium                    0.15.4+mc… fabric   HUANGHOU 0.95  needs full restart
+sodium                     0.8.13+mc… fabric   HUANGHOU 0.85  needs full restart
 ```
 
-（真实语料上的首轮结果。T4 的 Sophisticated Backpacks 被抓到 `DeferredRegister#register`；Jade 虽然读注册表，但没有注册调用，所以留在 T3。）
+（真实语料上的首轮结果。贵妃级（GUIFEI）的 Sophisticated Backpacks 被抓到 `DeferredRegister#register`；Jade 虽然读注册表，但没有注册调用，所以留在妃级（FEI）。）
 
 ## 运行
 
@@ -45,19 +48,20 @@ python3 tools/analyzer/run.py scan /path/to/mods --verbose
 python3 tools/analyzer/run.py scan /path/to/instance --recursive
 ```
 
-## Tier 定义
+## 等级定义（嫔 / 妃 / 贵妃 / 皇后）
 
-| Tier | 含义 | 判定依据（v0） | 结论 |
+| 等级 | 含义 | 判定依据（v0） | 结论 |
 |---|---|---|---|
-| **T0** | 只有资源（assets） | 无类、无 data | 资源重载即可 |
-| **T1** | 只有数据（data） | 无类、有 data | `/reload` 即可 |
-| **T2** | 只有代码，无 mixin、无注册表 | 有类，但无 mixin/registry 信号 | 可热加/更新；移除受类卸载限制 |
-| **T3** | 代码 + Mixin，无注册表内容 | 有 mixin 类，registry/content 信号不足 | 可热换，但有兼容性风险 |
-| **T4** | 注册表内容（方块/物品/实体/维度） | registry + content 信号 | 需要世界/游戏层重启（软重启候选） |
-| **T5** | 不支持热换 | native、核心渲染 mixin、已知性能/库模组 | 必须完整重启 |
+| **RESOURCE** | 只有资源（assets） | 无类、无 data | 原版资源重载（`F3+T`）即可 |
+| **DATA** | 只有数据（data） | 无类、有 data | 原版 `/reload` 即可 |
+| **PIN（嫔）** | 只有代码，无 mixin、无注册表 | 有类，但无 mixin/registry 信号 | 可热加/更新；移除受类卸载限制 |
+| **FEI（妃）** | 代码 + Mixin，无注册表内容 | 有 mixin 类，registry/content 信号不足 | 可热换，但有兼容性风险 |
+| **GUIFEI（贵妃）** | 注册表内容（方块/物品/实体/维度） | registry + content 信号 | 实验性 add-only 热加；完整生效/删除仍需重启 |
+| **HUANGHOU（皇后）** | 不支持热换 | native、核心渲染 mixin、已知性能/库模组 | 必须完整重启 |
 | **T?** | 分析失败 | 不是有效 jar / 无法读取 | 需要人工检查 |
 
-> Tier 是「最低安全代价」，不是「一定能成功」。真正的切换还要做 dry-run、注册清理、健康检查——这些是后续版本的事。
+> 等级是「最低安全代价」，不是「一定能成功」。真正的切换还要做 dry-run、注册清理、健康检查——这些是后续版本的事。
+> `RESOURCE` / `DATA` 属于原版能力，不算本项目的等级（旧文档里的 T0/T1）。
 
 ## 它看哪些信号
 
@@ -78,7 +82,7 @@ python3 tools/analyzer/run.py scan /path/to/instance --recursive
 2. **Fabric 生产 jar 是 intermediary 名**（`net.minecraft.class_310`），核心类识别会退化；需要 yarn/intermediary 映射表才能精确。目前会把这类目标标出来并降低置信度。
 3. **Jar-in-Jar 只拆一层**，嵌套再嵌套的 bundle 不会继续展开。
 4. **不运行游戏**，因此看不到运行时注册、线程、native 实际加载、跨模组引用。
-5. **种子列表是策略，不是测量**：`sodium`、`lithium` 等性能模组和 `fabric-api` 这类库模组被直接标成 T5，因为社区经验认为它们不该热换。
+5. **种子列表是策略，不是测量**：`sodium`、`lithium` 等性能模组和 `fabric-api` 这类库模组被直接标成 HUANGHOU（皇后级），因为社区经验认为它们不该热换。
 6. **不覆盖 NeoForge 的 FML 内部模块**，只按元数据识别。
 
 ## 测试

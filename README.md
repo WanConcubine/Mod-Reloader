@@ -2,7 +2,7 @@
 
 让 Minecraft 模组在游戏运行时**安全地增删 / 更新 / 热重载**。
 
-> 状态（2026-11-15）：**分析器 v0 已可运行**；**A0（T2）已验证**；**A1.2（T3/Mixin + 布局变更）主路径已在 NeoForge 1.21.1 dev client 验证**：热加 `lanserverproperties` 后进世界打开 Open to LAN。**A1.2 失败回滚已跑通**（post-ModList / post-pack 强制失败，恢复 ModList/module/config/类/资源包；post-ModList 重试 add 成功）。构造后事件监听器无法注销、存档回读未验证，按契约 A1.2 尚不算完成。**mods/inbox 监听 + 预检 + toast/弹窗 + 失败分析初版已跑通**（EasyLAN 检测→加载、坏 jar 失败屏、T4 不可加载）。**双端**：dedicated server 能热加 T2，命令靠重放生效，payload 适配 E1/E2/E3（含跨进程）已验证。**工程侧**：引擎与两端解耦（`PlatformHooks`）、启动有 `Capabilities` 锚点守卫、`dev/` 不进发布 jar、3 个无游戏 Java 单测。T4 / 软重启尚未开始。
+> 状态（2026-11-15）：**分析器 v0 已可运行**；**A0（嫔级）已验证**；**A1.2（妃级/Mixin + 布局变更）主路径已在 NeoForge 1.21.1 dev client 验证**：热加 `lanserverproperties` 后进世界打开 Open to LAN。**A1.2 失败回滚已跑通**（post-ModList / post-pack 强制失败，恢复 ModList/module/config/类/资源包；post-ModList 重试 add 成功）。构造后事件监听器无法注销、存档回读未验证，按契约 A1.2 尚不算完成。**mods/inbox 监听 + 预检 + toast/弹窗 + 失败分析初版已跑通**（EasyLAN 检测→加载、坏 jar 失败屏、贵妃级实验性加载与警告）。**双端**：dedicated server 能热加嫔级，命令靠重放生效，payload 适配 E1/E2/E3（含跨进程）已验证。**贵妃级注册表内容（实验性 add-only）已跑通**：方块/物品热加、放置存盘、重启读档 PASS；客户端资源包/创造栏已在单人验证；多人登录同步、datapack 未做。**工程侧**：引擎与两端解耦（`PlatformHooks`）、启动有 `Capabilities` 锚点守卫、`dev/` 不进发布 jar、3 个无游戏 Java 单测。皇后级与软重启尚未开始。
 > 短期目标是把工具做出来给社区用，论文/研究输出留到以后。
 >
 > **先读顺序**：[AGENTS.md](AGENTS.md) → [docs/status.md](docs/status.md)。状态只写在 status.md。
@@ -12,15 +12,15 @@
 - **Minecraft 1.21.1**
 - **分析器**：Fabric + NeoForge，但语料与校准锁 1.21.1
 - **运行时首发**：**NeoForge 1.21.1**
-- **首个 dogfood**：`Ex-Nihilo-Satellitium`（T4 内容模组）
-- **理由**：作者自有项目就是 NeoForge 1.21.1；其开发整合包 9 个模组里 6 个是 T4/T5；NeoForge 1.21.1 是 1.21.1 上最大的模组生态；NHMJ 只加不删，卸载/软重启仍是空白。
+- **首个 dogfood**：`Ex-Nihilo-Satellitium`（贵妃级内容模组）
+- **理由**：作者自有项目就是 NeoForge 1.21.1；其开发整合包 9 个模组里 6 个是贵妃/皇后级；NeoForge 1.21.1 是 1.21.1 上最大的模组生态；NHMJ 只加不删，卸载/软重启仍是空白。
 
-## 前置：MixinRuntime（只有 T3 需要）
+## 前置：MixinRuntime（只有妃级需要）
 
 | 能力 | 需要 MixinRuntime |
 |---|---|
-| T2 模组（无 mixin、无注册表） | **不需要** |
-| T3 模组（有 mixin，含布局变更） | **需要** |
+| 嫔级模组（无 mixin、无注册表） | **不需要** |
+| 妃级模组（有 mixin，含布局变更） | **需要** |
 
 MixinRuntime 的 modId 是 **`mr`**——FML 的报错、日志、`mods/` 列表里出现的都是这个名字，
 所以本项目所有面向用户的文案统一写成 **MixinRuntime (mr)**。
@@ -42,14 +42,14 @@ Missing or unsupported mandatory dependencies:
 
 改成可选之后，缺 MixinRuntime 时：
 
-- 游戏正常启动，**T2 热加载照常工作**；
-- 主菜单弹一次 toast，日志打一条 warn，**用产品名**说明「T3 需要 MixinRuntime (mr)」；
-- T3 候选的预检显示「T3（含 mixin）需要安装 MixinRuntime (mr)」，Load 变灰；
-- 直接 `/modreloader add` 一个 T3 模组会失败并按 LIFO 回滚，失败屏给出 `MIXIN_RUNTIME`。
+- 游戏正常启动，**嫔级热加载照常工作**；
+- 主菜单弹一次 toast，日志打一条 warn，**用产品名**说明「妃级需要 MixinRuntime (mr)」；
+- 妃级候选的预检显示「妃级（含 mixin）需要安装 MixinRuntime (mr)」，Load 变灰；
+- 直接 `/modreloader add` 一个妃级模组会失败并按 LIFO 回滚，失败屏给出 `MIXIN_RUNTIME`。
 
 ## A0 已经跑通
 
-在 NeoForge 1.21.1 dev client 中，不重启游戏热加载 `EasyLAN`（T2、无 mixin）：
+在 NeoForge 1.21.1 dev client 中，不重启游戏热加载 `EasyLAN`（嫔级、无 mixin）：
 
 ```text
 [ModReloader] resource packs selected after add: ... (new [mod/easylan])
@@ -67,7 +67,7 @@ Missing or unsupported mandatory dependencies:
 `runClient` 会自动使用 JBR 21（`~/Library/Java/JavaVirtualMachines/jbr-21.jdk`）并开启
 `-XX:+AllowEnhancedClassRedefinition`；启动日志会打印 `enhancedRedefinition=true`。
 
-实现与限制见 [A0 文档](docs/features/a0-hot-add.md)。A0 只支持 **T2**（无 mixin、无注册表）；资源包已选中并重载；EasyLAN 的 GUI 按钮还需人工点一次（`/modreloader add` 已由 `-PverifyAddCommand` 验证）。
+实现与限制见 [A0 文档](docs/features/a0-hot-add.md)。A0 只支持 **嫔级**（无 mixin、无注册表）；资源包已选中并重载；EasyLAN 的 GUI 按钮还需人工点一次（`/modreloader add` 已由 `-PverifyAddCommand` 验证）。
 
 ## A1.2 也跑通了（Mixin + 布局变更）
 
@@ -123,7 +123,7 @@ Missing or unsupported mandatory dependencies:
 [AddCmdCheck] RESULT: PASS
 ```
 
-负向回归：缺 MixinRuntime 时 add 一个 T3 模组必须被拒且不污染状态：
+负向回归：缺 MixinRuntime 时 add 一个妃级模组必须被拒且不污染状态：
 
 ```bash
 ./gradlew runClient \
@@ -155,21 +155,21 @@ Missing or unsupported mandatory dependencies:
 
 断言的是 toast 队列本身（`ToastComponent.visible`/`queued` 里按标题匹配），不是只看日志。
 
-限制：仅 dev client + JBR；MixinRuntime 现在是**可选**依赖（缺它时 T3 被拦、T2 照常），但**构建**仍需要 `libs/` 里的 jar；构造后事件监听器无法注销、存档回读未验证，A1.2 仍不算契约完成；只验证了 `lanserverproperties`，不等于通用 T3 支持。
+限制：仅 dev client + JBR；MixinRuntime 现在是**可选**依赖（缺它时妃级被拦、嫔级照常），但**构建**仍需要 `libs/` 里的 jar；构造后事件监听器无法注销、存档回读未验证，A1.2 仍不算契约完成；只验证了 `lanserverproperties`，不等于通用妃级支持。
 
 ## mods 文件夹监听与弹窗（初版）
 
 游戏运行时轮询 `run/mods` 和 `run/modreloader/inbox`，稳定检测到新 jar 后：
 
 - 主菜单自动弹出候选屏；世界中只 toast（不打断）。
-- 预检 T2–T5、依赖、mixin/registry/native；T4/T5 只提示“需要重启”，Load 禁用。
+- 预检嫔–皇后级、依赖、mixin/registry/native；皇后级只提示“需要重启”、Load 禁用；贵妃级可加载（带实验性警告）。
 - 点击加载后调用现有 `HotAddEngine`；失败打开结构化失败屏（原因/建议/回滚/复制/日志）。
 - 永不自动加载；忽略/失败记录在独立 `config/modreloader/watcher.json`。
 - **主菜单 / 暂停菜单右上角有常驻的 logo 入口**（Minecraft 风格槽位图标：绿色 → / 棕色 ← 交换箭头 + 石头槽位，20×20 像素图；不是文字按钮，悬停显示名称，左下角有版本号所以不放那里）；被忽略的 jar 在「已忽略」视图里可以**恢复**，点过「稍后」的 jar 也仍留在待处理列表里（主动打开列表时不按「已见过」过滤）。
 - GUI/按钮/toast/失败摘要支持 `en_us` / `zh_cn`。
 
 ```text
-[ModReloader] new mod candidate watchcheck-EasyLAN-neoforge-1.21.1-v1.6a.jar: easylan 1.5 · T2
+[ModReloader] new mod candidate watchcheck-EasyLAN-neoforge-1.21.1-v1.6a.jar: easylan 1.5 · pin
 [WatchCheck] prompt opened ... (1 candidate(s))
 [ModReloader] UI load succeeded: hot-added [easylan]
 [WatchCheck] RESULT: PASS
@@ -196,32 +196,35 @@ $ python3 tools/analyzer/run.py scan /path/to/mods
 
 Scanned 7 jars
   loaders: fabric: 5  neoforge: 2
-  tiers:   T3: 3  T4: 1  T5: 3
-  hot-swappable (T0-T3): 3/7 (43%)
-  needs restart (T4-T5): 4/7 (57%)
+  tiers:   RESOURCE: 0  DATA: 0  PIN: 0  FEI: 3  GUIFEI: 1  HUANGHOU: 3  T?: 0
+  no restart needed (RESOURCE-DATA-PIN-FEI): 3/7 (43%)
+  restart needed (GUIFEI-HUANGHOU):         4/7 (57%)
+  analysis failed:        0
 
-MOD                        VERSION    LOADER   TIER CONF  VERDICT
-appleskin                  3.0.6+mc1… fabric   T3   0.59  hot-swap with caveats
-jade                       15.10.6+n… neoforge T3   0.75  hot-swap with caveats
-jei                        19.70.0.4… fabric   T3   0.65  hot-swap with caveats
-sophisticatedbackpacks     3.26.21    neoforge T4   0.84  needs world/game-layer restart
-fabric-api                 0.116.18+… fabric   T5   0.85  needs full restart
-lithium                    0.15.4+mc… fabric   T5   0.95  needs full restart
-sodium                     0.8.13+mc… fabric   T5   0.85  needs full restart
+
+MOD                        VERSION    LOADER   TIER     CONF  VERDICT
+---------------------------------------------------------------------
+appleskin                  3.0.6+mc1… fabric   FEI      0.59  hot-swap with caveats
+jade                       15.10.6+n… neoforge FEI      0.75  hot-swap with caveats
+jei                        19.70.0.4… fabric   FEI      0.65  hot-swap with caveats
+sophisticatedbackpacks     3.26.21    neoforge GUIFEI   0.84  experimental add-only; restart for full effect
+fabric-api                 0.116.18+… fabric   HUANGHOU 0.85  needs full restart
+lithium                    0.15.4+mc… fabric   HUANGHOU 0.95  needs full restart
+sodium                     0.8.13+mc… fabric   HUANGHOU 0.85  needs full restart
 ```
 
-详见 [分析器文档](tools/analyzer/README.md)。
+（`RESOURCE` / `DATA` 是原版能力，不算我们的等级；`PIN`/`FEI`/`GUIFEI`/`HUANGHOU` = 嫔/妃/贵妃/皇后。详见 [分析器文档](tools/analyzer/README.md)。
 
-## 能力分级（T0–T5）
+## 能力分级（嫔 / 妃 / 贵妃 / 皇后）
 
-| Tier | 变更 | 代价 | 现状 |
+> T0/T1（资源 / 数据）是原版能力（`F3+T`、`/reload`），**不进入本项目的分级**；我们只处理「加/删/换模组」。
+
+| 等级 | 变更 | 代价 | 现状 |
 |---|---|---|---|
-| T0 | 资源（纹理/模型/声音） | 秒级 | 原版已支持（F3+T） |
-| T1 | 数据（配方/战利品/标签/数据包注册表） | 秒级 | 原版 `/reload`；可做选择性重载 |
-| T2 | 代码，无 mixin / 无注册表 | 毫秒级 | **A0 已验证（EasyLAN）** |
-| T3 | 代码 + Mixin，无注册表内容 | 0.5–2 秒 | **A1.2 主路径 + 失败回滚验证（lanserverproperties，JBR）；构造后 listener 不可注销** |
-| T4 | 注册表内容（方块/物品/维度） | 5–30 秒 | 空白区：需要进程内软重启 |
-| T5 | native / 性能核心 / 库模组 | 只能完整重启 | 拉黑或要求重启 |
+| **嫔**（PIN） | 代码，无 mixin / 无注册表 | 毫秒级 | **A0 已验证（EasyLAN）** |
+| **妃**（FEI） | 代码 + Mixin，无注册表内容 | 0.5–2 秒 | **A1.2 主路径 + 失败回滚验证（lanserverproperties，JBR）；构造后 listener 不可注销** |
+| **贵妃**（GUIFEI） | 注册表内容（方块/物品/维度） | 5–30 秒 | **实验性 add-only 热加已验证（服务端闭环 + 单人客户端资源/创造栏）；datapack/多人同步未做** |
+| **皇后**（HUANGHOU） | native / 性能核心 / 库模组 | 只能完整重启 | 拉黑或要求重启 |
 
 ## 文档
 
@@ -233,7 +236,7 @@ sodium                     0.8.13+mc… fabric   T5   0.85  needs full restart
 | [术语表](docs/glossary.md) | Tn、软重启、sidecar、registry 等 |
 | [使用场景](docs/use-cases.md) | 什么情况下无需重启最有价值；LAN 补丁场景实测 |
 | [A0 热加验证](docs/features/a0-hot-add.md) | NeoForge 1.21.1 热加 EasyLAN：实现、证据、限制 |
-| [A1 热加验证](docs/features/a1-mixin-hotadd.md) | T3/Mixin 热加：JBR vs sidecar、A1.0 probe、A1.1 spike、A1.2 全流水线、失败回滚 |
+| [A1 热加验证](docs/features/a1-mixin-hotadd.md) | 妃级/Mixin 热加：JBR vs sidecar、A1.0 probe、A1.1 spike、A1.2 全流水线、失败回滚 |
 | [GUI / 文件夹监听](docs/features/gui-mod-watcher.md) | 检测新增 jar、预检 tier/依赖、toast/弹窗、失败原因分析（初版实测） |
 | [LAN Doctor 规格](docs/features/lan-doctor.md) | B 路线 fallback：状态 / offline / republish / 地址 |
 | [决策记录](docs/decisions/README.md) | ADR-0001..0004：目标、分层、顺序、论文 |
@@ -267,7 +270,7 @@ experiments/
 ## 设计原则
 
 1. **只读优先**：能静态回答的问题，不启动游戏；能 dry-run 的切换，不直接改。
-2. **分层升级**：先试最便宜的 tier，失败再升级；T4/T5 明确告知用户。
+2. **分层升级**：先试最便宜的 tier，失败再升级；贵妃/皇后级明确告知用户。
 3. **可回滚**：任何写操作前备份；切换失败必须能回到原状。
 4. **解释优先**：不只给结论，要给理由（哪个 mixin、哪个注册表、哪个 native）。
 5. **开源可审计**：不做闭源 native hook；许可证 MIT（见 [LICENSE](LICENSE)）。
@@ -275,10 +278,10 @@ experiments/
 ## 下一步
 
 - **人工收尾**：游戏内 `/modreloader add` 手动验证；EasyLAN GUI/按键；
-- **A1 产品化**：构造后 listener 回滚 / 存档回读；第二个 T3 模组；把 MixinRuntime 从 dev-only 依赖换成可分发实现；
+- **A1 产品化**：构造后 listener 回滚 / 存档回读；第二个妃级模组；把 MixinRuntime 从 dev-only 依赖换成可分发实现；
 - **GUI 完善**：世界内 toast 实测、忽略/重试持久化、批量/依赖排序、i18n、自动化 GUI 检查；
 - **分析器校准**：50 个 1.21.1 模组人工标注，输出准确率；
-- **T4 软重启 PoC**：以 Ex Nihilo 为 dogfood。
+- **贵妃级软重启 PoC**：以 Ex Nihilo 为 dogfood。
 
 > Fabric 的 yarn/intermediary 映射仍是分析器的兼容项，但不是首发阻塞。
 

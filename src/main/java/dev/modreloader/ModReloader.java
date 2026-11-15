@@ -62,7 +62,7 @@ public final class ModReloader {
 
     public static void logMixinRuntime() {
         if (MixinRuntimeSupport.available()) {
-            LOGGER.info("[ModReloader] {} detected; T3 (mixin) hot-add enabled",
+            LOGGER.info("[ModReloader] {} detected; fei-tier (mixin) hot-add enabled",
                     MixinRuntimeSupport.name());
         } else {
             LOGGER.warn("[ModReloader] {} is not installed: T2 hot-add works, T3 (mixins) is "

@@ -1,7 +1,7 @@
-# 服务端热加（T2 / 命令重放 / payload 适配）
+# 服务端热加（嫔级 / 命令重放 / payload 适配）
 
 > 范围：runtime 在 **dedicated server** 上加载、发现、热加模组，以及两处必须"重放一次性事件"的适配。
-> 不覆盖：T3 在服务端（需要 JBR，未验证）、注册表内容（T4）、一次性启动事件（`ServerStartedEvent` 等）。
+> 不覆盖：妃级在服务端（需要 JBR，未验证）、注册表内容（贵妃级）、一次性启动事件（`ServerStartedEvent` 等）。
 > 状态：[status.md](../status.md) 的「服务端」相关表尺行。
 
 ## 1. 为什么不是"把客户端代码搬过去"
@@ -54,7 +54,7 @@ NeoForge 在注册阶段结束后把 `NetworkRegistry.setup` 置 true，之后�
 |---|---|---|
 | 专用服加载 | `loaded on dedicated server`；watcher 起在 Server thread；`Done (7.060s)`；无 `NoClassDefFoundError` | 2026-11-15 16:24：`./gradlew runServer`（`run/eula.txt` 本地接受） |
 | dist 门禁 + 回滚 | EasyLAN 被 `invalid dist DEDICATED_SERVER` 拒绝；event listeners / mod list / module layer 回滚 ok | 2026-11-15 16:24：`runServer -PautoAdd=/tmp/lanmods/EasyLAN-...jar` |
-| T2 夹具热加 | `@Mod constructed`；`isLoaded=true`；`keyMappings -1 -> -1`（客户端专用路径被跳过） | 2026-11-15 17:05：`runServer -PautoAdd=/tmp/servertest2/servertest-2.0.0.jar` |
+| 嫔级夹具热加 | `@Mod constructed`；`isLoaded=true`；`keyMappings -1 -> -1`（客户端专用路径被跳过） | 2026-11-15 17:05：`runServer -PautoAdd=/tmp/servertest2/servertest-2.0.0.jar` |
 | 命令重放 | `RegisterCommandsEvent fired; /servertest registered`；`replayed ...; root commands 93 -> 94`；`ServerTickEvent received 100/200/...`；无重复注册异常 | 2026-11-15 17:12：同上（源码 [experiments/server-fixture](../../experiments/server-fixture/README.md)） |
 | payload 负向 | 不适配时被拒：`Cannot register payload ... after registration phase`；`NETWORK_PAYLOAD` 回滚干净；命令夹具不受影响 | 2026-11-15 17:19–17:20：`build-payload.sh` 夹具 |
 | payload E1 | 单 JVM、建连接前热加：`adapted payloads for payloadfix: [payloadfix:ping]` → 玩家加入后客户端收到 | 2026-11-15 17:39：`runClient -PverifyPayload=...` |
@@ -65,7 +65,7 @@ NeoForge 在注册阶段结束后把 `NetworkRegistry.setup` 置 true，之后�
 ## 4. 限制与下一步
 
 - **没有握手**：两端各装各的 jar，靠人工保证一致；ADR-0007 第 3 条的登录期握手尚未实现。
-- **一次性启动事件**（`ServerStartedEvent` 等）不重放；注册表内容（T4）不支持。
-- **服务端 T3**：需要 JBR + `-XX:+AllowEnhancedClassRedefinition`，未在专用服验证。
+- **一次性启动事件**（`ServerStartedEvent` 等）不重放；注册表内容（贵妃级）不支持。
+- **服务端妃级**：需要 JBR + `-XX:+AllowEnhancedClassRedefinition`，未在专用服验证。
 - **重放的全局副作用**：命令监听器会执行两次（Brigadier 幂等，但副作用不可控）——这是已知问题 14/15。
 - **side 门禁只警告不拦**（ADR-0007 第 4 条），预检的 side 判定仍待补。

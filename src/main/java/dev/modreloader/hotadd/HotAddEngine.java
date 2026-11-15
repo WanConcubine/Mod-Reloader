@@ -133,7 +133,7 @@ public final class HotAddEngine {
                     ids, jar.getFileName(),
                     mixinConfigs.stream().map(ModFileParser.MixinConfig::config).toList());
 
-            // T4 detection: the analyzer already predicts registry content for
+            // Guifei-tier detection: the analyzer already predicts registry content for
             // the UI; use the same signal to decide whether the engine must open
             // a registry window around construction.
             boolean registryContent = false;
@@ -208,9 +208,9 @@ public final class HotAddEngine {
                 return fail(rollback, Stage.MODLIST, FailureKind.UNKNOWN, "injected failure after ModList rebuild");
             }
 
-            // 4. construct (+ T4 registry content) + replay lifecycle events.
+            // 4. construct (+ guifei-tier registry content) + replay lifecycle events.
             //    A registry window must open before construction: some mods call
-            //    Registry.register directly in the constructor. For T4 the normal
+            //    Registry.register directly in the constructor. For registry content the normal
             //    startup order is construct → RegisterEvent → freeze → common setup.
             stage = Stage.CONSTRUCT;
             rollback.add("event listeners", () -> {

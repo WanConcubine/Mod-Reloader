@@ -1,7 +1,7 @@
 # GUI / mods 文件夹监听（计划）
 
 > 状态：**Phase 1/2 初版 + i18n 已实现并验证（dev）**。目标：检测到 mods 文件夹新增 jar 时提示用户，确认后尝试热加；失败时给出可读原因和下一步建议。
-> 前置：A1.2 主路径 + 失败回滚已跑通（`HotAddEngine` / `Rollback`）；本功能不改 T4/T5 的“需要重启”边界。
+> 前置：A1.2 主路径 + 失败回滚已跑通（`HotAddEngine` / `Rollback`）；本功能不改皇后级的“需要重启”边界；贵妃级自 2026-11-15 起可实验性加载（带警告，见 [t4-registry-hotadd.md](t4-registry-hotadd.md)）。
 
 ## 1. 目标与非目标
 
@@ -12,14 +12,14 @@
 3. 用非阻塞 toast + 可选的弹窗提示：“发现新模组 X，尝试加载？”。
 4. 用户确认后调用现有 `HotAddEngine.add`；显示加载中 / 成功 / 失败。
 5. 失败时按阶段给出原因、建议、回滚结果，支持复制报告、打开日志。
-6. 默认**不自动加载**；T4/T5 不应被热加载，只提示“需要重启”。
+6. 默认**不自动加载**；皇后级只提示“需要重启”，贵妃级只做实验性 add-only 加载。
 
 ### 非目标
 
 - 删除/卸载/更新已加载 mod（当前只有 add）。
 - 自动信任任意路径的 jar；只监听配置的目录。
 - 替代分析器；预检只做运行时可承受的轻量分类。
-- T4 软重启 / T5 native 热替换。
+- 贵妃级软重启 / 皇后级 native 热替换。
 
 ## 2. 用户体验
 
@@ -29,13 +29,13 @@
 
 ```text
 发现新模组
-Foo 1.2.3（预测 T3）   [加载] [稍后]
+Foo 1.2.3（预测妃级）   [加载] [稍后]
 ```
 
 - 默认主菜单自动打开 `NewModsScreen`；世界中默认只 toast（避免突然暂停），可通过配置改为自动打开。
 - 屏幕里每个候选显示：文件名、mod id/name/version、预测 tier、依赖状态、状态（可加载 / 需要重启 / 已加载 / 预检失败）。
 - 按钮：`加载`、`稍后`、`忽略此文件`、`详情`。
-- `加载` 只对预测 T2/T3 且依赖满足的候选可用；T4/T5 显示“需要重启”，禁用加载。
+- `加载` 对嫔/妃级（依赖满足）与贵妃级（实验性，带警告）可用；皇后级禁用。
 - 多候选时逐个加载，或按依赖顺序批量；第一版建议逐个，失败不影响其他候选。
 
 ### 2.2 加载中
@@ -152,21 +152,21 @@ dev.modreloader.config/        # 客户端配置
 
 | 信号 | 预测 |
 |---|---|
-| 无 mixin、无 registry 调用、无 native | T2 |
-| mixin configs / `@Mixin` target | T3 |
-| `DeferredRegister` / `RegisterEvent` / `BuiltInRegistries` | T4 |
-| native lib / coremod / ASM transformer / 性能核心 | T5 |
+| 无 mixin、无 registry 调用、无 native | 嫔级 |
+| mixin configs / `@Mixin` target | 妃级 |
+| `DeferredRegister` / `RegisterEvent` / `BuiltInRegistries` | 贵妃级 |
+| native lib / coremod / ASM transformer / 性能核心 | 皇后级 |
 
-- T2/T3：允许“加载”按钮。
-- T4：显示“注册表内容，需要重启/软重启”，禁用加载。
-- T5：显示“需要完整重启”，禁用加载。
+- 嫔/妃级：允许“加载”按钮。
+- 贵妃级：显示实验性警告（存档依赖/不可回滚），加载可用（2026-11-15 起）。
+- 皇后级：显示“需要完整重启”，禁用加载。
 - 预检不确定时显示“未知”，默认只允许“详情”，不自动尝试。
 
 ### 5.3 与 A1.2 能力对齐
 
-- A1.2 只验证了 T2/T3 的 add；T4/T5 仍明确不支持。
+- A1.2 只验证了嫔/妃级的 add；贵妃/皇后级仍明确不支持。
 - 预检不是安全证明；用户点“加载”后仍可能失败，失败分析负责解释。
-- 若 JBR 未启用/非 JBR：T3 预检直接提示“需要 JBR 21 + `-XX:+AllowEnhancedClassRedefinition`”，不尝试。
+- 若 JBR 未启用/非 JBR：妃级预检直接提示“需要 JBR 21 + `-XX:+AllowEnhancedClassRedefinition`”，不尝试。
 
 ## 6. 失败分析
 
@@ -198,9 +198,9 @@ record HotAddOutcome(
 | `INVALID_METADATA` | TOML/依赖解析失败 | 重新下载；查看详情 |
 | `MISSING_DEPENDENCY` | required 依赖不在 ModList/候选 | 安装依赖；或重启 |
 | `ALREADY_LOADED` | `ModList.isLoaded` | 更新/重载未支持；需要重启 |
-| `UNSUPPORTED_TIER` | 预检 T4/T5 | 需要重启/软重启；不热加 |
+| `UNSUPPORTED_TIER` | 预检贵妃/皇后级 | 需要重启/软重启；不热加 |
 | `JBR_REQUIRED` | 布局变更但非 JBR/未开 flag | 换 JBR 21 + flag，或等 sidecar |
-| `MIXIN_CONFIG` | config 解析/注册/prepare 失败 | 检查 mixin config/版本；可能是 T3 兼容问题 |
+| `MIXIN_CONFIG` | config 解析/注册/prepare 失败 | 检查 mixin config/版本；可能是妃级兼容问题 |
 | `MIXIN_TARGET` | target 加载/织入/接口合并失败 | 提供 target/config；建议重启或反馈 |
 | `REDEFINE` | JBR redefine 失败 | 布局/类不可修改；需要重启 |
 | `MODLIST` | ModList/module 重建失败 | 依赖/模块冲突；重试或重启 |
@@ -232,10 +232,10 @@ toastOnDetect = true
 
 [loading]
 autoLoad = false                # 默认必须确认
-allowT2 = true
-allowT3 = true
-allowT4 = false
-allowT5 = false
+allow嫔级 = true
+allow妃级 = true
+allow贵妃级 = false
+allow皇后级 = false
 
 [ignore]
 # 路径 + size + mtime 的持久化列表；UI 可清空
@@ -248,7 +248,7 @@ allowT5 = false
 ## 8. 安全与边界
 
 1. **默认不自动加载**：任何 add 必须用户确认（除非显式开启 autoLoad + 白名单）。
-2. **T4/T5 不热加**：只提示需要重启；不要因为“有回滚”就尝试注册表内容。
+2. **贵妃/皇后级不热加**：只提示需要重启；不要因为“有回滚”就尝试注册表内容。
 3. **只监听配置目录**：不监听任意路径；UI 显示绝对路径。
 4. **不加载已加载 mod**：更新/重载仍未支持，提示重启。
 5. **单飞**：同一时间一个 add；失败后允许重试，但保留失败指纹避免循环弹窗。
@@ -265,7 +265,7 @@ allowT5 = false
 - `FailureAnalyzer`：分类 + 建议文本。
 - `ModsFolderWatcher`：轮询、稳定检测、基线、去重（先只在日志/命令里输出）。
 - `/modreloader scan` 显示候选/预检结果。
-- 测试：坏 jar/缺依赖/T4/T5/正常 T3；现有 A1.2 回归。
+- 测试：坏 jar/缺依赖/贵妃/皇后级/正常妃级；现有 A1.2 回归。
 
 ### Phase 2：Toast + 简单列表——**已实现初版**
 
@@ -285,18 +285,18 @@ allowT5 = false
 
 - 多候选/依赖排序、同 mod id 冲突、文件被替换/删除。
 - `-PverifyGui` 自动测试（放置 jar → 等弹窗 → 点击加载 → 断言）。
-- T4/T5 的“需要重启”流程。
+- 贵妃/皇后级的“需要重启”流程。
 - 文档/状态表尺更新。
 
 ## 10. 验证计划
 
 | 用例 | 操作 | 预期 |
 |---|---|---|
-| 正常 T2/T3 | inbox 放入 EasyLAN/LSP | 检测 → 弹窗 → 加载 → 成功 |
+| 正常嫔/妃级 | inbox 放入 EasyLAN/LSP | 检测 → 弹窗 → 加载 → 成功 |
 | 坏 jar | 放入非 mod jar | 预检失败/构造失败 → 失败面板，回滚 |
 | 缺依赖 | jar 依赖不存在的 mod | 预检直接“缺依赖”，不尝试 |
-| T4 | Ex Nihilo 或 T4 jar | 显示“需要重启”，Load 禁用 |
-| T5 | native/性能 jar | 显示“需要完整重启” |
+| 贵妃级 | Ex Nihilo 或贵妃级 jar | 显示“需要重启”，Load 禁用 |
+| 皇后级 | native/性能 jar | 显示“需要完整重启” |
 | 已加载 | 重复放入已加载 jar | “已加载；更新需要重启” |
 | 部分文件 | 复制中/半截 jar | 不提示；稳定后才处理 |
 | 删除/替换 | 候选期间文件删除 | 取消候选，不崩 |
@@ -309,7 +309,7 @@ allowT5 = false
 
 1. 监听范围：真实 `mods/`、独立 `inbox/`，还是两者？（建议两者，inbox 仅 dev 测试）
 2. 世界中检测到时：只 toast，还是自动弹窗？（建议只 toast，主菜单自动弹）
-3. T4/T5：只提示“需要重启”，还是允许用户“仍然尝试”？（建议禁用；A1.2 明确不承诺）
+3. 贵妃/皇后级：只提示“需要重启”，还是允许用户“仍然尝试”？（建议禁用；A1.2 明确不承诺）
 4. 自动加载：是否永远不自动，还是提供显式白名单？（建议默认永不自动）
 5. 忽略/失败记录存哪：客户端 TOML 还是独立 JSON？（建议独立 JSON，按路径+指纹）
 
@@ -319,13 +319,13 @@ allowT5 = false
 ### 已实现
 
 - `run/mods` + `run/modreloader/inbox` 双目录轮询；2s、稳定 2 次；启动基线；忽略/失败指纹。
-- `ModInspector`：FML `mods.toml` 元数据 + 依赖 + mixin configs + ASM registry/native 扫描；T2–T5 预测。
-- `ModReloaderScreen`：候选列表、tier、预检原因、加载/稍后/忽略/关闭；T4/T5 的加载按钮禁用。
+- `ModInspector`：FML `mods.toml` 元数据 + 依赖 + mixin configs + ASM registry/native 扫描；嫔–皇后级预测。
+- `ModReloaderScreen`：候选列表、tier、预检原因、加载/稍后/忽略/关闭；贵妃/皇后级的加载按钮禁用。
 - 主菜单自动弹出；世界中只 toast（代码路径）。
 - `LoadController` 单飞；失败 `LoadFailureScreen`（原因/建议/回滚/复制/打开日志/重试）。
 - `config/modreloader/watcher.json`：独立 JSON，含 ignored/failed；永不自动加载。
 - `/modreloader scan`、`/modreloader gui` 已注册。
-- **i18n**：`assets/modreloader/lang/en_us.json` + `zh_cn.json`（现各 128 key，键集与占位符由单测核对）；GUI/按钮/toast/命令/预检/失败摘要/复制详情的标签全部走翻译 key。
+- **i18n**：`assets/modreloader/lang/en_us.json` + `zh_cn.json`（现各 132 key，键集与占位符由单测核对）；GUI/按钮/toast/命令/预检/失败摘要/复制详情的标签全部走翻译 key。
 - dev 检查：`-PverifyWatch=true -PwatchJar=<jar>`；`-PwatchExpectFailure=true`。
 
 ### 实测
@@ -336,7 +336,7 @@ allowT5 = false
 ```
 
 ```text
-[ModReloader] new mod candidate watchcheck-EasyLAN-neoforge-1.21.1-v1.6a.jar: easylan 1.5 · T2
+[ModReloader] new mod candidate watchcheck-EasyLAN-neoforge-1.21.1-v1.6a.jar: easylan 1.5 · 嫔级
 [WatchCheck] prompt opened ... (1 candidate(s))
 [ModReloader] UI load succeeded: hot-added [easylan] (modules [easylan])
 [WatchCheck] RESULT: PASS
@@ -354,7 +354,7 @@ allowT5 = false
 [WatchCheck] failure screen opened; RESULT: PASS
 ```
 
-T4：
+贵妃级：
 
 ```bash
 ./gradlew runClient -PverifyWatch=true -PwatchExpectFailure=true \
@@ -362,10 +362,10 @@ T4：
 ```
 
 ```text
-[ModReloader] new mod candidate ...: exnihilosatellitium 1.5.0 · T4 · registry
+[ModReloader] new mod candidate ...: exnihilosatellitium 1.5.0 · 贵妃级 · registry
 ```
 
-弹窗显示 `[T4]`、加载按钮“不可加载”、原因“registry content: requires restart/soft restart”。
+弹窗显示 `[贵妃级]`、加载按钮“不可加载”、原因“registry content: requires restart/soft restart”。
 
 LSP + 强制 add 失败（验证失败屏 + 回滚集成）：
 
@@ -376,19 +376,19 @@ LSP + 强制 add 失败（验证失败屏 + 回滚集成）：
 ```
 
 ```text
-[ModReloader] new mod candidate ...: lanserverproperties 1.13.2 · T3 · mixins
+[ModReloader] new mod candidate ...: lanserverproperties 1.13.2 · 妃级 · mixins
 [ModReloader] rollback: deactivated mixin config lsp.mixins.json
 [ModReloader] rollback: module layer ok
 [WatchCheck] failure screen opened; RESULT: PASS
 ```
 
-截图：`run/screenshots/watch-prompt.png`（EasyLAN，中文）、`run/screenshots/watch-prompt-en.png`（EasyLAN，英文）、`run/screenshots/watch-prompt-t4.png`（T4，不可加载）、`run/screenshots/watch-failure.png`（坏 jar，翻译后的失败屏）。
+截图：`run/screenshots/watch-prompt.png`（EasyLAN，中文）、`run/screenshots/watch-prompt-en.png`（EasyLAN，英文）、`run/screenshots/watch-prompt-t4.png`（贵妃级，不可加载）、`run/screenshots/watch-failure.png`（坏 jar，翻译后的失败屏）。
 
 ### i18n 实测
 
 - 中文：`run/options.txt` `lang:zh_cn` → `watch-prompt.png`；按钮/标题/toast 均为中文，无 key 泄漏。
 - 英文：切到 `lang:en_us` 后同样通过；截图 `watch-prompt-en.png`；测试后已恢复 `zh_cn`。
-- 键覆盖：`ModReloaderToasts`、`ModReloaderScreen`、`LoadFailureScreen`、`ReloaderCommands`、`ModReloaderI18n`、`FailureAnalyzer` 的可见文本均使用 `modreloader.*` key；语言文件各 128 key（键集与占位符由 `LangKeysTest` 核对）。
+- 键覆盖：`ModReloaderToasts`、`ModReloaderScreen`、`LoadFailureScreen`、`ReloaderCommands`、`ModReloaderI18n`、`FailureAnalyzer` 的可见文本均使用 `modreloader.*` key；语言文件各 132 key（键集与占位符由 `LangKeysTest` 核对）。
 - `FailureAnalyzer` 的 detail/剪贴板标签（jar/预检/依赖/阶段/分类/回滚/日志）也已 key 化；异常原始消息和枚举名保留英文，便于排查。
 - 技术值（异常消息、stage/kind 枚举、路径）保留原始英文；标签已本地化。
 
@@ -396,9 +396,9 @@ LSP + 强制 add 失败（验证失败屏 + 回滚集成）：
 
 - 世界内 toast 路径已由 `-PverifyAddCommandWatchJar` 验证（只 toast、不弹窗）。
 - `/modreloader gui` / `scan` 命令未自动验证。
-- T4 提示屏的“不可加载”旧证据已过时：现在 T4 可加载（实验性，见 [t4-registry-hotadd.md](t4-registry-hotadd.md)）。
+- 贵妃级提示屏的“不可加载”旧证据已过时：现在贵妃级可加载（实验性，见 [t4-registry-hotadd.md](t4-registry-hotadd.md)）。
 - 忽略/失败 JSON 的持久化未手工验证；失败后“重试”按钮未自动验证。
 - 弹窗最多直接显示 7 个候选，没有滚动列表；失败屏只显示摘要/建议，完整详情走复制/日志。
-- T5 只提示重启；T4 在 2026-11-15 后走实验性 add-only 热加（提示屏有警告，见 [t4-registry-hotadd.md](t4-registry-hotadd.md)）。
+- 皇后级只提示重启；贵妃级在 2026-11-15 后走实验性 add-only 热加（提示屏有警告，见 [t4-registry-hotadd.md](t4-registry-hotadd.md)）。
 - 没有自动加载（按所有者决定）。
-- T5 native/coremod 检测未用真实 T5 jar 校准。
+- 皇后级 native/coremod 检测未用真实皇后级 jar 校准。

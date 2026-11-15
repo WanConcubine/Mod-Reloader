@@ -6,14 +6,15 @@
 
 | 术语 | 含义 |
 |---|---|
-| **Tn / Tier** | 项目内部的重载分级（T0–T5、T?），**不是** Minecraft/JVM 标准。Tier = 让变更生效所需的最低安全机制。 |
-| **T0** | 只有资源（`assets/`），资源重载即可。 |
-| **T1** | 只有数据（`data/`），`/reload` 即可。 |
-| **T2** | 有代码，但无 mixin、无注册表；类加载 + 入口点。 |
-| **T3** | 代码 + Mixin，无注册表内容；类重定义 + 离线 re-mix + 布局拆分。 |
-| **T4** | 注册表内容（方块/物品/维度等）；需要世界/游戏层重启（软重启候选）。 |
-| **T5** | 不支持热换（native、核心渲染、性能/库模组）；只能完整重启。 |
-| **T?** | 分析失败（坏 jar / 无法读取）。 |
+| **嫔（pin）** | 有代码，但无 mixin、无注册表；类加载 + 入口点。旧称 T2。 |
+| **妃（fei）** | 代码 + Mixin，无注册表内容；类重定义 + 离线 re-mix + 布局拆分。旧称 T3。 |
+| **贵妃（guifei）** | 注册表内容（方块/物品/维度等）；实验性 add-only 热加，删除/更新/完整生效仍需重启。旧称 T4。 |
+| **皇后（huanghou）** | 不支持热换（native、核心渲染、性能/库模组）；只能完整重启。旧称 T5。 |
+| **T?** | 分析失败（坏 jar / 无法读取），不是一个等级。 |
+| **T0 / T1** | 资源 / 数据变更，属于**原版能力**（`F3+T` / `/reload`），**不进入本项目的分级**。 |
+
+> 2026-11-15 起分级改称 **嫔 / 妃 / 贵妃 / 皇后**，不再使用 Tn 编号。
+> 历史文档（[history.md](history.md)、ADR、调研）保留旧写法，按上表对应即可。
 
 ## 重载方式
 
@@ -102,8 +103,8 @@
 | **Dev source set / DevEntry** | `src/dev/java`：游戏内验证 harness。不进发布 jar；主源集只能按名字反射 `DevEntry.install()`，编译期无法引用。 |
 | **Harness** | 自动化游戏内验证入口（`-PverifyXxx`）：建世界/连服、执行动作、断言并打 `RESULT: PASS/FAIL`。 |
 | **History** | [history.md](history.md)：追加式过程记录（做了什么、证据、为什么）。状态只看 [status.md](status.md)。 |
-| **Registry adaptation（注册表适配）** | T4 的候选路线：unfreeze + 重放 `RegisterEvent` + 重建依赖缓存，让注册表内容「就地」生效；只支持 add-only，且单向提交、不可回滚。见 [research-t4-registry.md](research-t4-registry.md)。 |
-| **Bake callback** | NeoForge 在 `freeze()` 时执行的回调；重算 BlockState id 映射、方块缓存/loot table、属性校验等。T4 适配的「依赖缓存重建」就靠它。 |
+| **Registry adaptation（注册表适配）** | 贵妃级的路线：unfreeze + 重放 `RegisterEvent` + 重建依赖缓存，让注册表内容「就地」生效；只支持 add-only，且单向提交、不可回滚。见 [research-t4-registry.md](research-t4-registry.md)。 |
+| **Bake callback** | NeoForge 在 `freeze()` 时执行的回调；重算 BlockState id 映射、方块缓存/loot table、属性校验等。贵妃级适配的「依赖缓存重建」就靠它。 |
 | **One-shot replay（一次性事件重放）** | 把启动期只发生一次的事件（命令、payload、`RegisterEvent`）在热加后重新投递；按容器重放，避免全局重放导致已加载 mod 的监听器再跑一遍。 |
-| **单向提交（commit-only）** | T4 适配的失败模型：注册表条目无法撤销，提交前尽量预检，提交后失败只能把运行时标记为不可信并要求重启。 |
-| **Registry window（注册表窗口）** | T4 热加的 unfreeze → construct → RegisterEvent 重放 → 清空 state id → freeze 这一段；窗口内失败可以恢复冻结状态，freeze 之后不可回滚。 |
+| **单向提交（commit-only）** | 贵妃级适配的失败模型：注册表条目无法撤销，提交前尽量预检，提交后失败只能把运行时标记为不可信并要求重启。 |
+| **Registry window（注册表窗口）** | 贵妃级热加的 unfreeze → construct → RegisterEvent 重放 → 清空 state id → freeze 这一段；窗口内失败可以恢复冻结状态，freeze 之后不可回滚。 |

@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * T4 stage: lets a hot-added mod register content (blocks / items / …) into the
+ * Guifei-tier stage: lets a hot-added mod register content (blocks / items / …) into the
  * already-frozen built-in registries.
  *
  * <p>Shape of the operation — deliberately different from T2/T3:

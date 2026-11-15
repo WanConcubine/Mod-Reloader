@@ -111,8 +111,9 @@ public final class ModReloaderScreen extends Screen {
             return Component.literal(prefix + Path.of(ignored.get(index).path).getFileName());
         }
         var candidate = candidates.get(index);
-        return Component.literal(prefix + "[" + candidate.inspection().tier() + "] "
-                + candidate.path().getFileName());
+        return Component.literal(prefix + "[")
+                .append(ModReloaderI18n.tier(candidate.inspection().tier()))
+                .append(Component.literal("] " + candidate.path().getFileName()));
     }
 
     private void toggleIgnored() {
