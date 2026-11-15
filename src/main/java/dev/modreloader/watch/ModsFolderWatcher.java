@@ -95,11 +95,44 @@ public final class ModsFolderWatcher {
     }
 
     /** Scans immediately (command/UI use) and marks new candidates as reported. */
+    /**
+     * Explicit user query ("open the pending list", "/modreloader scan").
+     *
+     * <p>Unlike the polling path this ignores the {@code seen} fingerprint: a jar
+     * the user deferred with "Later" (or one that was already present at startup)
+     * must stay reachable. Ignored/failed fingerprints and already-loaded mods are
+     * still skipped.
+     */
     public synchronized List<Candidate> scanNow() {
         prepareDirectories();
-        List<Candidate> candidates = scan();
+        List<Candidate> candidates = scanPending();
         if (!candidates.isEmpty()) {
             lastCandidates = List.copyOf(candidates);
+        }
+        return candidates;
+    }
+
+    private List<Candidate> scanPending() {
+        List<Candidate> candidates = new ArrayList<>();
+        for (Path dir : watchDirs()) {
+            for (Path jar : jars(dir)) {
+                Fingerprint fingerprint;
+                try {
+                    fingerprint = Fingerprint.of(jar);
+                } catch (Throwable ignored) {
+                    continue;
+                }
+                if (config.isIgnored(jar, fingerprint.size(), fingerprint.mtime())
+                        || config.isFailed(jar, fingerprint.size(), fingerprint.mtime())) {
+                    continue;
+                }
+                ModInspection inspection = ModInspector.inspect(jar);
+                if (inspection.ok() && inspection.mods().stream()
+                        .anyMatch(mod -> net.neoforged.fml.ModList.get().isLoaded(mod.modId()))) {
+                    continue;
+                }
+                candidates.add(new Candidate(jar, fingerprint.size(), fingerprint.mtime(), inspection));
+            }
         }
         return candidates;
     }

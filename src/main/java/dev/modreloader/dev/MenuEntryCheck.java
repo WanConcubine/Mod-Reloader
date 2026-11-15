@@ -31,6 +31,7 @@ public final class MenuEntryCheck {
     private static int ticks;
     private static boolean started;
     private static boolean failed;
+    private static Path pendingJar;
 
     private MenuEntryCheck() {
     }
@@ -69,6 +70,10 @@ public final class MenuEntryCheck {
         if (!(mc.screen instanceof TitleScreen) || mc.getOverlay() != null) {
             return;
         }
+        // The watcher starts ~80 ticks in; the pending list needs it.
+        if (ModReloader.WATCHER == null) {
+            return;
+        }
         AbstractButton button = findEntryButton(mc.screen);
         if (button == null) {
             fail("title screen has no '" + I18n.get("modreloader.gui.entry") + "' button; buttons: "
@@ -82,6 +87,7 @@ public final class MenuEntryCheck {
     }
 
     private static void press(Minecraft mc) {
+        seedPendingJar();
         AbstractButton button = findEntryButton(mc.screen);
         if (button == null) {
             fail("menu entry disappeared before it could be pressed");
@@ -99,6 +105,12 @@ public final class MenuEntryCheck {
             return;
         }
         List<String> labels = describeButtons(screen);
+        boolean showsPending = pendingJar != null && labels.stream()
+                .anyMatch(label -> label.contains(pendingJar.getFileName().toString()));
+        if (!showsPending) {
+            fail("pending list does not show the unloaded jar " + pendingJar + "; buttons=" + labels);
+            return;
+        }
         int ignored = ModReloader.WATCHER_CONFIG == null ? 0 : ModReloader.WATCHER_CONFIG.ignoredCount();
         String expectedToggle = I18n.get("modreloader.gui.ignored_list", ignored);
         ModReloader.LOGGER.info("[MenuCheck] pending screen opened; showingIgnored={}, buttons={}, "
@@ -132,7 +144,10 @@ public final class MenuEntryCheck {
         ticks = 0;
     }
 
-    /** Seeds one ignored fingerprint so the Restore path can be exercised end to end. */
+    /**
+     * Seeds two samples: an ignored fingerprint (to exercise Restore) and an
+     * unloaded jar in the inbox (to prove a deferred/present jar is still listed).
+     */
     private static void seedIgnored() {
         try {
             Path sample = Path.of("/tmp/lanmods/EasyLAN-neoforge-1.21.1-v1.6a.jar");
@@ -140,6 +155,7 @@ public final class MenuEntryCheck {
                 ModReloader.LOGGER.warn("[MenuCheck] no sample jar; the Restore path will not be tested");
                 return;
             }
+
             ModReloader.WATCHER_CONFIG.ignore(sample, Files.size(sample),
                     Files.getLastModifiedTime(sample).toMillis());
             ModReloader.LOGGER.info("[MenuCheck] seeded an ignored entry for {}; ignoredCount={}",
@@ -173,8 +189,36 @@ public final class MenuEntryCheck {
             return;
         }
         ModReloader.LOGGER.info("[MenuCheck] RESULT: PASS");
+        if (pendingJar != null) {
+            try {
+                Files.deleteIfExists(pendingJar);
+                ModReloader.LOGGER.info("[MenuCheck] removed seeded jar {}", pendingJar.getFileName());
+            } catch (Throwable t) {
+                ModReloader.LOGGER.warn("[MenuCheck] could not remove {}", pendingJar, t);
+            }
+        }
         stage = Stage.DONE;
         ticks = 0;
+    }
+
+    /** Copies the sample into the inbox once the watcher (and its dir) exists. */
+    private static void seedPendingJar() {
+        if (pendingJar != null || ModReloader.WATCHER == null) {
+            return;
+        }
+        try {
+            Path sample = Path.of("/tmp/lanmods/EasyLAN-neoforge-1.21.1-v1.6a.jar");
+            if (!Files.isRegularFile(sample)) {
+                return;
+            }
+            Path inbox = ModReloader.WATCHER.inboxDir();
+            Files.createDirectories(inbox);
+            pendingJar = inbox.resolve("menutest-EasyLAN-neoforge-1.21.1-v1.6a.jar");
+            Files.copy(sample, pendingJar, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            ModReloader.LOGGER.info("[MenuCheck] seeded a pending jar {}", pendingJar.getFileName());
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn("[MenuCheck] cannot seed the pending jar", t);
+        }
     }
 
     private static AbstractButton findButton(Screen screen, String label) {
