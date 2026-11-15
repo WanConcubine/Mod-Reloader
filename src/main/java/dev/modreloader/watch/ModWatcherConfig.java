@@ -145,6 +145,22 @@ public final class ModWatcherConfig {
         save();
     }
 
+    /** Snapshot of ignored fingerprints, for the "ignored" view in the GUI. */
+    public synchronized List<IgnoredEntry> ignoredEntries() {
+        return List.copyOf(ignored);
+    }
+
+    /** Undoes {@link #ignore} so the jar becomes a candidate again. */
+    public synchronized boolean unignore(Path path, long size, long mtime) {
+        String key = path.toAbsolutePath().normalize().toString();
+        boolean removed = ignored.removeIf(
+                entry -> key.equals(entry.path) && size == entry.size && mtime == entry.mtime);
+        if (removed) {
+            save();
+        }
+        return removed;
+    }
+
     public synchronized int ignoredCount() {
         return ignored.size();
     }

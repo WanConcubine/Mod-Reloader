@@ -108,5 +108,13 @@
   "modreloader.detail.dependency_required": "必需",
   "modreloader.detail.dependency_optional": "可选",
   "modreloader.detail.dependency_ok": "满足",
-  "modreloader.detail.dependency_missing": "缺失"
+  "modreloader.detail.dependency_missing": "缺失",
+  "modreloader.gui.entry": "模组热加载",
+  "modreloader.gui.ignored_list": "已忽略（%s）",
+  "modreloader.gui.ignored_back": "返回待处理",
+  "modreloader.gui.ignored_empty": "没有已忽略的模组",
+  "modreloader.gui.ignored_hint": "选中一条后点「恢复」，它会重新出现在待处理列表里。",
+  "modreloader.gui.restore": "恢复",
+  "modreloader.toast.restored.title": "已恢复",
+  "modreloader.toast.restored.message": "%s 已重新成为候选"
 }

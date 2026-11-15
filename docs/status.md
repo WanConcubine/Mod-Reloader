@@ -47,6 +47,7 @@
 | **世界内 toast（不弹窗）** | **`new mod(s) detected in world; toast only`；toast 队列命中 1（按 `toast.detected.title` 断言）；`screen=null`、`promptOpened=false`；in-world RESULT: PASS** | 2026-11-15 15:43：`-PverifyAddCommand=...EasyLAN... -PverifyAddCommandWatchJar=...mcwifipnp...`（世界内把 jar 丢进 inbox） |
 | **专用服务端加载（双端化）** | **`loaded on dedicated server`；watcher 起在 Server thread；`Done (7.060s)`；无 `NoClassDefFoundError`** | 2026-11-15 16:24：`./gradlew runServer`（`run/eula.txt` 本地接受） |
 | **服务端热加 T2：被 dist 拦住（回滚干净）** | **EasyLAN 失败：`Attempted to load class net/minecraft/client/gui/screens/Screen for invalid dist DEDICATED_SERVER`；event listeners / mod list / module layer 回滚 ok** | 2026-11-15 16:24：`runServer -PautoAdd=/tmp/lanmods/EasyLAN-...jar` |
+| **主菜单入口 + 忽略恢复** | **标题屏按钮「模组热加载」→ 待处理屏 [不可加载/稍后/忽略/已忽略（1）/关闭] → 已忽略视图列出 jar + 恢复 → `ignoredCount 1 -> 0`，回到待处理视图；RESULT: PASS** | 2026-11-15 16:32：`runClient -PverifyMenu=true` |
 | **双端化后客户端回归** | **`loaded on client`；`AddCmdCheck RESULT: PASS`** | 2026-11-15 16:25：`runClient -PverifyAddCommand=/tmp/lanmods/EasyLAN-...jar` |
 
 ## 验证状态
@@ -71,7 +72,7 @@
 - **生产 jar / 第三方启动器**：只在 dev client 测过。
 - ~~**世界内 toast 路径**~~：**已自动化验证**（2026-11-15 15:43）：世界里丢 jar 进 inbox → 检测到 → toast 进队列（按标题断言）、`screen=null`、未弹窗。见表尺「世界内 toast」。
 - **`/modreloader gui` / `scan` 命令**：已注册，未自动验证。
-- **忽略/失败 JSON**：写入逻辑已实现，未手工验证持久化。
+- **忽略/失败 JSON 跨重启持久化**：GUI 内 ignore → restore 已自动验证（`-PverifyMenu`），但重启客户端后是否仍记住未验证。
 - **T4（注册表内容）**：未开始。
 - **Tier 预测 vs 人工标注**——还没有 ground truth，准确率未知。
 - **Fabric intermediary 映射**——`class_XXX` 目标识别仍退化。
@@ -90,7 +91,7 @@
 8. **Git 仓库已建立**（2026-11-15）：`main`、首次 commit、`origin` → `github.com/WanConcubine/Mod-Reloader`；尚未加 CI、tag、release，证据截图仍只在 `run/`（被忽略）。
 9. **没有人工标注集**：规则准确率、混淆矩阵都还没有。
 10. **没有删/更新路径**：A1.2 只实现了 add；运行时删除/卸载/更新未实现、未测试。已加载的类（尤其已织入 mixin 的 `ShareToLanScreen` / `AbstractWidget`）无法靠删 jar 卸载；需要 classloader 隔离或 T4 软重启。
-11. **GUI/监听初版限制**：只提供 `zh_cn` / `en_us`；异常消息/技术值仍是原始英文（标签已本地化）；最多直接显示 7 个候选；世界内 toast、`/modreloader gui`/`scan`、忽略/重试持久化未自动验证；T4/T5 只提示重启，不尝试加载。
+11. **GUI/监听初版限制**：只提供 `zh_cn` / `en_us`；异常消息/技术值仍是原始英文（标签已本地化）；最多直接显示 7 个候选；世界内 toast 与主菜单入口/忽略恢复已自动化，`/modreloader gui`/`scan`、失败重试未自动验证；T4/T5 只提示重启，不尝试加载。
 12. **MixinRuntime 是 T3 的第三方前置，已改为可选依赖**（2026-11-15）：`mr` 从 `required` 改成 `type="optional"`，因此缺它时**游戏能启动、T2 照常可用**，由我们给出人话提示（主菜单 toast + 日志 warn + 预检 + 失败屏，文案统一 `MixinRuntime (mr)`）。改的理由：`required` 时 FML `ModSorter#formatDependencyError` 只打印原始 modId（格式 `Mod ID: '%s', Requested by: '%s', Expected range: '%s', Actual version: '%s'`，缺失打印 `[MISSING]`，`[[dependencies]]` 无显示名字段），且加载阶段即终止，我方代码不执行、无法提示。为让「无 mr」真正可用，`MixinSupport`（直接 import mr 类型）被隔离在 [MixinStage](../src/main/java/dev/modreloader/hotadd/MixinStage.java) 之后，`HotAddEngine` 不再引用它；`HotAddEngine` 在 mixin 阶段前用 `MixinRuntimeSupport` 探测，缺失则 `FailureKind.MIXIN_RUNTIME` 失败并回滚。**构建仍需要** `libs/` 的 jar（`compileOnly`），而 `libs/` 被忽略 → **fresh clone 无法编译**（移走 jar 实测 24 个符号错误）；尚未反射化。代码只用它 5 个能力：取 transformer、`transformClassBytes`、`getClassBytes`（前两者有等价 public API，第三者可用自有 `Instrumentation`），以及 `MixinConfig.prepare/onSelect` 与 `MixinProcessor` 的 `configs/pendingConfigs`（包私有 + private，需反射）。`MixinEnvironment.getActiveTransformer()` 在 NeoForge 1.21.1 下是否可用**未验证**。**无 mr 启动路径已验证**：2026-11-15 15:32 移走 `run/mods` 的 mr 启动，无 FML 依赖报错，warn + toast 出现，EasyLAN（T2）热加 `isLoaded=true`；15:33 放回 mr 后 lanserverproperties（T3）回归通过。
 13. **`mods.toml` 的 side 字段不可信**（2026-11-15 实测）：EasyLAN 声明 `side="BOTH"`，但它的 `@Mod` 构造器里注册了 `ScreenEvent` 监听，在专用服上直接抛 `Attempted to load class net/minecraft/client/gui/screens/Screen for invalid dist DEDICATED_SERVER`。NeoForge 在服务端是**主动拒绝**加载客户端类，不是"没有这个类"。所以判断"能否上服务端"必须扫字节码里的 `net/minecraft/client/**` 引用（含 provider 类本身），不能只看 metadata；且扫描只能减少误判，不能保证，仍需运行期兜底（我们已有回滚）。
 14. **服务端尚无"成功"样例**：目前只验证了服务端**加载** runtime、以及热加被 dist 拒绝并干净回滚；还没找到一个真正服务端安全的 T2 mod 来证明服务端热加成功路径。
@@ -124,3 +125,4 @@
 - **2026-11-15（世界内 toast 自动化）**：`AddCommandCheck` 增加第二阶段 `-PverifyAddCommandWatchJar`：进世界后把 jar 丢进 inbox，断言**只 toast、不弹窗**。实测 15:43：`new mod(s) detected in world; toast only`；toast 队列按 `toast.detected.title` 命中 1（读 `ToastComponent.visible`/`queued`，因 `ToastInstance` 包私有，改走 `UnsafeAccess` 读字段）；`screen=null`、`promptOpened=false`；in-world RESULT: PASS。status「未验证」里的世界内 toast 一条转正。
 - **2026-11-15（T4 路线 / ADR-0006）**：所有者决定 T4 走 **managed relaunch** 优先，不注入注册表；实测确认 `MappedRegistry.unfreeze()` 为 public，但它只解除写保护，`Block.BLOCK_STATE_REGISTRY`/创造栏/`BlockEntityType` 绑定/数据包/资源包/存档 palette 全不重建。后续顺序：managed relaunch → dedicated server「一代重建」PoC → 才评估客户端软重启。另：side 门禁按所有者决定做**只警告不拦**；双端（client+server）热加列为方向性目标。
 - **2026-11-15（双端化第一步）**：拆出 `Platform`（不引用客户端类型）、`client/ClientBootstrap`（UI/toast/资源包/tick/dev 检查）、`client/ClientCommands`（`gui` 节点）、`server/ServerBootstrap`（控制台命令 + `ServerStartedEvent` 触发）、`ClientThreads`；`ModReloader` 去掉 `dist = Dist.CLIENT`，mods.toml 依赖改 `side = "BOTH"`；`FmlEvents`/`HotAddEngine`/`ModsFolderWatcher` 加 side 守卫；`runServer` 增加 `autoAdd`/`probe` 属性。实测：服务端加载 PASS、客户端回归 PASS、服务端热加 EasyLAN 被 dist 拒绝并干净回滚（新增已知问题 13/14）。
+- **2026-11-15（待处理入口 + 忽略恢复）**：新增 `client/MenuEntry`（`ScreenEvent.Init.Post` 在 TitleScreen / PauseScreen 左下角挂「模组热加载」按钮）；`ModReloaderScreen` 增加「已忽略」视图与恢复（`ModWatcherConfig.unignore` / `ignoredEntries`），解决「点了忽略就再也找不到」；新增 `dev/MenuEntryCheck`（`-PverifyMenu`）。实测 16:32：入口按钮 (4,216) → 待处理屏 → 已忽略（1）视图 → 恢复后 `ignoredCount 1 -> 0`，RESULT: PASS。

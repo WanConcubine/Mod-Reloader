@@ -4,6 +4,7 @@ import dev.modreloader.ModReloader;
 import dev.modreloader.command.ReloaderCommands;
 import dev.modreloader.dev.AddCommandCheck;
 import dev.modreloader.dev.LanScreenCheck;
+import dev.modreloader.dev.MenuEntryCheck;
 import dev.modreloader.dev.RollbackCheck;
 import dev.modreloader.dev.WatchCheck;
 import dev.modreloader.hotadd.HotAddEngine;
@@ -43,6 +44,7 @@ public final class ClientBootstrap {
         }
         installed = true;
         NeoForge.EVENT_BUS.addListener(ReloaderCommands::registerClient);
+        MenuEntry.install();
         NeoForge.EVENT_BUS.addListener(ClientTickEvent.Post.class, event -> tick());
         installAutoAdd();
         installDevChecks();
@@ -100,6 +102,9 @@ public final class ClientBootstrap {
     }
 
     private static void installDevChecks() {
+        if (Boolean.getBoolean("modreloader.verifyMenu")) {
+            MenuEntryCheck.start();
+        }
         String verifyAddCommand = System.getProperty("modreloader.verifyAddCommand", "").trim();
         if (!verifyAddCommand.isEmpty()) {
             AddCommandCheck.start(Path.of(verifyAddCommand));
