@@ -119,5 +119,7 @@
   "modreloader.toast.restored.message": "%s 已重新成为候选",
   "modreloader.failure.missing_file.summary": "那个 jar 已经不在原路径了。",
   "modreloader.failure.missing_file.suggestion": "它在被检测到之后被移动或删除了；重新扫描文件夹即可。",
-  "modreloader.gui.empty_hint": "把 jar 放进 mods/ 或 modreloader/inbox，再打开这个列表。"
+  "modreloader.gui.empty_hint": "把 jar 放进 mods/ 或 modreloader/inbox，再打开这个列表。",
+  "modreloader.failure.network_payload.summary": "该模组注册了自定义网络 payload，而 NeoForge 禁止在启动后注册，因此无法热加。",
+  "modreloader.failure.network_payload.suggestion": "请在启动前安装它；热加的这类模组能加载但无法与客户端交换自定义数据包。"
 }

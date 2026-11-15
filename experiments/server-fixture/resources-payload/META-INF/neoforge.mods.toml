@@ -1,0 +1,26 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "MIT"
+
+[[mods]]
+modId = "payloadfix"
+version = "1.0.0"
+displayName = "Payload Fixture"
+description = '''
+Realistic server-side fixture: registers a command and a repeating tick listener
+in its constructor, like real server mods do.
+'''
+
+[[dependencies.payloadfix]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21.1,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.payloadfix]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1,1.22)"
+ordering = "NONE"
+side = "BOTH"

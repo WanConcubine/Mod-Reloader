@@ -48,7 +48,7 @@ public final class HotAddEngine {
 
     public enum FailureKind {
         NONE, MISSING_FILE, NOT_A_MOD, INVALID_METADATA, ALREADY_LOADED, MISSING_DEPENDENCY, JBR_REQUIRED,
-        MIXIN_RUNTIME, UNSUPPORTED_TIER, MIXIN_CONFIG, MIXIN_TARGET, REDEFINE, MODULE, MODLIST,
+        MIXIN_RUNTIME, NETWORK_PAYLOAD, UNSUPPORTED_TIER, MIXIN_CONFIG, MIXIN_TARGET, REDEFINE, MODULE, MODLIST,
         CONSTRUCT, EVENT, RESOURCE_PACK, ROLLBACK_PARTIAL, UNKNOWN
     }
 
@@ -199,6 +199,17 @@ public final class HotAddEngine {
             }
             int keysAfter = Platform.isClient()
                     ? Minecraft.getInstance().options.keyMappings.length : -1;
+
+            // 4a. payloads: NeoForge forbids registering them after startup, so a
+            //     mod that needs them would load but never talk to clients.
+            for (ModContainer container : containers) {
+                String payloadError = FmlEvents.probeNetworkPayloads(container);
+                if (payloadError != null) {
+                    return fail(rollback, Stage.CONSTRUCT, FailureKind.NETWORK_PAYLOAD,
+                            container.getModId() + " registers network payloads, which NeoForge "
+                                    + "forbids after startup: " + payloadError);
+                }
+            }
 
             // 4b. commands: the server fired RegisterCommandsEvent long ago, so a
             //     hot-added mod's listener never ran. Re-fire it now.

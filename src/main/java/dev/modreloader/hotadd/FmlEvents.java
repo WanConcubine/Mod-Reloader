@@ -10,6 +10,7 @@ import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.fml.event.lifecycle.FMLConstructModEvent;
 import net.neoforged.fml.event.lifecycle.FMLLoadCompleteEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodType;
@@ -22,6 +23,27 @@ import java.lang.invoke.MethodType;
  */
 public final class FmlEvents {
     private FmlEvents() {
+    }
+
+    /**
+     * Probes whether the mod wants custom network payloads.
+     *
+     * <p>NeoForge forbids registering payloads after the start-up registration
+     * phase ({@code NetworkRegistry.register} throws), so a hot-added mod that
+     * needs them can never work. Replaying the event here turns that into a
+     * precise error instead of a mod that loads but cannot talk to clients.
+     *
+     * @return the failure message, or {@code null} when the mod registers no payloads
+     */
+    public static String probeNetworkPayloads(ModContainer container) {
+        try {
+            container.acceptEvent(new RegisterPayloadHandlersEvent());
+            return null;
+        } catch (UnsupportedOperationException e) {
+            return e.getMessage();
+        } catch (Throwable t) {
+            return t.getClass().getSimpleName() + ": " + t.getMessage();
+        }
     }
 
     public static void constructAndInit(ModContainer container) throws Throwable {

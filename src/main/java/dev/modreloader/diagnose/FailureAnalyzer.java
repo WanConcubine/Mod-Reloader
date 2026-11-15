@@ -87,6 +87,7 @@ public final class FailureAnalyzer {
             case MISSING_DEPENDENCY -> "missing_dependency";
             case JBR_REQUIRED -> "jbr_required";
             case MIXIN_RUNTIME -> "mixin_runtime";
+            case NETWORK_PAYLOAD -> "network_payload";
             case UNSUPPORTED_TIER -> "unsupported_tier";
             case MIXIN_CONFIG -> "mixin_config";
             case MIXIN_TARGET -> "mixin_target";
