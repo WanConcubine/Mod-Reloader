@@ -114,7 +114,7 @@
 3. **GUI / 文件夹监听完善**：Phase 3/4——忽略/重试持久化、批量/依赖排序、i18n 收尾、`-PverifyGui` 自动化；世界内 toast 已有 harness；见 [gui-mod-watcher.md](features/gui-mod-watcher.md)。
 4. **分析器校准**：50 个 1.21.1 模组，人工标注 tier；算准确率；修 `mekanismgenerators` 类漏判。
 5. **游戏内 `/modreload why <mod>`**：NeoForge 1.21.1，只读。
-6. **T4（ADR-0006）**：先做 managed relaunch（存盘 → 重启 → 回存档），再在 dedicated server 做「一代重建」PoC，最后才评估客户端软重启；**拒绝注入注册表**（`unfreeze` 只解除写保护，依赖它的缓存/数据包/资源/存档都不会重建）。
+6. **T4（ADR-0006）**：先做 managed relaunch（存盘 → 重启 → 回存档），再在 dedicated server 做「一代重建」PoC，最后才评估客户端软重启；ADR-0006 当时**拒绝注入注册表**，但 payload 适配（E1–E3）证明「解冻+重放」有效果 → **T4 开题时先评估「注册表适配」是否成立**（同套路：解冻 + 重放 `RegisterEvent` + 重建依赖缓存），再定是否仍走 relaunch；需要新 ADR-0008，并写明「已有存档不可用」的硬约束。
 7. **B fallback**：只在 A 失败时提供 offline/republish；不是主线。
 
 ## 最近变更
