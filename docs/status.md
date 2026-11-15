@@ -78,15 +78,16 @@
 4. **Jar-in-Jar 只拆一层**；更深 bundle 不展开。
 5. **Python 分析器 vs 未来 Java 模组**：规则需要抽成声明式配置，避免两份逻辑漂移。
 6. **LAN 模组是 T3 布局变更**：会给 `MinecraftServer` / `PauseScreen` / `ShareToLanScreen` 加字段；需要 JBR 或 sidecar；`online-mode` 可能要重启集成服务器才生效。详见 [use-cases.md](use-cases.md)。
-7. **A1.2 仍未产品化**：依赖 JBR + `-XX:+AllowEnhancedClassRedefinition`；依赖 dev-only 的 MixinRuntime（`run/mods`）。失败回滚只覆盖 post-ModList / post-pack：构造后的 `@Mod` 构造器和事件监听器无法注销；JVM 不能 undefine module，回滚把 Module 对象留在缓存里供重试；被移除的 mixin config 对象保留但 inactive。存档回读、第二个 T3 模组、真实 jar 启动仍未验证。
+7. **A1.2 仍未产品化**：依赖 JBR + `-XX:+AllowEnhancedClassRedefinition`；依赖 MixinRuntime（**第三方硬前置**，非 dev-only 便利依赖，见已知问题 12）。失败回滚只覆盖 post-ModList / post-pack：构造后的 `@Mod` 构造器和事件监听器无法注销；JVM 不能 undefine module，回滚把 Module 对象留在缓存里供重试；被移除的 mixin config 对象保留但 inactive。存档回读、第二个 T3 模组、真实 jar 启动仍未验证。
 8. **Git 仓库已建立**（2026-11-15）：`main`、首次 commit、`origin` → `github.com/WanConcubine/Mod-Reloader`；尚未加 CI、tag、release，证据截图仍只在 `run/`（被忽略）。
 9. **没有人工标注集**：规则准确率、混淆矩阵都还没有。
 10. **没有删/更新路径**：A1.2 只实现了 add；运行时删除/卸载/更新未实现、未测试。已加载的类（尤其已织入 mixin 的 `ShareToLanScreen` / `AbstractWidget`）无法靠删 jar 卸载；需要 classloader 隔离或 T4 软重启。
 11. **GUI/监听初版限制**：只提供 `zh_cn` / `en_us`；异常消息/技术值仍是原始英文（标签已本地化）；最多直接显示 7 个候选；世界内 toast、`/modreloader gui`/`scan`、忽略/重试持久化未自动验证；T4/T5 只提示重启，不尝试加载。
+12. **MixinRuntime 是第三方硬前置**（2026-11-15 实测）：`libs/` 与 `run/mods/` 都被 `.gitignore` 忽略，但 `compileOnly files('libs/MixinRuntime-1.0.2-mc1.21.jar')` 是编译必需——移走 jar 后 `./gradlew compileJava` 报 **24 个符号错误**，即 **fresh clone 无法构建**；`neoforge.mods.toml` 把 `mr` 声明为 `type="required"`、`versionRange="[1.0.2,)"`，**缺它整个 mod 不加载**。结论：用户要用本 runtime，**必须先自行安装 MixinRuntime**（MIT；jar 内无 LICENSE 文件）。所有者 2026-11-15 决定**保持现状**（不改 optional、不内嵌、不自研）。代码实际只用它 5 个能力：取 transformer、`transformClassBytes`、`getClassBytes`（前两者有等价 public API，第三者可用自有 `Instrumentation` 实现），以及 `MixinConfig.prepare/onSelect` 与 `MixinProcessor` 的 `configs/pendingConfigs`（包私有 + private，需反射）。`MixinEnvironment.getActiveTransformer()` 在 NeoForge 1.21.1 下是否可用**未验证**。
 
 ## 下一步
 
-0. **Git 收尾**：加 CI（分析器单测 + `./gradlew build`）；证据截图从 `run/screenshots` 复制进 `docs/`（`run/` 被忽略）；首个 tag `v0.1.0` 待功能稳定。
+0. **Git 收尾**：加 CI（分析器单测 + `./gradlew build`）；证据截图从 `run/screenshots` 复制进 `docs/`（`run/` 被忽略）；首个 tag `v0.1.0` 待功能稳定。**CI 会先撞上已知问题 12**：`libs/` 不随仓库分发，build 在 CI 上无 jar 可用，加 CI 前必须决定 jar 从哪来（下载脚本 / 提交 jar / 先只跑分析器单测）。
 1. **人工收尾**：进世界执行 `/modreloader add`；点一次 EasyLAN 的 GUI 按钮。
 2. **A1 产品化**：构造后 listener 回滚 / 存档回读；第二个 T3 模组（如 `mcwifipnp`）；把 MixinRuntime 从 dev-only 依赖换成可分发实现。
 3. **GUI / 文件夹监听完善**：Phase 3/4——世界内 toast 实测、忽略/重试持久化、批量/依赖排序、i18n 收尾、`-PverifyGui` 自动化；见 [gui-mod-watcher.md](features/gui-mod-watcher.md)。
@@ -107,3 +108,4 @@
 - **2026-11-15（GUI 初版）**：实现 mods/inbox 监听、Java 预检（T2–T5）、toast + 主菜单弹窗、加载/失败屏、独立 watcher JSON；EasyLAN 检测→加载、坏 jar 失败屏、T4 不可加载均验证。详见 [gui-mod-watcher.md](features/gui-mod-watcher.md)。
 - **2026-11-15（i18n）**：新增 `en_us` / `zh_cn` 语言文件（各 103 key）；GUI、按钮、toast、命令、预检/失败摘要、复制详情标签全部走翻译 key；中英文截图验证无 key 泄漏；异常原始消息保留英文。
 - **2026-11-15（git / 许可 / 作者）**：`git init -b main`，`.gitignore` 覆盖 `.gradle/`、`build/`、`run/`、`libs/`、`*.class`、`__pycache__/`，78 文件 + `LICENSE` 共 79 文件首次 commit 并推到 `origin`（GitHub `WanConcubine/Mod-Reloader`）。许可证由 Apache-2.0 改为 **MIT**：新增 `LICENSE`，`mod_license`、`neoforge.mods.toml`、README、roadmap 同步。作者改为 **Liu_Mei**（`mod_authors` / `authors` / git 提交身份）。
+- **2026-11-15（记录更正）**：MixinRuntime 由「dev-only 依赖」更正为**第三方硬前置**（新增已知问题 12）：`libs/` 被忽略 + `compileOnly` 依赖 → fresh clone 编译失败（24 个符号错误）；`mr` 在 mods.toml 为 `required` → 缺它整个 mod 不加载。所有者决定保持现状。
