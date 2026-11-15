@@ -26,7 +26,7 @@ import java.util.List;
  * ignored jar stays reachable).
  */
 public final class MenuEntryCheck {
-    private enum Stage { WAIT_TITLE, PRESS, VERIFY, TOGGLE, RESTORE, DONE }
+    private enum Stage { WAIT_TITLE, PRESS, VERIFY, SHOT, TOGGLE, RESTORE, DONE }
 
     private static final int TIMEOUT_TICKS = 20 * 120;
 
@@ -63,6 +63,7 @@ public final class MenuEntryCheck {
             case WAIT_TITLE -> waitTitle(mc);
             case PRESS -> press(mc);
             case VERIFY -> verify(mc);
+            case SHOT -> shot(mc);
             case TOGGLE -> toggle(mc);
             case RESTORE -> restore(mc);
             case DONE -> stopWhenDone(mc);
@@ -97,7 +98,11 @@ public final class MenuEntryCheck {
     }
 
     private static void screenshot(Minecraft mc) {
-        var file = mc.gameDirectory.toPath().resolve("screenshots").resolve("menu-logo-entry.png");
+        screenshot(mc, "menu-logo-entry.png");
+    }
+
+    private static void screenshot(Minecraft mc, String name) {
+        var file = mc.gameDirectory.toPath().resolve("screenshots").resolve(name);
         try {
             java.nio.file.Files.createDirectories(file.getParent());
             NativeImage image = Screenshot.takeScreenshot(mc.getMainRenderTarget());
@@ -145,9 +150,21 @@ public final class MenuEntryCheck {
             fail("no ignored-list toggle '" + expectedToggle + "' on the pending screen; buttons=" + labels);
             return;
         }
-        AbstractButton toggle = findButton(screen, expectedToggle);
+        stage = Stage.SHOT;
+        ticks = 0;
+    }
+
+    /** Lets the pending screen render for a frame before capturing it. */
+    private static void shot(Minecraft mc) {
+        if (ticks < 4) {
+            return;
+        }
+        screenshot(mc, "pending-screen.png");
+        int ignored = ModReloader.WATCHER_CONFIG == null ? 0 : ModReloader.WATCHER_CONFIG.ignoredCount();
+        String expectedToggle = I18n.get("modreloader.gui.ignored_list", ignored);
+        AbstractButton toggle = findButton(mc.screen, expectedToggle);
         if (toggle == null) {
-            fail("toggle button not found by label");
+            fail("toggle button not found by label after the screenshot");
             return;
         }
         toggle.onPress();

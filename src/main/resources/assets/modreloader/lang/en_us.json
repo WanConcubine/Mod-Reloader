@@ -110,7 +110,7 @@
   "modreloader.detail.dependency_ok": "ok",
   "modreloader.detail.dependency_missing": "missing",
   "modreloader.gui.entry": "Mod Reloader",
-  "modreloader.gui.ignored_list": "Ignored (%s)",
+  "modreloader.gui.ignored_list": "View ignored (%s)",
   "modreloader.gui.ignored_back": "Back to pending",
   "modreloader.gui.ignored_empty": "No ignored mods",
   "modreloader.gui.ignored_hint": "Select an entry and click Restore to make it a candidate again.",
@@ -118,5 +118,6 @@
   "modreloader.toast.restored.title": "Restored",
   "modreloader.toast.restored.message": "%s is a candidate again",
   "modreloader.failure.missing_file.summary": "The jar no longer exists at that path.",
-  "modreloader.failure.missing_file.suggestion": "It was moved or deleted after it was detected; rescan the folder."
+  "modreloader.failure.missing_file.suggestion": "It was moved or deleted after it was detected; rescan the folder.",
+  "modreloader.gui.empty_hint": "Drop a jar into mods/ or modreloader/inbox, then reopen this list."
 }

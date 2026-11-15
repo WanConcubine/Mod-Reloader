@@ -48,7 +48,7 @@
 | **专用服务端加载（双端化）** | **`loaded on dedicated server`；watcher 起在 Server thread；`Done (7.060s)`；无 `NoClassDefFoundError`** | 2026-11-15 16:24：`./gradlew runServer`（`run/eula.txt` 本地接受） |
 | **服务端热加 T2：被 dist 拦住（回滚干净）** | **EasyLAN 失败：`Attempted to load class net/minecraft/client/gui/screens/Screen for invalid dist DEDICATED_SERVER`；event listeners / mod list / module layer 回滚 ok** | 2026-11-15 16:24：`runServer -PautoAdd=/tmp/lanmods/EasyLAN-...jar` |
 | **塞入 → 删除 → 再拷回** | **放入后 pending；删除后不在 pending；用 `COPY_ATTRIBUTES`（同 size/mtime）重新拷回后**又出现在 pending**（`seen` 不再遮蔽）；`add(缺失路径)` → `stage=VALIDATE, kind=MISSING_FILE`；RESULT: PASS** | 2026-11-15 16:38：`runClient -PverifyDelete=true` |
-| **主菜单入口 + 待处理列表 + 忽略恢复** | **右上角 logo 按钮、20×20 像素风槽位图标（Minecraft 石头斜面 + 草方块，悬停贴图）、tooltip「模组热加载」、非文字；待处理屏列出未加载 jar `▶ [T2] menutest-...`；已忽略视图可恢复（`ignoredCount 1 -> 0`）；RESULT: PASS** | 2026-11-15 16:42：`runClient -PverifyMenu=true`；截图 [menu-logo-entry.png](features/images/menu-logo-entry.png) |
+| **主菜单入口 + 待处理列表 + 忽略恢复** | **右上角 20×20 像素风槽位图标 + tooltip；待处理屏：主操作行 `加载/忽略/关闭` 等宽对齐、次行 `查看已忽略（N）`；忽略视图 `恢复/关闭/返回待处理`；恢复后 `ignoredCount 1 -> 0`；RESULT: PASS** | 2026-11-15 16:42：`runClient -PverifyMenu=true`；截图 [menu-logo-entry.png](features/images/menu-logo-entry.png) |
 | **双端化后客户端回归** | **`loaded on client`；`AddCmdCheck RESULT: PASS`** | 2026-11-15 16:25：`runClient -PverifyAddCommand=/tmp/lanmods/EasyLAN-...jar` |
 
 ## 验证状态
@@ -131,3 +131,4 @@
 - **2026-11-15（塞入/删除语义）**：新增 `dev/DeleteCheck`（`-PverifyDelete`）覆盖「放入→删除→同字节拷回」；修掉两个粗糙点：`seen` 指纹在文件消失后未清理（会遮蔽之后同 size/mtime 的重新拷入）→ `scan()` 现在按 `present` 同步清理；加载已消失的 jar 之前只会报 `unknown`（"原因无法分类"）→ 新增 `FailureKind.MISSING_FILE` 与中英文案，且不再写 failed 记录。实测 16:38：四条断言全 PASS。
 - **2026-11-15（入口改成 logo）**：`MenuEntry` 从文字按钮改到**右上角**（原来左下角压着版本/版权行），新增 `client/LogoButton` （`assets/modreloader/textures/gui/modreloader_logo.png`，64×64，按 pose 缩放绘制；悬停高亮 + tooltip + 旁白）；`MenuEntryCheck` 改为按类型查找并断言位于右上角，顺带截图。实测 16:42：`(399,4) 24x24 topRight=true`，待处理/已忽略/恢复仍 PASS。注：`blit()` 不缩放，第一版只采样了 64×64 纹理的左上角，截图发现后改为 pose 缩放。
 - **2026-11-15（入口改为 Minecraft 风格图标）**：用户反馈原 logo 过于扁平。改为 20×20 像素图：带斜面的石头槽位（1px 黑边 + 左上浅/右下深 + 青色高光）+ 草方块，另附 `modreloader_logo_hovered.png` 悬停态；`LogoButton` 改成 1:1 绘制（不再缩放），键盘焦点额外画 1px 白框；尺寸从 24 改为 20。实测 16:50：`-PverifyMenu=true` PASS，截图确认右上角渲染正确。注：期间我的批量替换脚本误把 `LogoButton.java` 写坏（把每个 `}` 替换成整段方法），已整文件重写修复。
+- **2026-11-15（屏幕语义重排）**：用户指出按钮布局不合理且有重复语义。删除「稍后」（与「关闭」行为完全相同）、不再把「不可加载」做成按钮（保留「加载」并置灰，原因显示在详情行）；主操作统一一行等宽（加载/忽略/关闭），视图切换独立一行（查看已忽略（N）／返回待处理）；忽略后立即从列表移除；空列表只保留「关闭」+ 提示「把 jar 放进 mods/ 或 modreloader/inbox」。i18n 121 key（两语言一致）。实测 16:57：布局截图 + RESULT: PASS。logo 仍在重新设计中，等所有者确认。
