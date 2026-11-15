@@ -80,6 +80,8 @@ def verifyMenu = providers.gradleProperty('verifyMenu').orNull
 def verifyDelete = providers.gradleProperty('verifyDelete').orNull
 def verifyRegistryProbe = providers.gradleProperty('verifyRegistryProbe').orNull
 def verifyRegistryRefreeze = providers.gradleProperty('verifyRegistryRefreeze').orNull
+def t4fixtureSelftest = providers.gradleProperty('t4fixtureSelftest').orNull
+def t4fixtureSelftestRead = providers.gradleProperty('t4fixtureSelftestRead').orNull
 def verifyPayload = providers.gradleProperty('verifyPayload').orNull
 def verifyPayloadAfterJoin = providers.gradleProperty('verifyPayloadAfterJoin').orNull
 def verifyPayloadRemote = providers.gradleProperty('verifyPayloadRemote').orNull
@@ -169,6 +171,12 @@ neoForge {
             }
             if (probeJar) {
                 systemProperty 'modreloader.probe', probeJar
+            }
+            if (t4fixtureSelftest) {
+                systemProperty 't4fixture.selftest', 'true'
+            }
+            if (t4fixtureSelftestRead) {
+                systemProperty 't4fixture.selftest.read', 'true'
             }
         }
     }

@@ -4,6 +4,8 @@ import cpw.mods.jarhandling.JarContents;
 import dev.modreloader.ModReloader;
 import dev.modreloader.capability.Capabilities;
 import dev.modreloader.inspect.MixinRuntimeSupport;
+import dev.modreloader.inspect.ModInspection;
+import dev.modreloader.inspect.ModInspector;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.loading.moddiscovery.ModFile;
@@ -36,12 +38,12 @@ import java.util.Set;
  */
 public final class HotAddEngine {
     public enum Stage {
-        NONE, VALIDATE, MODULE, MIXIN, MODLIST, CONSTRUCT, EVENT, PACK
+        NONE, VALIDATE, MODULE, MIXIN, MODLIST, CONSTRUCT, REGISTRY, EVENT, PACK
     }
 
     public enum FailureKind {
         NONE, MISSING_FILE, NOT_A_MOD, INVALID_METADATA, ALREADY_LOADED, MISSING_DEPENDENCY, JBR_REQUIRED,
-        MIXIN_RUNTIME, NETWORK_PAYLOAD, UNSUPPORTED_TIER, CAPABILITY, MIXIN_CONFIG, MIXIN_TARGET, REDEFINE, MODULE, MODLIST,
+        MIXIN_RUNTIME, NETWORK_PAYLOAD, UNSUPPORTED_TIER, CAPABILITY, MIXIN_CONFIG, MIXIN_TARGET, REDEFINE, MODULE, MODLIST, REGISTRY,
         CONSTRUCT, EVENT, RESOURCE_PACK, ROLLBACK_PARTIAL, UNKNOWN
     }
 
@@ -131,6 +133,18 @@ public final class HotAddEngine {
                     ids, jar.getFileName(),
                     mixinConfigs.stream().map(ModFileParser.MixinConfig::config).toList());
 
+            // T4 detection: the analyzer already predicts registry content for
+            // the UI; use the same signal to decide whether the engine must open
+            // a registry window around construction.
+            boolean registryContent = false;
+            try {
+                ModInspection inspection = ModInspector.inspect(jar);
+                registryContent = inspection.ok() && inspection.registry();
+            } catch (Throwable t) {
+                ModReloader.LOGGER.warn("[ModReloader] cannot predict registry content for {}", jar, t);
+            }
+            ModReloader.LOGGER.info("[ModReloader] registry content detected: {}", registryContent);
+
             // Framework anchors first: if NeoForge drifted under us, say so
             // before anything is mutated instead of crashing halfway through.
             Capabilities.Result moduleCapability =
@@ -194,7 +208,10 @@ public final class HotAddEngine {
                 return fail(rollback, Stage.MODLIST, FailureKind.UNKNOWN, "injected failure after ModList rebuild");
             }
 
-            // 4. construct + replay client lifecycle events.
+            // 4. construct (+ T4 registry content) + replay lifecycle events.
+            //    A registry window must open before construction: some mods call
+            //    Registry.register directly in the constructor. For T4 the normal
+            //    startup order is construct → RegisterEvent → freeze → common setup.
             stage = Stage.CONSTRUCT;
             rollback.add("event listeners", () -> {
                 if (constructed[0]) {
@@ -203,13 +220,30 @@ public final class HotAddEngine {
                                     + "unregistered; only ModList/module/mixin state is restored");
                 }
             });
+            if (registryContent) {
+                Capabilities.Result registryCapability =
+                        Capabilities.get(Capabilities.Capability.REGISTRY_ADAPTATION);
+                if (!registryCapability.available()) {
+                    return fail(rollback, Stage.VALIDATE, FailureKind.CAPABILITY,
+                            registryCapability.describe());
+                }
+                RegistryStage.begin(rollback);
+            }
             PlatformHooks hooks = PlatformHooks.get();
             int keysBefore = hooks.keyMappingCount();
             List<String> loaded = new ArrayList<>();
             for (ModContainer container : containers) {
-                FmlEvents.constructAndInit(container);
+                FmlEvents.construct(container);
                 constructed[0] = true;
                 loaded.add(container.getModId());
+            }
+            if (registryContent) {
+                stage = Stage.REGISTRY;
+                RegistryStage.commit(containers);
+            }
+            stage = Stage.EVENT;
+            for (ModContainer container : containers) {
+                FmlEvents.finish(container);
             }
             int keysAfter = hooks.keyMappingCount();
 
@@ -283,6 +317,7 @@ public final class HotAddEngine {
             case MODULE -> FailureKind.MODULE;
             case MODLIST -> FailureKind.MODLIST;
             case CONSTRUCT -> FailureKind.CONSTRUCT;
+            case REGISTRY -> FailureKind.REGISTRY;
             case EVENT -> FailureKind.EVENT;
             case PACK -> FailureKind.RESOURCE_PACK;
             case VALIDATE -> FailureKind.INVALID_METADATA;

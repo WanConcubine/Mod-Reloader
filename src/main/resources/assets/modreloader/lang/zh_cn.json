@@ -73,6 +73,8 @@
   "modreloader.failure.module.suggestion": "看看是否有同名模块/重复 jar；重启后再试。",
   "modreloader.failure.modlist.summary": "ModList/ModContainer 重建失败。",
   "modreloader.failure.modlist.suggestion": "检查依赖与重复 mod；重启后重试。",
+  "modreloader.failure.registry.summary": "注册表内容注册失败。注册表条目无法回滚。",
+  "modreloader.failure.registry.suggestion": "重启游戏。如果已经注册了条目，运行时已不可信，重启是唯一干净的状态。",
   "modreloader.failure.construct.summary": "模组构造器或生命周期事件抛异常。",
   "modreloader.failure.construct.suggestion": "查看异常栈；构造后监听器可能残留，建议重启。",
   "modreloader.failure.event.summary": "客户端生命周期事件失败。",

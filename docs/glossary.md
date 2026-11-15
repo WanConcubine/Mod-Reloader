@@ -106,3 +106,4 @@
 | **Bake callback** | NeoForge 在 `freeze()` 时执行的回调；重算 BlockState id 映射、方块缓存/loot table、属性校验等。T4 适配的「依赖缓存重建」就靠它。 |
 | **One-shot replay（一次性事件重放）** | 把启动期只发生一次的事件（命令、payload、`RegisterEvent`）在热加后重新投递；按容器重放，避免全局重放导致已加载 mod 的监听器再跑一遍。 |
 | **单向提交（commit-only）** | T4 适配的失败模型：注册表条目无法撤销，提交前尽量预检，提交后失败只能把运行时标记为不可信并要求重启。 |
+| **Registry window（注册表窗口）** | T4 热加的 unfreeze → construct → RegisterEvent 重放 → 清空 state id → freeze 这一段；窗口内失败可以恢复冻结状态，freeze 之后不可回滚。 |

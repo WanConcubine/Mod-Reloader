@@ -21,6 +21,16 @@ public final class FmlEvents {
     }
 
     public static void constructAndInit(ModContainer container) throws Throwable {
+        construct(container);
+        finish(container);
+    }
+
+    /**
+     * Constructs the mod and fires {@code FMLConstructModEvent}. Split from
+     * {@link #finish(ModContainer)} so a T4 hot-add can replay registry events
+     * between construction and common setup (that is the normal startup order).
+     */
+    public static void construct(ModContainer container) throws Throwable {
         MethodHandle construct = UnsafeAccess.trusted().findVirtual(
                 ModContainer.class, "constructMod", MethodType.methodType(void.class));
 
@@ -35,7 +45,10 @@ public final class FmlEvents {
         DeferredWorkQueue constructQueue = queue(container, "construct");
         container.acceptEvent(new FMLConstructModEvent(container, constructQueue));
         constructQueue.runTasks();
+    }
 
+    /** Common setup, client setup/key mappings and load-complete. */
+    public static void finish(ModContainer container) throws Throwable {
         DeferredWorkQueue commonQueue = queue(container, "common");
         container.acceptEvent(new FMLCommonSetupEvent(container, commonQueue));
         commonQueue.runTasks();

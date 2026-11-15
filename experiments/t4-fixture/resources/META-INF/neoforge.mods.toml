@@ -1,0 +1,26 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "MIT"
+
+[[mods]]
+modId = "t4fixture"
+version = "1.0.0"
+displayName = "T4 Registry Fixture"
+description = '''
+Registers one block and one BlockItem, then reads them back in common setup.
+Used to exercise the T4 registry window on hot-add.
+'''
+
+[[dependencies.t4fixture]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21.1,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.t4fixture]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1,1.22)"
+ordering = "NONE"
+side = "BOTH"

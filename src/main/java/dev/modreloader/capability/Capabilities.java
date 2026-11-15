@@ -3,7 +3,11 @@ package dev.modreloader.capability;
 import cpw.mods.cl.ModuleClassLoader;
 import dev.modreloader.ModReloader;
 import dev.modreloader.Platform;
+import dev.modreloader.hotadd.UnsafeAccess;
 import dev.modreloader.inspect.MixinRuntimeSupport;
+import net.minecraft.core.MappedRegistry;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.Connection;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.ModLoader;
@@ -46,6 +50,7 @@ public final class Capabilities {
         MODLIST_REBUILD("mod list rebuild", true),
         NETWORK_ADAPTATION("network payload adaptation", false),
         MIXIN_HOTADD("mixin hot-add", false),
+        REGISTRY_ADAPTATION("registry content hot-add (T4)", false),
         RESOURCE_PACKS("resource pack injection", false);
 
         private final String label;
@@ -90,6 +95,7 @@ public final class Capabilities {
         RESULTS.put(Capability.MODLIST_REBUILD, checkModListRebuild());
         RESULTS.put(Capability.NETWORK_ADAPTATION, checkNetworkAdaptation());
         RESULTS.put(Capability.MIXIN_HOTADD, checkMixinHotAdd());
+        RESULTS.put(Capability.REGISTRY_ADAPTATION, checkRegistryAdaptation());
         RESULTS.put(Capability.RESOURCE_PACKS, checkResourcePacks());
 
         List<String> summary = new ArrayList<>();
@@ -214,6 +220,37 @@ public final class Capabilities {
             missing.add("mixin classes: " + t.getClass().getSimpleName());
         }
         return result(Capability.MIXIN_HOTADD, missing);
+    }
+
+    private static Result checkRegistryAdaptation() {
+        List<String> missing = new ArrayList<>();
+        try {
+            java.lang.reflect.Method unfreeze = MappedRegistry.class.getMethod("unfreeze");
+            if (!java.lang.reflect.Modifier.isPublic(unfreeze.getModifiers())) {
+                missing.add("MappedRegistry#unfreeze is not public");
+            }
+            net.neoforged.neoforge.registries.GameData.class.getDeclaredMethod("unfreezeData");
+            net.neoforged.neoforge.registries.GameData.class.getDeclaredMethod("freezeData");
+            net.neoforged.neoforge.registries.GameData.class.getDeclaredMethod("getRegistrationOrder");
+            net.neoforged.neoforge.registries.RegisterEvent.class.getDeclaredConstructor(
+                    net.minecraft.resources.ResourceKey.class, Registry.class);
+
+            Class<?> callbacks = Class.forName(
+                    "net.neoforged.neoforge.registries.NeoForgeRegistryCallbacks$BlockCallbacks");
+            Object map = UnsafeAccess.getStatic(callbacks, "BLOCKSTATE_TO_ID_MAP");
+            map.getClass().getDeclaredMethod("clear");
+
+            if (BuiltInRegistries.BLOCK.size() == 0 || BuiltInRegistries.ITEM.size() == 0) {
+                missing.add("BuiltInRegistries.BLOCK/ITEM is empty");
+            }
+        } catch (ClassNotFoundException | NoSuchMethodException e) {
+            missing.add(e instanceof NoSuchMethodException
+                    ? "registry anchor method missing: " + e.getMessage()
+                    : "NeoForge registry callbacks missing");
+        } catch (Throwable t) {
+            missing.add("registry anchors: " + t.getClass().getSimpleName());
+        }
+        return result(Capability.REGISTRY_ADAPTATION, missing);
     }
 
     private static Result checkResourcePacks() {

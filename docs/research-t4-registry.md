@@ -211,9 +211,10 @@ refreeze: after 15 ms; blocks=1060 states=26684 frozen=true stone=26685 grass=26
 
 ## 6. 下一步实验（按顺序，每步都可独立否决）
 
-1. **最小夹具**：`experiments/t4-fixture/`（一个方块 + 一个 BlockItem，无数据包），
-   在 server 新世界热加 → 放置/破坏 → 存盘 → 重启（mod 仍在）→ 读档。
-   验证：id 稳定、区块可读、第二次启动不需要"修复"。
+1. ✅ **最小夹具**（2026-11-15 21:48，已完成）：`experiments/t4-fixture/`（一个方块 + 一个 BlockItem，无数据包），
+   在 dedicated server 热加 → 放置 `(0,100,0)` → 存盘 → 把 fixture 放进 `run/mods` 正常启动 → 读档。
+   结果：blocks 1060→1061、items 1333→1334、states 26684→26685，stoneId 1→1 稳定；重启后
+   `entryId=1060 / stateId=26684` 与热加时一致，`RESULT: PASS`。机制与复现见 [features/t4-registry-hotadd.md](features/t4-registry-hotadd.md)。
 2. **失败语义**：construct 阶段抛异常（此时注册表已 unfreeze）→ 确认进程被标记 dirty、
    不尝试回滚、提示重启；这是"单向提交"的诚实实现。
 3. **客户端**：同一夹具在客户端登录前热加 → 进入世界 → 模型/翻译/创造栏可见。

@@ -7,7 +7,7 @@
 ## 1. 项目是什么
 
 - **目标**：让 Minecraft Java 版模组在游戏运行时**安全地增删 / 更新 / 热重载**。
-- **当前阶段**：只读分析器 v0 已完成；**A0（T2 模组热加）已验证**；**A1.2（T3/Mixin + 布局变更）主路径已在 dev client 验证**：`lanserverproperties` 热加后进世界打开 Open to LAN，LSP 控件可用；**失败回滚已覆盖 post-ModList / post-pack**（恢复 ModList/module/config/类/资源包，post-ModList 重试成功）。构造后事件监听器无法注销、存档回读未做，按 §6 尚不算完成。**mods/inbox 监听 + 预检 + toast/弹窗 + 失败分析初版已实现**（EasyLAN 检测→加载、坏 jar 失败屏、T4 不可加载）。T4 软重启未开始；**T4 调研已开题**（注册表适配评估，见 [research-t4-registry.md](docs/research-t4-registry.md) 与 ADR-0008 Proposed）。剩余人工：点 EasyLAN 的 GUI 按钮（`/modreloader add` 已由 `-PverifyAddCommand` 自动化）。**服务端**：runtime 能在 dedicated server 加载并热加 T2；命令注册通过重放 `RegisterCommandsEvent` 生效（根命令 93→94），重复触发的 `ServerTickEvent` 也能到达；payload 可通过 `NetworkAdaptation` 解冻注册表后注册，并修补已建立连接的 `PayloadSetup`（E1/E2 单人 + E3 跨进程均已验证）；一次性启动事件 / 注册表仍不支持（ADR-0007）。**工程侧（2026-11-15）**：引擎通过 `PlatformHooks` 与两端解耦，启动时有 `Capabilities` 反射锚点守卫，`src/dev` 独立 source set（不进发布 jar），`./gradlew test` 有 3 个无游戏 Java 单测。
+- **当前阶段**：只读分析器 v0 已完成；**A0（T2 模组热加）已验证**；**A1.2（T3/Mixin + 布局变更）主路径已在 dev client 验证**：`lanserverproperties` 热加后进世界打开 Open to LAN，LSP 控件可用；**失败回滚已覆盖 post-ModList / post-pack**（恢复 ModList/module/config/类/资源包，post-ModList 重试成功）。构造后事件监听器无法注销、存档回读未做，按 §6 尚不算完成。**mods/inbox 监听 + 预检 + toast/弹窗 + 失败分析初版已实现**（EasyLAN 检测→加载、坏 jar 失败屏、T4 不可加载）。T4 软重启未开始；**T4 注册表热加（实验性，server-only）已验证**：服务端热加一个方块 + BlockItem、放置存盘、重启读档 PASS（[t4-registry-hotadd.md](docs/features/t4-registry-hotadd.md)）；仍限 add-only、无客户端/datapack、UI 未放行（ADR-0008 Accepted）。剩余人工：点 EasyLAN 的 GUI 按钮（`/modreloader add` 已由 `-PverifyAddCommand` 自动化）。**服务端**：runtime 能在 dedicated server 加载并热加 T2；命令注册通过重放 `RegisterCommandsEvent` 生效（根命令 93→94），重复触发的 `ServerTickEvent` 也能到达；payload 可通过 `NetworkAdaptation` 解冻注册表后注册，并修补已建立连接的 `PayloadSetup`（E1/E2 单人 + E3 跨进程均已验证）；一次性启动事件 / datapack 注册表仍不支持（ADR-0007/0008）；built-in 注册表 add-only 的服务端热加已验证。**工程侧（2026-11-15）**：引擎通过 `PlatformHooks` 与两端解耦，启动时有 `Capabilities` 反射锚点守卫，`src/dev` 独立 source set（不进发布 jar），`./gradlew test` 有 3 个无游戏 Java 单测。
 - **目标版本**：**Minecraft 1.21.1**；分析器支持 Fabric + NeoForge，语料与校准锁 1.21.1。
 - **运行时首发**：**NeoForge 1.21.1**（原因见 [ADR-0001](docs/decisions/0001-target-1.21.1-neoforge.md)）。
 - **首个 dogfood**：`../Ex-Nihilo-Satellitium`（NeoForge 1.21.1，T4 内容模组）。
@@ -82,6 +82,9 @@ python3 tools/analyzer/run.py scan ~/Projects/Ex-Nihilo-Satellitium/build/libs/e
 ./gradlew runServer -PautoAdd=/tmp/payloadfix/payloadfix-1.0.0.jar
 ./gradlew runClient -PverifyPayloadRemote=/tmp/payloadfix/payloadfix-1.0.0.jar
 
+# T4 注册表热加：热加夹具 → 放置/存盘 → 放进 run/mods → 重启读档（详见 experiments/t4-fixture/README.md）
+./gradlew runServer -PautoAdd=/tmp/t4fixture/t4fixture-1.0.0.jar -Pt4fixtureSelftest=true
+
 # T4 调研：只读注册表探针（加 -PverifyRegistryRefreeze=true 会做一次受控 unfreeze/freeze，仅一次性世界）
 ./gradlew runClient -PverifyAddCommand=/tmp/lanmods/EasyLAN-neoforge-1.21.1-v1.6a.jar -PverifyRegistryProbe=true
 
@@ -153,7 +156,7 @@ docs/
   design.md                # 架构、分层、不变量
   glossary.md              # 术语（Tn、软重启、sidecar、registry…）
   use-cases.md             # 真实场景：什么情况下无需重启最有价值
-  features/                # 功能规格与验证：a0-hot-add.md / a1-mixin-hotadd.md / gui-mod-watcher.md / server-hotadd.md / lan-doctor.md
+  features/                # 功能规格与验证：a0-hot-add.md / a1-mixin-hotadd.md / gui-mod-watcher.md / server-hotadd.md / t4-registry-hotadd.md / lan-doctor.md
   decisions/               # ADR：为什么这样定
   research-hot-mod-reload.md  # 2026-11 调研报告；历史背景，结论以 status 为准
   research-t4-registry.md    # T4 注册表适配调研（机制/边界/实验计划）
@@ -166,6 +169,7 @@ src/test/java/dev/modreloader/     # 不需要游戏的 JUnit 测试
 tools/analyzer/            # 只读分析器（Python）
 experiments/self-attach-poc/  # 自附加 + 类重定义最小验证（Java）
 experiments/server-fixture/   # 夹具：命令+tick、payload（payload 适配验证）
+experiments/t4-fixture/       # 夹具：一个方块 + BlockItem（T4 注册表热加验证）
 ```
 
 ## 5. 记忆约定

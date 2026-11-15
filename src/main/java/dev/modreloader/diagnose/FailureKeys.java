@@ -37,6 +37,7 @@ public final class FailureKeys {
             case REDEFINE -> "redefine";
             case MODULE -> "module";
             case MODLIST -> "modlist";
+            case REGISTRY -> "registry";
             case CONSTRUCT -> "construct";
             case EVENT -> "event";
             case RESOURCE_PACK -> "resource_pack";

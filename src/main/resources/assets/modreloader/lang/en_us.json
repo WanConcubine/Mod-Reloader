@@ -73,6 +73,8 @@
   "modreloader.failure.module.suggestion": "Check for a duplicate module/jar; retry after a restart.",
   "modreloader.failure.modlist.summary": "ModList/ModContainer rebuild failed.",
   "modreloader.failure.modlist.suggestion": "Check dependencies and duplicate mods; retry after a restart.",
+  "modreloader.failure.registry.summary": "Registry content could not be registered. Registry entries cannot be rolled back.",
+  "modreloader.failure.registry.suggestion": "Restart the game. If entries were already added, the runtime is dirty and a restart is the only clean state.",
   "modreloader.failure.construct.summary": "The mod constructor or lifecycle event threw.",
   "modreloader.failure.construct.suggestion": "Check the stack trace; listeners may remain after construction, prefer restart.",
   "modreloader.failure.event.summary": "A client lifecycle event failed.",
