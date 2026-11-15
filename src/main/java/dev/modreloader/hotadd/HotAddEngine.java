@@ -2,6 +2,7 @@ package dev.modreloader.hotadd;
 
 import cpw.mods.jarhandling.JarContents;
 import dev.modreloader.ModReloader;
+import dev.modreloader.inspect.MixinRuntimeSupport;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.repository.Pack;
@@ -45,8 +46,8 @@ public final class HotAddEngine {
 
     public enum FailureKind {
         NONE, NOT_A_MOD, INVALID_METADATA, ALREADY_LOADED, MISSING_DEPENDENCY, JBR_REQUIRED,
-        UNSUPPORTED_TIER, MIXIN_CONFIG, MIXIN_TARGET, REDEFINE, MODULE, MODLIST, CONSTRUCT,
-        EVENT, RESOURCE_PACK, ROLLBACK_PARTIAL, UNKNOWN
+        MIXIN_RUNTIME, UNSUPPORTED_TIER, MIXIN_CONFIG, MIXIN_TARGET, REDEFINE, MODULE, MODLIST,
+        CONSTRUCT, EVENT, RESOURCE_PACK, ROLLBACK_PARTIAL, UNKNOWN
     }
 
     public record Result(boolean ok, String message, Stage stage, FailureKind kind,
@@ -142,18 +143,22 @@ public final class HotAddEngine {
             Set<String> moduleNames = ModuleInjector.addToGameLayer(List.of(newFileInfo));
 
             // 2. mixin: register configs, then redefine already-loaded targets.
+            //    MixinStage keeps every MixinRuntime/MixinSupport reference behind
+            //    one call, so a Type2 mod still works when mr is not installed.
             stage = Stage.MIXIN;
-            MixinSupport.Report mixin = MixinSupport.Report.empty();
+            List<String> mixinSummary = new ArrayList<>();
             if (!mixinConfigs.isEmpty()) {
-                mixin = MixinSupport.register(mixinConfigs, ids, primaryId, rollback);
-                ModReloader.LOGGER.info(
-                        "[ModReloader] mixin setup: registered={}, skipped={}, targets={}",
-                        mixin.registered(), mixin.skipped(), mixin.targets());
-                ModReloader.LOGGER.info(
-                        "[ModReloader] mixin setup: redefined={}, eager={}, deferred={}",
-                        mixin.redefined(), mixin.eager(), mixin.deferred());
-                if (!mixin.ok()) {
-                    return fail(rollback, Stage.MIXIN, FailureKind.MIXIN_CONFIG, "mixin setup failed for " + ids + ": " + mixin.errors());
+                if (!MixinRuntimeSupport.available()) {
+                    return fail(rollback, Stage.MIXIN, FailureKind.MIXIN_RUNTIME,
+                            ids + " declares mixins but " + MixinRuntimeSupport.name()
+                                    + " is not installed");
+                }
+                List<String> mixinLog = new ArrayList<>();
+                String mixinError = MixinStage.register(mixinConfigs, ids, primaryId, rollback,
+                        mixinLog, mixinSummary);
+                mixinLog.forEach(ModReloader.LOGGER::info);
+                if (mixinError != null) {
+                    return fail(rollback, Stage.MIXIN, FailureKind.MIXIN_CONFIG, "mixin setup failed for " + ids + ": " + mixinError);
                 }
             } else {
                 ModReloader.LOGGER.info("[ModReloader] no mixin configs declared by {}", ids);
@@ -206,9 +211,8 @@ public final class HotAddEngine {
             }
 
             String message = "hot-added " + loaded + " (modules " + moduleNames + ")";
-            if (!mixin.registered().isEmpty()) {
-                message += " (mixins " + mixin.registered() + ", redefined " + mixin.redefined()
-                        + ", eager " + mixin.eager() + ", deferred " + mixin.deferred() + ")";
+            if (!mixinSummary.isEmpty()) {
+                message += mixinSummary.get(0);
             }
             ModReloader.LOGGER.info("[ModReloader] {}", message);
             return new Result(true, message);

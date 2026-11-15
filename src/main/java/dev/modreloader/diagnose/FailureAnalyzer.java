@@ -2,6 +2,7 @@ package dev.modreloader.diagnose;
 
 import dev.modreloader.hotadd.HotAddEngine;
 import dev.modreloader.inspect.JbrSupport;
+import dev.modreloader.inspect.MixinRuntimeSupport;
 import dev.modreloader.inspect.ModInspection;
 import dev.modreloader.ui.ModReloaderI18n;
 
@@ -43,7 +44,8 @@ public final class FailureAnalyzer {
             if (inspection != null) {
                 dependency = inspection.dependencies().stream()
                         .filter(dep -> dep.required() && !dep.satisfied())
-                        .map(dep -> dep.modId() + " " + dep.versionRange())
+                        .map(dep -> ModReloaderI18n.dependencyName(dep.modId())
+                                + " " + dep.versionRange())
                         .findFirst()
                         .orElse("?");
             }
@@ -62,6 +64,7 @@ public final class FailureAnalyzer {
             lines.add(I18n.get("modreloader.detail.dependencies",
                     dependencySummary(inspection)));
             lines.add(I18n.get("modreloader.detail.jbr", JbrSupport.describe()));
+            lines.add(I18n.get("modreloader.detail.mixinruntime", MixinRuntimeSupport.describe()));
         }
         lines.add(I18n.get("modreloader.detail.stage", result.stage()));
         lines.add(I18n.get("modreloader.detail.kind", result.kind()));
@@ -82,6 +85,7 @@ public final class FailureAnalyzer {
             case ALREADY_LOADED -> "already_loaded";
             case MISSING_DEPENDENCY -> "missing_dependency";
             case JBR_REQUIRED -> "jbr_required";
+            case MIXIN_RUNTIME -> "mixin_runtime";
             case UNSUPPORTED_TIER -> "unsupported_tier";
             case MIXIN_CONFIG -> "mixin_config";
             case MIXIN_TARGET -> "mixin_target";
@@ -111,6 +115,9 @@ public final class FailureAnalyzer {
             suggestion = Component.translatable("modreloader.preflight.suggestion.t5");
         } else if (inspection.tier() == ModInspection.Tier.T3 && !JbrSupport.available()) {
             suggestion = Component.translatable("modreloader.preflight.suggestion.jbr");
+        } else if (inspection.mixinRuntimeMissing()) {
+            suggestion = Component.translatable("modreloader.preflight.suggestion.mixin_runtime",
+                    MixinRuntimeSupport.name());
         } else if (inspection.dependencies().stream()
                 .anyMatch(dep -> dep.required() && !dep.satisfied())) {
             suggestion = Component.translatable("modreloader.preflight.suggestion.missing_dependency");
@@ -128,6 +135,7 @@ public final class FailureAnalyzer {
             lines.add(I18n.get("modreloader.detail.notes", inspection.notes()));
         }
         lines.add(I18n.get("modreloader.detail.jbr", JbrSupport.describe()));
+        lines.add(I18n.get("modreloader.detail.mixinruntime", MixinRuntimeSupport.describe()));
         return new Report(title, summary, suggestion, String.join("\n", lines));
     }
 
@@ -143,7 +151,7 @@ public final class FailureAnalyzer {
                     String state = dep.satisfied()
                             ? I18n.get("modreloader.detail.dependency_ok")
                             : I18n.get("modreloader.detail.dependency_missing");
-                    return dep.modId() + " (" + kind + ", " + state + ")";
+                    return ModReloaderI18n.dependencyName(dep.modId()) + " (" + kind + ", " + state + ")";
                 })
                 .collect(Collectors.joining(", "));
     }

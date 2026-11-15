@@ -7,10 +7,12 @@ import dev.modreloader.dev.RollbackCheck;
 import dev.modreloader.dev.WatchCheck;
 import dev.modreloader.hotadd.HotAddEngine;
 import dev.modreloader.hotadd.MixinProbe;
+import dev.modreloader.inspect.MixinRuntimeSupport;
 import dev.modreloader.ui.ModReloaderScreen;
 import dev.modreloader.ui.ModReloaderToasts;
 import dev.modreloader.watch.ModWatcherConfig;
 import dev.modreloader.watch.ModsFolderWatcher;
+import net.minecraft.network.chat.Component;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
@@ -57,6 +59,7 @@ public final class ModReloader {
             watcherStarted = true;
             WATCHER = new ModsFolderWatcher(WATCHER_CONFIG, ModReloader::onCandidates);
             WATCHER.start();
+            notifyMixinRuntime();
         });
 
         String autoAdd = System.getProperty("modreloader.autoAdd", "").trim();
@@ -118,6 +121,29 @@ public final class ModReloader {
         }
 
         LOGGER.info("[ModReloader] loaded; hot-add engine ready (module -> mixin -> ModList -> events -> packs)");
+    }
+
+    /**
+     * Speaks about the optional MixinRuntime dependency in our own words.
+     *
+     * <p>It stays optional on purpose: with {@code type = "required"} FML aborts
+     * the whole launch and prints the bare modId {@code mr}, so the only text a
+     * user would ever see is the one nobody can interpret. Loading anyway lets
+     * us say the product name, what still works, and what to install.
+     */
+    private static void notifyMixinRuntime() {
+        if (MixinRuntimeSupport.available()) {
+            LOGGER.info("[ModReloader] {} detected; T3 (mixin) hot-add enabled",
+                    MixinRuntimeSupport.name());
+            return;
+        }
+        LOGGER.warn("[ModReloader] {} is not installed: T2 hot-add works, T3 (mixins) is "
+                        + "blocked. Install it into mods/ (version >= 1.0.2) and restart.",
+                MixinRuntimeSupport.name());
+        ModReloaderToasts.info(
+                Component.translatable("modreloader.toast.mixinruntime.title"),
+                Component.translatable("modreloader.toast.mixinruntime.message",
+                        MixinRuntimeSupport.name()));
     }
 
     private static void onCandidates(List<ModsFolderWatcher.Candidate> candidates) {

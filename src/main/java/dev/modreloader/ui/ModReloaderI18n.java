@@ -1,6 +1,7 @@
 package dev.modreloader.ui;
 
 import dev.modreloader.inspect.JbrSupport;
+import dev.modreloader.inspect.MixinRuntimeSupport;
 import dev.modreloader.inspect.ModInspection;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -47,13 +48,29 @@ public final class ModReloaderI18n {
         for (ModInspection.Dependency dependency : inspection.dependencies()) {
             if (dependency.required() && !dependency.satisfied()) {
                 return Component.translatable("modreloader.preflight.missing_dependency",
-                        dependency.modId(), dependency.versionRange());
+                        dependencyName(dependency.modId()), dependency.versionRange());
             }
         }
         if (inspection.tier() == ModInspection.Tier.T3 && !JbrSupport.available()) {
             return Component.translatable("modreloader.preflight.jbr");
         }
+        if (inspection.mixinRuntimeMissing()) {
+            return Component.translatable("modreloader.preflight.mixin_runtime",
+                    MixinRuntimeSupport.name());
+        }
         return Component.translatable("modreloader.preflight.can_load");
+    }
+
+    /**
+     * FML and mod metadata speak modIds; users know product names. Only the one
+     * dependency we ship is mapped — everything else stays untouched rather
+     * than guessing.
+     */
+    public static String dependencyName(String modId) {
+        if (MixinRuntimeSupport.MOD_ID.equals(modId)) {
+            return MixinRuntimeSupport.name();
+        }
+        return modId;
     }
 
     public static Component summary(ModInspection inspection) {

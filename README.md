@@ -15,6 +15,38 @@
 - **首个 dogfood**：`Ex-Nihilo-Satellitium`（T4 内容模组）
 - **理由**：作者自有项目就是 NeoForge 1.21.1；其开发整合包 9 个模组里 6 个是 T4/T5；NeoForge 1.21.1 是 1.21.1 上最大的模组生态；NHMJ 只加不删，卸载/软重启仍是空白。
 
+## 前置：MixinRuntime（只有 T3 需要）
+
+| 能力 | 需要 MixinRuntime |
+|---|---|
+| T2 模组（无 mixin、无注册表） | **不需要** |
+| T3 模组（有 mixin，含布局变更） | **需要** |
+
+MixinRuntime 的 modId 是 **`mr`**——FML 的报错、日志、`mods/` 列表里出现的都是这个名字，
+所以本项目所有面向用户的文案统一写成 **MixinRuntime (mr)**。
+
+- 版本：`[1.0.2,)`；本仓库验证用 `MixinRuntime-1.0.2-mc1.21.jar`
+- 放置：游戏 `mods/`（dev 环境是 `run/mods/`）
+- 许可证：MIT
+
+它在 [neoforge.mods.toml](src/main/resources/META-INF/neoforge.mods.toml) 里是 **`type = "optional"`**，
+这是刻意的。写成 `required` 时，缺前置会让 FML 在加载阶段直接终止整个启动，并且只打印原始 modId：
+
+```text
+Missing or unsupported mandatory dependencies:
+	Mod ID: 'mr', Requested by: 'modreloader', Expected range: '[1.0.2,)', Actual version: '[MISSING]'
+```
+
+（格式来自 `ModSorter#formatDependencyError`；`[[dependencies]]` 没有显示名字段，改不掉。）
+那种情况下我们的代码一行都不会执行，也就没法用人话告诉用户该装什么。
+
+改成可选之后，缺 MixinRuntime 时：
+
+- 游戏正常启动，**T2 热加载照常工作**；
+- 主菜单弹一次 toast，日志打一条 warn，**用产品名**说明「T3 需要 MixinRuntime (mr)」；
+- T3 候选的预检显示「T3（含 mixin）需要安装 MixinRuntime (mr)」，Load 变灰；
+- 直接 `/modreloader add` 一个 T3 模组会失败并按 LIFO 回滚，失败屏给出 `MIXIN_RUNTIME`。
+
 ## A0 已经跑通
 
 在 NeoForge 1.21.1 dev client 中，不重启游戏热加载 `EasyLAN`（T2、无 mixin）：

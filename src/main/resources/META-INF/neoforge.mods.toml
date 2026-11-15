@@ -28,7 +28,7 @@ side = "CLIENT"
 
 [[dependencies.modreloader]]
 modId = "mr"
-type = "required"
+type = "optional"
 versionRange = "[1.0.2,)"
 ordering = "NONE"
 side = "CLIENT"

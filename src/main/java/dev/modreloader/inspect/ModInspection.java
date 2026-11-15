@@ -37,7 +37,12 @@ public record ModInspection(Path jar, String fileName, List<Mod> mods, Tier tier
                 return false;
             }
         }
-        return tier != Tier.T3 || JbrSupport.available();
+        return tier != Tier.T3 || (JbrSupport.available() && MixinRuntimeSupport.available());
+    }
+
+    /** T3 needs MixinRuntime to reopen Mixin's frozen config list. */
+    public boolean mixinRuntimeMissing() {
+        return tier == Tier.T3 && !MixinRuntimeSupport.available();
     }
 
     public String blockReason() {
@@ -60,6 +65,9 @@ public record ModInspection(Path jar, String fileName, List<Mod> mods, Tier tier
         }
         if (tier == Tier.T3 && !JbrSupport.available()) {
             return "T3 layout changes require JBR 21 + -XX:+AllowEnhancedClassRedefinition";
+        }
+        if (mixinRuntimeMissing()) {
+            return "T3 mixins require " + MixinRuntimeSupport.name() + " to be installed";
         }
         return null;
     }

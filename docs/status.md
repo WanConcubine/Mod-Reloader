@@ -40,6 +40,8 @@
 | **mods 监听 / 预检 / 弹窗** | **run/mods + run/modreloader/inbox；EasyLAN 检测 T2→弹窗→加载 PASS；坏 jar 失败屏 PASS；Ex Nihilo T4→不可加载；LSP + failAfterModList→失败屏 + 回滚 PASS；i18n zh_cn/en_us 无 key 泄漏** | `-PverifyWatch=true -PwatchJar=...`；`run/screenshots/watch-prompt.png` / `watch-failure.png` |
 | 系统 JDK | 17 / 8；**Gradle toolchain JDK 21** 在 `~/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x/jdk-21.0.12.1+1/Contents/Home` | `java -version`；Gradle foojay |
 | **JBR 21** | **JBR-21.0.11+10-1163.125-nomod**；`enhancedRedefinition=true` | `~/Library/Java/JavaVirtualMachines/jbr-21.jdk/Contents/Home`；`runClient` 自动使用 |
+| **缺 mr 启动 + T2** | **无 `Missing or unsupported`；warn「MixinRuntime (mr) is not installed」；EasyLAN `isLoaded=true, container=true`、`hot-added [easylan]`** | 2026-11-15 15:32：`run/mods` 移走 mr → `runClient -PautoAdd=/tmp/lanmods/EasyLAN-neoforge-1.21.1-v1.6a.jar` |
+| **有 mr 回归（T3）** | **`MixinRuntime (mr) detected`；`registered=[lsp.mixins.json]`；redefined 2 / eager 2；`isLoaded=true`** | 2026-11-15 15:33：放回 mr → `runClient -PautoAdd=/tmp/lanmods/lanserverproperties-1.13.2-neoforge.jar` |
 
 ## 验证状态
 
@@ -83,13 +85,13 @@
 9. **没有人工标注集**：规则准确率、混淆矩阵都还没有。
 10. **没有删/更新路径**：A1.2 只实现了 add；运行时删除/卸载/更新未实现、未测试。已加载的类（尤其已织入 mixin 的 `ShareToLanScreen` / `AbstractWidget`）无法靠删 jar 卸载；需要 classloader 隔离或 T4 软重启。
 11. **GUI/监听初版限制**：只提供 `zh_cn` / `en_us`；异常消息/技术值仍是原始英文（标签已本地化）；最多直接显示 7 个候选；世界内 toast、`/modreloader gui`/`scan`、忽略/重试持久化未自动验证；T4/T5 只提示重启，不尝试加载。
-12. **MixinRuntime 是第三方硬前置**（2026-11-15 实测）：`libs/` 与 `run/mods/` 都被 `.gitignore` 忽略，但 `compileOnly files('libs/MixinRuntime-1.0.2-mc1.21.jar')` 是编译必需——移走 jar 后 `./gradlew compileJava` 报 **24 个符号错误**，即 **fresh clone 无法构建**；`neoforge.mods.toml` 把 `mr` 声明为 `type="required"`、`versionRange="[1.0.2,)"`，**缺它整个 mod 不加载**。结论：用户要用本 runtime，**必须先自行安装 MixinRuntime**（MIT；jar 内无 LICENSE 文件）。所有者 2026-11-15 决定**保持现状**（不改 optional、不内嵌、不自研）。代码实际只用它 5 个能力：取 transformer、`transformClassBytes`、`getClassBytes`（前两者有等价 public API，第三者可用自有 `Instrumentation` 实现），以及 `MixinConfig.prepare/onSelect` 与 `MixinProcessor` 的 `configs/pendingConfigs`（包私有 + private，需反射）。`MixinEnvironment.getActiveTransformer()` 在 NeoForge 1.21.1 下是否可用**未验证**。
+12. **MixinRuntime 是 T3 的第三方前置，已改为可选依赖**（2026-11-15）：`mr` 从 `required` 改成 `type="optional"`，因此缺它时**游戏能启动、T2 照常可用**，由我们给出人话提示（主菜单 toast + 日志 warn + 预检 + 失败屏，文案统一 `MixinRuntime (mr)`）。改的理由：`required` 时 FML `ModSorter#formatDependencyError` 只打印原始 modId（格式 `Mod ID: '%s', Requested by: '%s', Expected range: '%s', Actual version: '%s'`，缺失打印 `[MISSING]`，`[[dependencies]]` 无显示名字段），且加载阶段即终止，我方代码不执行、无法提示。为让「无 mr」真正可用，`MixinSupport`（直接 import mr 类型）被隔离在 [MixinStage](../src/main/java/dev/modreloader/hotadd/MixinStage.java) 之后，`HotAddEngine` 不再引用它；`HotAddEngine` 在 mixin 阶段前用 `MixinRuntimeSupport` 探测，缺失则 `FailureKind.MIXIN_RUNTIME` 失败并回滚。**构建仍需要** `libs/` 的 jar（`compileOnly`），而 `libs/` 被忽略 → **fresh clone 无法编译**（移走 jar 实测 24 个符号错误）；尚未反射化。代码只用它 5 个能力：取 transformer、`transformClassBytes`、`getClassBytes`（前两者有等价 public API，第三者可用自有 `Instrumentation`），以及 `MixinConfig.prepare/onSelect` 与 `MixinProcessor` 的 `configs/pendingConfigs`（包私有 + private，需反射）。`MixinEnvironment.getActiveTransformer()` 在 NeoForge 1.21.1 下是否可用**未验证**。**无 mr 启动路径已验证**：2026-11-15 15:32 移走 `run/mods` 的 mr 启动，无 FML 依赖报错，warn + toast 出现，EasyLAN（T2）热加 `isLoaded=true`；15:33 放回 mr 后 lanserverproperties（T3）回归通过。
 
 ## 下一步
 
 0. **Git 收尾**：加 CI（分析器单测 + `./gradlew build`）；证据截图从 `run/screenshots` 复制进 `docs/`（`run/` 被忽略）；首个 tag `v0.1.0` 待功能稳定。**CI 会先撞上已知问题 12**：`libs/` 不随仓库分发，build 在 CI 上无 jar 可用，加 CI 前必须决定 jar 从哪来（下载脚本 / 提交 jar / 先只跑分析器单测）。
 1. **人工收尾**：进世界执行 `/modreloader add`；点一次 EasyLAN 的 GUI 按钮。
-2. **A1 产品化**：构造后 listener 回滚 / 存档回读；第二个 T3 模组（如 `mcwifipnp`）；把 MixinRuntime 从 dev-only 依赖换成可分发实现。
+2. **A1 产品化**：构造后 listener 回滚 / 存档回读；第二个 T3 模组（如 `mcwifipnp`）；把 mr 的 5 个调用点反射化，去掉 `compileOnly` 依赖，让 fresh clone 能构建（已知问题 12）。
 3. **GUI / 文件夹监听完善**：Phase 3/4——世界内 toast 实测、忽略/重试持久化、批量/依赖排序、i18n 收尾、`-PverifyGui` 自动化；见 [gui-mod-watcher.md](features/gui-mod-watcher.md)。
 4. **分析器校准**：50 个 1.21.1 模组，人工标注 tier；算准确率；修 `mekanismgenerators` 类漏判。
 5. **游戏内 `/modreload why <mod>`**：NeoForge 1.21.1，只读。
@@ -109,3 +111,4 @@
 - **2026-11-15（i18n）**：新增 `en_us` / `zh_cn` 语言文件（各 103 key）；GUI、按钮、toast、命令、预检/失败摘要、复制详情标签全部走翻译 key；中英文截图验证无 key 泄漏；异常原始消息保留英文。
 - **2026-11-15（git / 许可 / 作者）**：`git init -b main`，`.gitignore` 覆盖 `.gradle/`、`build/`、`run/`、`libs/`、`*.class`、`__pycache__/`，78 文件 + `LICENSE` 共 79 文件首次 commit 并推到 `origin`（GitHub `WanConcubine/Mod-Reloader`）。许可证由 Apache-2.0 改为 **MIT**：新增 `LICENSE`，`mod_license`、`neoforge.mods.toml`、README、roadmap 同步。作者改为 **Liu_Mei**（`mod_authors` / `authors` / git 提交身份）。
 - **2026-11-15（记录更正）**：MixinRuntime 由「dev-only 依赖」更正为**第三方硬前置**（新增已知问题 12）：`libs/` 被忽略 + `compileOnly` 依赖 → fresh clone 编译失败（24 个符号错误）；`mr` 在 mods.toml 为 `required` → 缺它整个 mod 不加载。所有者决定保持现状。
+- **2026-11-15（前置改为可选）**：`mr` 从 `required` 改为 `type="optional"`；新增 `inspect/MixinRuntimeSupport`（不引用 mr 类型）与 `hotadd/MixinStage`（把 `MixinSupport` 挡在引擎外）；缺 mr 时主菜单 toast + 日志 warn + 预检/失败屏文案统一 `MixinRuntime (mr)`；`HotAddEngine` 在 mixin 阶段前探测，缺失则 `FailureKind.MIXIN_RUNTIME` 失败并回滚；i18n `en_us`/`zh_cn` 各 **110 key**。**运行时已验证**：移走 mr 启动无 FML 报错、warn 出现、EasyLAN T2 热加 `isLoaded=true`；放回 mr 后 LSP T3 回归通过（`registered=[lsp.mixins.json]`，redefined 2，eager 2）。
