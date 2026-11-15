@@ -1,8 +1,11 @@
 package dev.modreloader.dev;
 
 import dev.modreloader.ModReloader;
+import dev.modreloader.client.LogoButton;
 import dev.modreloader.ui.ModReloaderScreen;
+import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.Screenshot;
 import net.minecraft.client.gui.components.AbstractButton;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
@@ -74,16 +77,39 @@ public final class MenuEntryCheck {
         if (ModReloader.WATCHER == null) {
             return;
         }
-        AbstractButton button = findEntryButton(mc.screen);
+        LogoButton button = findEntryButton(mc.screen);
         if (button == null) {
-            fail("title screen has no '" + I18n.get("modreloader.gui.entry") + "' button; buttons: "
-                    + describe(mc.screen));
+            fail("title screen has no logo button; buttons: " + describe(mc.screen));
             return;
         }
-        ModReloader.LOGGER.info("[MenuCheck] found menu entry '{}' at ({},{})",
-                button.getMessage().getString(), button.getX(), button.getY());
+        boolean topRight = button.getX() > mc.screen.width / 2 && button.getY() <= 40;
+        ModReloader.LOGGER.info("[MenuCheck] logo button at ({},{}) size {}x{}; topRight={}; tooltip='{}'",
+                button.getX(), button.getY(), button.getWidth(), button.getHeight(), topRight,
+                button.getMessage().getString());
+        if (!topRight) {
+            fail("logo button is not in the top-right corner; at (" + button.getX() + ","
+                    + button.getY() + ")");
+            return;
+        }
+        screenshot(mc);
         stage = Stage.PRESS;
         ticks = 0;
+    }
+
+    private static void screenshot(Minecraft mc) {
+        var file = mc.gameDirectory.toPath().resolve("screenshots").resolve("menu-logo-entry.png");
+        try {
+            java.nio.file.Files.createDirectories(file.getParent());
+            NativeImage image = Screenshot.takeScreenshot(mc.getMainRenderTarget());
+            try {
+                image.writeToFile(file);
+            } finally {
+                image.close();
+            }
+            ModReloader.LOGGER.info("[MenuCheck] screenshot: {}", file.toAbsolutePath());
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn("[MenuCheck] screenshot failed", t);
+        }
     }
 
     private static void press(Minecraft mc) {
@@ -230,10 +256,9 @@ public final class MenuEntryCheck {
         return null;
     }
 
-    private static AbstractButton findEntryButton(Screen screen) {
-        String label = I18n.get("modreloader.gui.entry");
+    private static LogoButton findEntryButton(Screen screen) {
         for (var child : screen.children()) {
-            if (child instanceof AbstractButton button && label.equals(button.getMessage().getString())) {
+            if (child instanceof LogoButton button) {
                 return button;
             }
         }

@@ -165,7 +165,7 @@ Missing or unsupported mandatory dependencies:
 - 预检 T2–T5、依赖、mixin/registry/native；T4/T5 只提示“需要重启”，Load 禁用。
 - 点击加载后调用现有 `HotAddEngine`；失败打开结构化失败屏（原因/建议/回滚/复制/日志）。
 - 永不自动加载；忽略/失败记录在独立 `config/modreloader/watcher.json`。
-- **主菜单 / 暂停菜单左下角有常驻「模组热加载」入口**；被忽略的 jar 在「已忽略」视图里可以**恢复**，点过「稍后」的 jar 也仍留在待处理列表里（主动打开列表时不按「已见过」过滤）。
+- **主菜单 / 暂停菜单右上角有常驻的 logo 入口**（不是文字按钮，悬停显示名称；左下角有版本号所以不放那里）；被忽略的 jar 在「已忽略」视图里可以**恢复**，点过「稍后」的 jar 也仍留在待处理列表里（主动打开列表时不按「已见过」过滤）。
 - GUI/按钮/toast/失败摘要支持 `en_us` / `zh_cn`。
 
 ```text

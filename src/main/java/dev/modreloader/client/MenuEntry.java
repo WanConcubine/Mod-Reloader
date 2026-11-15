@@ -4,7 +4,6 @@ import dev.modreloader.ModReloader;
 import dev.modreloader.ui.ModReloaderScreen;
 import dev.modreloader.watch.ModsFolderWatcher;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
@@ -22,8 +21,8 @@ import java.util.List;
  * be unreachable unless the user edited {@code watcher.json} by hand.
  */
 public final class MenuEntry {
-    private static final int WIDTH = 110;
-    private static final int HEIGHT = 20;
+    private static final int SIZE = 24;
+    private static final int MARGIN = 4;
 
     private MenuEntry() {
     }
@@ -37,13 +36,12 @@ public final class MenuEntry {
         if (!(screen instanceof TitleScreen) && !(screen instanceof PauseScreen)) {
             return;
         }
-        int x = 4;
-        int y = screen.height - HEIGHT - 4;
-        event.addListener(Button.builder(
-                        Component.translatable("modreloader.gui.entry"),
-                        button -> open())
-                .bounds(x, y, WIDTH, HEIGHT)
-                .build());
+        // Top-right corner: vanilla title/pause screens keep it empty, unlike the
+        // bottom-left where the version/copyright line sits.
+        int x = screen.width - SIZE - MARGIN;
+        int y = MARGIN;
+        event.addListener(new LogoButton(x, y, SIZE,
+                Component.translatable("modreloader.gui.entry"), MenuEntry::open));
         ModReloader.LOGGER.debug("[ModReloader] menu entry added to {}",
                 screen.getClass().getSimpleName());
     }
