@@ -164,7 +164,7 @@ Gradle 编译仍用 Temurin 21 toolchain，只有游戏运行用 JBR。
 9. **不要夸大 A0**：A0 只支持嫔级（无 mixin、无注册表）；不要在文档/UI 里写成“支持任意模组”。
 10. **不要夸大 A1**：A1.2 只验证了 `lanserverproperties` + JBR + dev client；MixinRuntime 是**可选**依赖（缺它妃级被拦、嫔级照常，但构建仍需 `libs/` 的 jar）；失败回滚只覆盖 post-ModList/post-pack，构造后事件监听器和存档回读未解决；不等于通用妃级支持。
 11. **不要夸大 GUI/监听**：只验证了 EasyLAN、坏 jar、Ex Nihilo 贵妃级三个场景；`scan`/`gui` 命令、失败重试、忽略记录跨重启未自动验证（`add` 命令、世界内 toast、主菜单入口与忽略恢复已有 harness）；**皇后级只提示重启**；贵妃级走实验性 add-only 热加（UI 有警告，仅验证过 fixture）。
-12. **客户端启动期注册事件：主要项已重放，还剩两项**：已重放 `FMLClientSetupEvent` / `RegisterKeyMappingsEvent` / `RegisterMenuScreensEvent` / `EntityRenderersEvent.RegisterRenderers`（并重建两个 dispatcher）/ `RegisterColorHandlersEvent.Block/.Item` / `RegisterClientExtensionsEvent`；**仍未重放** `RegisterClientReloadListenersEvent`（客户端机器数据，主要给 JEI）与 `RegisterLayerDefinitions`（模型层启动时已 bake）。别写「客户端完全正常」，见 [status.md](docs/status.md) 已知问题 21。
+12. **客户端启动期注册/快照：主要项已重放/补齐，还剩两项**：已重放 `FMLClientSetupEvent` / `RegisterKeyMappingsEvent` / `RegisterMenuScreensEvent` / `EntityRenderersEvent.RegisterRenderers`（并重建两个 dispatcher）/ `RegisterColorHandlersEvent.Block/.Item` / `RegisterClientExtensionsEvent`，并补齐 `ItemRenderer` 的 item→model 快照（否则物品图标是紫黑方块）；**仍未重放** `RegisterClientReloadListenersEvent`（客户端机器数据，主要给 JEI）与 `RegisterLayerDefinitions`（模型层启动时已 bake）。别写「客户端完全正常」，见 [status.md](docs/status.md) 已知问题 21。
 13. **不要夸大 datapack**：只覆盖 `RegistryLayer.RELOADABLE`（配方/战利品/标签/附魔/伤害类型/纹饰/物品修饰器 + mod 自注册的 server reload listener）；**世界生成注册表**（维度/生物群系/结构）仍需重启或新世界。只能 add、不能删/改；提交后不可回滚；存档会绑定 `mod/<modId>` 这个 data pack。只验证过众星捧月 1.5.0 与 t4fixture，不要写成"支持任意 datapack"。
 
 ## 4. 目录

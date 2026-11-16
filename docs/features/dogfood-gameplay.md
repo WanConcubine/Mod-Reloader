@@ -18,7 +18,8 @@
 | 4 | 真实 3×3 合成：铁锭×2 + 木棍×2 | 命中 `exnihilosatellitium:iron_hammer` |
 | 5 | 机器 GUI 的 screen factory（`MenuScreens`） | 2 个 menu type 全部有 screen（`missing=[]`） |
 | 6 | 客户端注册：BE 渲染器 / 物品染色 / 流体扩展 | `beRenderers 6/6 (missing=[])`、瓷桶染色已注册、`fluidExtensions=3` |
-| 7 | 创造物品栏渲染 40 tick（`-PverifyCreative`） | 不崩，`defaults=4`，PASS |
+| 7 | 物品图标模型 | `181/181 resolved, missing=[]` |
+| 8 | 创造物品栏渲染 40 tick（`-PverifyCreative`） | 不崩，`defaults=4`，PASS |
 
 ```bash
 ./gradlew runClient \
@@ -116,6 +117,31 @@ creative RESULT: PASS
 
 > 注：瓷桶空桶时 handler 返回 `0xFFFFFFFF`，在 Java 里就是 `-1`，所以断言查的是「`ItemColors` 的 map 里有这个 item」，
 > 而不是 tint 值。
+
+### 2.4 物品栏图标全是紫黑方块（已修）
+
+方块放出来是正常的，只有**物品图标**是紫黑。原因还是启动期快照，但这次在 `ItemRenderer`：
+
+- `ItemRenderer` 的构造器遍历 `BuiltInRegistries.ITEM`，把每个 item → `ModelResourceLocation.inventory(id)`
+  注册进 NeoForge 的 `RegistryAwareItemModelShaper`；
+- 热加的 181 个物品不在那次遍历里，`getItemModel(item)` 返回 null → 退化成 missing model（紫黑立方体）；
+- 方块模型不受影响：它们是资源重载时按 blockstate JSON 解析的。
+
+修法：`ClientRegistrationReplay` 里把 shaper 里**还没有**的 item 补注册
+（`ModelResourceLocation.inventory(id)`）；热加本身会触发一次客户端资源重载，
+`ItemRenderer.onResourceManagerReload → rebuildCache()` 会把这些位置解析成真实模型。
+断言放在资源重载之后：
+
+```text
+# 修前
+[GameplayCheck] item models: 0/181 resolved, missing=[exnihilosatellitium:porcelain, ...]
+[GameplayCheck] RESULT: FAIL
+
+# 修后
+[ModReloader] item model shaper: registered 181 new item(s); the next resource reload resolves them
+[GameplayCheck] item models: 181/181 resolved, missing=[]
+[GameplayCheck] RESULT: PASS
+```
 
 ## 3. 手动清单（待所有者）
 

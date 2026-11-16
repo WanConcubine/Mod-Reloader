@@ -82,6 +82,7 @@ public final class GameplayCheck {
     /** -PverifyCreative: switch to creative and render the creative inventory. */
     private static final boolean VERIFY_CREATIVE = Boolean.getBoolean("modreloader.verifyCreative");
     private static boolean creativeScreenOpened;
+    private static boolean itemModelsChecked;
 
     /** -PverifyGameplayKeepOpen: leave the world running for manual play. */
     private static final boolean KEEP_OPEN = Boolean.getBoolean("modreloader.verifyGameplayKeepOpen");
@@ -356,6 +357,42 @@ public final class GameplayCheck {
     }
 
     /**
+     * Item icons: every item of the hot-added mod must resolve to a real baked
+     * model (not ModelManager's missing model). A missing model is the purple
+     * cube players see in the creative inventory.
+     */
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static boolean checkItemModels() {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        net.minecraft.client.resources.model.BakedModel missing = mc.getModelManager().getMissingModel();
+        int items = 0;
+        List<String> missingModels = new ArrayList<>();
+        for (var holder : BuiltInRegistries.ITEM.holders().toList()) {
+            ResourceLocation key = holder.unwrapKey()
+                    .map(resourceKey -> resourceKey.location()).orElse(null);
+            if (key == null || !modId.equals(key.getNamespace())) {
+                continue;
+            }
+            items++;
+            net.minecraft.client.resources.model.BakedModel model = mc.getItemRenderer()
+                    .getModel(new ItemStack((net.minecraft.world.item.Item) holder.value()),
+                            null, null, 0);
+            if (model == missing) {
+                missingModels.add(key.toString());
+            }
+        }
+        ModReloader.LOGGER.info("[GameplayCheck] item models: {}/{} resolved, missing={}",
+                items - missingModels.size(), items,
+                missingModels.size() > 8 ? missingModels.subList(0, 8) + "..." : missingModels);
+        if (!missingModels.isEmpty()) {
+            fail(missingModels.size() + "/" + items + " item models are the missing model: "
+                    + missingModels.subList(0, Math.min(5, missingModels.size())));
+            return false;
+        }
+        return true;
+    }
+
+    /**
      * Client-side registrations that are replayed by
      * {@code client/ClientRegistrationReplay}: block entity renderers must be
      * instantiated for the mod's block entities, item tints must exist, and the
@@ -465,6 +502,12 @@ public final class GameplayCheck {
     }
 
     private static void verify(MinecraftServer server) {
+        if (!itemModelsChecked) {
+            itemModelsChecked = true;
+            if (!checkItemModels()) {
+                return;
+            }
+        }
         if (verifyFuture == null) {
             verifyFuture = new CompletableFuture<>();
             server.execute(() -> {

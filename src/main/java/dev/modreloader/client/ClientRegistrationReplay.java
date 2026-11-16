@@ -3,6 +3,12 @@ package dev.modreloader.client;
 import dev.modreloader.ModReloader;
 import dev.modreloader.hotadd.UnsafeAccess;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.ItemModelShaper;
+import net.minecraft.client.resources.model.ModelResourceLocation;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterColorHandlersEvent;
@@ -47,9 +53,39 @@ public final class ClientRegistrationReplay {
     }
 
     public static void replay(ModContainer container) {
+        registerItemModels(container);
         replayRenderers(container);
         replayColorHandlers(container);
         replayClientExtensions(container);
+    }
+
+    /**
+     * {@code ItemRenderer}'s constructor snapshots {@code BuiltInRegistries.ITEM}
+     * into NeoForge's {@code RegistryAwareItemModelShaper}; items registered later
+     * are never added, so every one of them resolves to the missing model — the
+     * purple cube in the inventory — even though the block models load fine from
+     * the pack. Register the newcomers here; the next client resource reload (the
+     * hot-add already triggers one) calls {@code rebuildCache()} and resolves them.
+     */
+    private static void registerItemModels(ModContainer container) {
+        try {
+            Minecraft minecraft = Minecraft.getInstance();
+            ItemModelShaper shaper = minecraft.getItemRenderer().getItemModelShaper();
+            int added = 0;
+            for (Item item : BuiltInRegistries.ITEM) {
+                if (item == Items.AIR || shaper.getItemModel(item) != null) {
+                    continue;
+                }
+                shaper.register(item,
+                        ModelResourceLocation.inventory(BuiltInRegistries.ITEM.getKey(item)));
+                added++;
+            }
+            ModReloader.LOGGER.info(
+                    "[ModReloader] item model shaper: registered {} new item(s); "
+                            + "the next resource reload resolves them", added);
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn("[ModReloader] item model shaper registration failed", t);
+        }
     }
 
     private static void replayRenderers(ModContainer container) {
