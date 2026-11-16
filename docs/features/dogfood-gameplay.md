@@ -87,7 +87,34 @@ creative RESULT: PASS
 ```
 
 观察：页签在第 **2/2** 页（NeoForge 每页最多 10 个非默认页签），玩家要翻页才能点到它；这是 NeoForge 的分页行为，不是缺口。
-未覆盖：没有模拟鼠标点击页签按钮（用的是界面自己的 `selectTab`），也没有翻页操作；创建页签的 `icon` 只被渲染间接覆盖。
+未覆盖：没有模拟鼠标点击页签按钮（用的是界面自己的 `selectTab`）；页签的 `icon` 只被渲染间接覆盖。
+
+#### 2.1.1 主菜单热加这条路径（`-PverifyCreativeAtTitle`，2026-11-16 补）
+
+上面的检查是**进世界之后** `/modreloader add`（`afterRegistryContent()` 有 level，会立刻重建所有页签内容）。
+用户报的失败场景是**主菜单热加**：没有集成服务器，走的是 `afterRegistryContent()` 的 title-screen 分支
+（只 `sortTabs()` + 清 `CACHED_PARAMETERS`，contents 交给第一次打开创造栏时重建）。这条路径此前只有“防御性”代码，没有实测。
+
+新增 `dev/CreativeTitleCheck`（`-PverifyCreativeAtTitle=<jar>`）：标题屏热加 → 建新世界 → 切创造 → 打开创造栏 →
+找 mod 自己的页签 → 若不在当前页就**按界面真实的 `>` 翻页按钮** → 断言页签出现在当前页 → 选中 → 渲染 40 tick。
+
+实测（2026-11-16 15:52，众星捧月 1.5.0，当前代码）：
+
+```text
+[CreativeTitle] title-screen add: ok=true kind=NONE
+[CreativeTitle] registry tabs (15): [建筑方块, …, 无中生有：众星捧月]
+[CreativeTitle] own tab candidate: exnihilosatellitium:main items=182 modItems=182
+[CreativeTitle] own tab exnihilosatellitium:main is on page 2/2
+[CreativeTitle] page 1 does not show the mod's tab (... 10 vanilla + hotbar/search/inventory); pressing the page button
+[CreativeTitle] mod's tab is now on the current page: [exnihilosatellitium:main, minecraft:hotbar, minecraft:search, minecraft:inventory]
+[CreativeTitle] selected own tab ... (182 items)
+[CreativeTitle] own tab rendered 40 ticks: 182 tab items, 45 in the menu
+[CreativeTitle] RESULT: PASS
+```
+
+结论（只说测到的）：**当前代码上**主菜单热加后，mod 页签在 registry 里、在界面的第 2 页里、翻页按钮能到、内容 182 项、选中后渲染正常。
+唯一“打开时看不到”的原因是它不在第 1 页——第 1 页是 10 个 vanilla 页签 + hotbar/search/inventory，页签按钮在屏幕左上/右上的 `<` `>`。
+旧构建上是否失败没有对照（那次报告发生在 title-screen 分支和 `CACHED_PARAMETERS` 失效逻辑加入之前/之后不明），所以这里不写“修好了”，只写“这条路径第一次被自动验证，当前通过”。
 
 ### 2.2 机器 GUI 打不开（已修）
 

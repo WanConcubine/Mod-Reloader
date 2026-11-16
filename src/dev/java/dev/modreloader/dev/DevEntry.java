@@ -96,6 +96,10 @@ public final class DevEntry {
         if (!verifyRegAudit.isEmpty()) {
             RegAuditCheck.start(verifyRegAudit);
         }
+        String verifyCreativeAtTitle = System.getProperty("modreloader.verifyCreativeAtTitle", "").trim();
+        if (!verifyCreativeAtTitle.isEmpty()) {
+            CreativeTitleCheck.start(Path.of(verifyCreativeAtTitle));
+        }
         String verifyMixinLayout = System.getProperty("modreloader.verifyMixinLayout", "").trim();
         if (!verifyMixinLayout.isEmpty()) {
             MixinLayoutCheck.start(verifyMixinLayout,

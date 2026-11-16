@@ -154,4 +154,15 @@
   `creative own tab candidate: exnihilosatellitium:main (无中生有：众星捧月) items=182 modItems=182`、
   `creative own tab is on page 2/2 of the screen`、`selected own tab …`、`own tab rendered: 182 tab items, 46 in the menu`、
   `creative inventory rendered 40 ticks without crashing (with the mod's own tab selected)`、`creative RESULT: PASS`；同一次 `GameplayCheck RESULT: PASS`。
-  边界：没有模拟鼠标点页签按钮（用的是界面自己的 `selectTab`），也没有翻页操作；页签在第 2/2 页是 NeoForge 的分页行为。文档：[dogfood-gameplay.md](features/dogfood-gameplay.md) §2.1、status 表尺。
+  边界：没有模拟鼠标点页签按钮（用的是界面自己的 `selectTab`）；页签在第 2/2 页是 NeoForge 的分页行为。文档：[dogfood-gameplay.md](features/dogfood-gameplay.md) §2.1、status 表尺。
+
+  同一天用户指出「是在**主菜单**热加载导致没出现创造栏」——上面那条是进世界后 `/modreloader add`，走的不是 reported 路径。
+  于是补 `dev/CreativeTitleCheck`（`-PverifyCreativeAtTitle=<jar>`）：标题屏热加 → 建新世界 → 切创造 → 开创造栏 →
+  找到 mod 自己的页签 → 若不在当前页就按界面真实的 `>` 翻页按钮 → 断言页签在当前页 → 选中 → 渲染 40 tick。
+  实测（2026-11-16 15:52，当前代码）：`title-screen add ok=true`、`registry tabs (15)`、`own tab candidate: exnihilosatellitium:main items=182`、
+  `on page 2/2`、`page 1 does not show the mod's tab (...); pressing the page button`、
+  `mod's tab is now on the current page: [exnihilosatellitium:main, minecraft:hotbar, minecraft:search, minecraft:inventory]`、
+  `selected own tab ...`、`own tab rendered 40 ticks: 182 tab items, 45 in the menu`、`RESULT: PASS`。
+  也就是说：**当前代码上主菜单热加这条路径是通过的**；唯一“打开时看不到”的原因是页签在第 2 页（第 1 页是 10 个 vanilla 页签 + hotbar/search/inventory）。
+  旧构建上是否失败没有对照（那次报告与 title-screen 分支/`CACHED_PARAMETERS` 失效逻辑的先后不明），所以只写「这条路径第一次被自动验证，当前通过」，不写「修好了」。
+  文档：[dogfood-gameplay.md](features/dogfood-gameplay.md) §2.1.1、status。

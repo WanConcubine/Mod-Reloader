@@ -46,7 +46,7 @@
 | **贵妃级 add-only（服务端闭环）** | blocks 1060→1061 / items 1333→1334 / states 26684→26685，stoneId 1→1 稳定；放置 `(0,100,0)` 存盘；重启读档 `isT4Block=true` | [t4-registry-hotadd.md](features/t4-registry-hotadd.md) |
 | **贵妃级客户端路径** | in-world 命令与 watcher 两条路：`mod/t4fixture` 资源包选中重载、`rebuilt 14 creative tab(s)`、物品进 `building_blocks` | 同上；截图 [t4-registry-prompt.png](features/images/t4-registry-prompt.png) |
 | **datapack 热加载** | 众星捧月 **recipes 0→164 / loot 0→75 / tags 2+1**、真实 3×3 合成与战利品掉落 PASS；标题屏走 `already live` 短路；专用服 fixture 热加 + 重启后数据仍加载 | [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) |
-| **dogfood 玩法验收** | `/exnihilo tables` 七表全非空；锤/筛/合成真实命中；`beRenderers 6/6`、`fluidExtensions=3`、`clientReloadListeners=6`、图标 `181/181`、config `1/1`；创造栏 `defaults=4`，**模组自己的页签 `exnihilosatellitium:main`（第 2/2 页、182 项）选中后菜单 46 项、再渲染 40 tick 不崩** | [dogfood-gameplay.md](features/dogfood-gameplay.md) §1、§2.1 |
+| **dogfood 玩法验收** | `/exnihilo tables` 七表全非空；锤/筛/合成真实命中；`beRenderers 6/6`、`fluidExtensions=3`、`clientReloadListeners=6`、图标 `181/181`、config `1/1`；创造栏 `defaults=4`，**模组自己的页签 `exnihilosatellitium:main`（182 项）选中后菜单 46 项、再渲染 40 tick 不崩**；**主菜单热加路径**同样验证（`-PverifyCreativeAtTitle`：页签在第 2/2 页，按真实 `>` 翻页按钮到达后选中、182 项、渲染 PASS） | [dogfood-gameplay.md](features/dogfood-gameplay.md) §1、§2.1 |
 | **多人连接后 id 同步** | 两端**相反顺序**热加：暂态 push 被正确拒绝 → `applied registry snapshot … 30 registries, 5043 entries` → `ids match the server exactly (29475 lines, blocks=1141, items=1515)` PASS | [t4-registry-hotadd.md](features/t4-registry-hotadd.md) §9；`-PmpRegistryServer` + `-PverifyMpRegistry` |
 | **热加告知在线客户端** | **未装该 jar 的客户端会先收到通知（聊天 + toast：mod 名/版本/jar/sha256 + 「会被断开且装回前进不来」），随后被 datapack 同步踢掉（`Failed to decode packet 'clientbound/minecraft:update_recipes'`）、重连被 `server-with-unknown-keys` 拒绝；客户端 ack 让服务端日志显示 `Dev has [] of the hot-added mod id(s)`** | 2026-11-16 11:48：`runServer -PmpNoticeServer=<t4fixture>` + `runClient -PverifyMpNotice=true`（客户端**故意不装**该 jar）；见 [t4-registry-hotadd.md](features/t4-registry-hotadd.md) §10 |
 | **AppleSkin 悬停食物崩溃（已修）** | **崩溃报告 `IllegalArgumentException: Unknown TooltipComponent` @ `ClientTooltipComponent.create`；根因：`RegisterClientTooltipComponentFactoriesEvent` 从未重放。修后 `tooltip component factories replayed: 1 new, 1 total`、`isLoaded=true`；**悬停渲染那一步还没复测**（需要鼠标）** | 2026-11-16 14:56（崩溃）/ 14:57（修复）：`run/crash-reports/crash-2026-11-16_14.56.09-client.txt` + `-PverifyCompat=<appleskin>` |
@@ -171,6 +171,8 @@
   （第 **2/2** 页、**182 项**全来自该 mod），断言它在界面的分页里，用界面自己的 `selectTab` 选中，
   断言菜单被填充（46 个非空 ItemStack）并再渲染 40 tick：`creative RESULT: PASS`（2026-11-16 15:45）。
   证据与未覆盖项见 [dogfood-gameplay.md](features/dogfood-gameplay.md) §2.1。
+  另外补了**主菜单热加**这条此前未实测的路径：`dev/CreativeTitleCheck`（`-PverifyCreativeAtTitle=<jar>`）标题屏热加 → 建世界 →
+  创造栏 → 发现页签在第 2/2 页 → 按真实 `>` 翻页按钮 → 选中 182 项 → 渲染 PASS（2026-11-16 15:52）。
 
 - **2026-11-16（注册审计：漏了哪个启动期事件，现在是数据而不是运气）**：起因是 AppleSkin 悬停崩溃暴露的第六个「漏重放」缺口。
   新增 `inspect/RegistrationAudit`（纯分级规则，无 ASM / 无游戏类，8 个单测）+ `inspect/RegistrationAuditScanner`

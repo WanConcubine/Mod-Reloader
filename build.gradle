@@ -211,6 +211,16 @@ neoForge {
                 systemProperty 'modreloader.mpRegistryAddress',
                         providers.gradleProperty('mpRegistryAddress').get()
             }
+            if (providers.gradleProperty('verifyCreativeAtTitle').orNull) {
+                // Title-screen hot-add, then create a world and check the mod's own
+                // creative tab is registered, listed, selectable and renders.
+                systemProperty 'modreloader.verifyCreativeAtTitle',
+                        providers.gradleProperty('verifyCreativeAtTitle').get()
+            }
+            if (providers.gradleProperty('verifyCreativeAtTitleModId').orNull) {
+                systemProperty 'modreloader.verifyCreativeAtTitleModId',
+                        providers.gradleProperty('verifyCreativeAtTitleModId').get()
+            }
             if (providers.gradleProperty('verifyRegAudit').orNull) {
                 // Read-only registration audit: grade the mod-bus events each jar
                 // registers against, and prove a known-crashing one is refused.
