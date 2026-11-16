@@ -166,6 +166,11 @@
   也就是说：**当前代码上主菜单热加这条路径是通过的**；唯一“打开时看不到”的原因是页签在第 2 页（第 1 页是 10 个 vanilla 页签 + hotbar/search/inventory）。
   旧构建上是否失败没有对照（那次报告与 title-screen 分支/`CACHED_PARAMETERS` 失效逻辑的先后不明），所以只写「这条路径第一次被自动验证，当前通过」，不写「修好了」。
   文档：[dogfood-gameplay.md](features/dogfood-gameplay.md) §2.1.1、status。
+  **结局（2026-11-16 16:2x）**：所有者反馈「无法复现，我放弃了」。最后一次手动 1.4.2 会话（16:16–16:20）日志显示：
+  点是（`UI loading … 1.4.2.jar`）→ `UI load succeeded` → 进世界 → 正常退出，无崩溃；日志里也没有切创造模式的记录。
+  另核对：1.4.2 与 1.5.0 发布 jar 内容一致（只差 MANIFEST/mods.toml 版本号，`ModCreativeTabs.class` 哈希相同）。
+  因此**不改代码**，把四条 harness（进世界 add / 标题屏冷 / 标题屏热缓存 / 正常安装）留作回归，并在 status 已知问题 27 里写明「未定位、未修复、需要那台日志」。
+  环境已还原：1.5.0 放回 `run/mods/`（正常安装），inbox 清空；1.4.2 副本留在 `/tmp/dogfood-142-inbox.jar`。
   又补了两个对照（2026-11-16 16:03–16:05）：**warm cache**（`-PverifyCreativeAtTitleWarm`：先进世界开一次创造栏 → 暂停菜单 Save and Quit → 标题屏热加 → 再进世界）——
   `at add: sortedTabs=10 modTabsInSorted=0 server=null`、add ok、页签第 2/2 页、182 项、PASS；**正常安装**（jar 在 `run/mods`，`-PverifyCreativeAtTitleInstalled`，不热加）——同样第 2/2 页、182 项、PASS。
   结论：三条路径（进世界后 add / 标题屏 add / 正常安装）唯一「打开时看不到」的原因都是**页签在第 2 页**（NeoForge 分页，`>` 在屏幕左上/右上）；

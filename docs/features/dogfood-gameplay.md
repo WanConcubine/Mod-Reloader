@@ -126,6 +126,11 @@ creative RESULT: PASS
 所以「打开创造栏时看不到」在三条路径（进世界后 add / 标题屏 add / 正常安装）上都是同一个原因：**页签在第 2 页**。
 「翻页也找不到」目前**没有复现**（四条路径全过）；如果确实出现，需要那次会话的 `latest.log`（里面有 `registration audit`、`creative tabs sorted at the title screen`、`registry commit` 和异常）或者截图。
 
+**结局（2026-11-16）**：所有者说无法复现，放弃了这条。失败那次用的是众星捧月 **1.4.2**（另一台机器），但本仓库的两个发布 jar
+1.4.2 / 1.5.0 **内容一致**（只差 `MANIFEST.MF` / `neoforge.mods.toml` 的版本号，`ModCreativeTabs.class` 哈希相同），
+所以版本差异解释不了它。没有拿到那台的日志，**没有改代码**；四条 harness 留作回归。
+若以后再出现：先看那台日志里有没有 `creative tabs sorted at the title screen`（没有 = runtime 是旧构建），再看 `hot-add` 是否真的 `ok=true`。
+
 ### 2.2 机器 GUI 打不开（已修）
 
 手动验收时打开 `exnihilosatellitium:fuel_machine`，日志只有一行警告、界面不出来：

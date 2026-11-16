@@ -46,6 +46,7 @@
 | **贵妃级 add-only（服务端闭环）** | blocks 1060→1061 / items 1333→1334 / states 26684→26685，stoneId 1→1 稳定；放置 `(0,100,0)` 存盘；重启读档 `isT4Block=true` | [t4-registry-hotadd.md](features/t4-registry-hotadd.md) |
 | **贵妃级客户端路径** | in-world 命令与 watcher 两条路：`mod/t4fixture` 资源包选中重载、`rebuilt 14 creative tab(s)`、物品进 `building_blocks` | 同上；截图 [t4-registry-prompt.png](features/images/t4-registry-prompt.png) |
 | **datapack 热加载** | 众星捧月 **recipes 0→164 / loot 0→75 / tags 2+1**、真实 3×3 合成与战利品掉落 PASS；标题屏走 `already live` 短路；专用服 fixture 热加 + 重启后数据仍加载 | [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) |
+| **创造栏回归（四条路径）** | 进世界 add / 标题屏 add（冷）/ 标题屏 add（热缓存）/ 正常安装：页签 `exnihilosatellitium:main` 都在**第 2/2 页**，`>` 翻页可达，182 项、选中后渲染 40 tick；「翻页也找不到」未复现（已知问题 27） | `-PverifyCreativeAtTitle`（`Warm`/`Installed` 变体）；[dogfood-gameplay.md](features/dogfood-gameplay.md) §2.1.1 |
 | **dogfood 玩法验收** | `/exnihilo tables` 七表全非空；锤/筛/合成真实命中；`beRenderers 6/6`、`fluidExtensions=3`、`clientReloadListeners=6`、图标 `181/181`、config `1/1`；创造栏 `defaults=4`，**模组自己的页签 `exnihilosatellitium:main`（182 项）选中后菜单 46 项、再渲染 40 tick 不崩**；**主菜单热加路径**同样验证（`-PverifyCreativeAtTitle`：页签在第 2/2 页，按真实 `>` 翻页按钮到达后选中、182 项、渲染 PASS） | [dogfood-gameplay.md](features/dogfood-gameplay.md) §1、§2.1 |
 | **多人连接后 id 同步** | 两端**相反顺序**热加：暂态 push 被正确拒绝 → `applied registry snapshot … 30 registries, 5043 entries` → `ids match the server exactly (29475 lines, blocks=1141, items=1515)` PASS | [t4-registry-hotadd.md](features/t4-registry-hotadd.md) §9；`-PmpRegistryServer` + `-PverifyMpRegistry` |
 | **热加告知在线客户端** | **未装该 jar 的客户端会先收到通知（聊天 + toast：mod 名/版本/jar/sha256 + 「会被断开且装回前进不来」），随后被 datapack 同步踢掉（`Failed to decode packet 'clientbound/minecraft:update_recipes'`）、重连被 `server-with-unknown-keys` 拒绝；客户端 ack 让服务端日志显示 `Dev has [] of the hot-added mod id(s)`** | 2026-11-16 11:48：`runServer -PmpNoticeServer=<t4fixture>` + `runClient -PverifyMpNotice=true`（客户端**故意不装**该 jar）；见 [t4-registry-hotadd.md](features/t4-registry-hotadd.md) §10 |
@@ -134,6 +135,17 @@
     （status 的「桶/坩埚/堆肥只有手动清单」与此吻合，但此前不知道原因）。语料 **5/16** 个模组引用该事件
     （众星捧月、ZeroCore2、AE2、Mekanism、ExtremeReactors2）。审计把它标成 `behavior`（warn，不拒绝）；
     重放是下一步第一项（§下一步 0）。
+
+27. **「主菜单热加后创造栏没出现」报告无法复现（2026-11-16，未修复 / 未定位）**：所有者在其机器上（众星捧月 **1.4.2**）观察到的症状是
+    「主菜单热加 → 进世界 → 创造栏翻页也找不到众星捧月页签」。本机四条路径全部 PASS：
+    进世界后 add、标题屏 add（冷/热缓存）、正常安装（jar 在 `run/mods`，不热加）；
+    三种情况下页签都在 **第 2/2 页**（第 1 页固定 10 个 vanilla 页签 + hotbar/search/inventory），
+    `CreativeTitleCheck` 用界面真实的 `>` 翻页按钮到达并选中，182 项、菜单 45/46 项、渲染 40 tick。
+    另外 1.4.2 与 1.5.0 两个发布 jar **内容一致**（sha256 不同只因为 `META-INF/MANIFEST.MF` 与 `neoforge.mods.toml` 的版本号；
+    `ModCreativeTabs.class` 哈希相同），所以版本本身解释不了差异。
+    失败那次的 `latest.log` 没有拿到；所有者放弃复现。**结论：没有改代码**（没有证据指向产品 bug），
+    保留了四条 harness 作为回归。若再现，需要那台的 `logs/latest.log`（看 `creative tabs sorted at the title screen` 是否存在 = 是否旧构建）
+    或 `-PverifyCreativeAtTitle` 的 `[CreativeTitle]` 行。
 
 ## 下一步
 
