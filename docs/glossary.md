@@ -60,7 +60,8 @@
 | **ModuleLayer** | Java 9+ 的模块层；FML 用它组织游戏和模组。 |
 | **FML** | Forge Mod Loader；NeoForge 的加载器核心。 |
 | **ModDevGradle** | NeoForge 官方 Gradle 插件（`net.neoforged.moddev`）。 |
-| **JiJ / Jar-in-Jar** | 模组把依赖打包进 `META-INF/jars/` 或 `META-INF/jarjar/`。 |
+| **注册表快照同步 / registry sync** | NeoForge 只在登录的 configuration 阶段同步注册表（`FrozenRegistryPayload`）。本运行时的 play 通道（`hotadd/RegistrySync`）让**已连接**的客户端也能拿到服务端的 id 映射：服务端 commit 后推 `RegistrySyncPayload`，客户端用 `RegistryManager.applySnapshot` 应用；两端条目集合必须一致，否则客户端拒绝（不部分应用）。见 [t4-registry-hotadd.md](features/t4-registry-hotadd.md) §9。 |
+| **JiJ / Jar-in-Jar** | 模组把依赖打包进 `META-INF/jars/` 或 `META-INF/jarjar/`。启动时由 FML 的 locator 注册成独立 mod file；热加载时由 `hotadd/JarInJar` 抽出并注入 game layer 的 module（纯库能读；带 `mods.toml` 的嵌套 mod 只拿到类、没有 container）。 |
 | **Intermediary** | Fabric 的稳定中间名（`class_310`），生产环境常用。 |
 | **Yarn** | Fabric 的可读映射（intermediary → named）。 |
 | **Mojmap** | Mojang 官方映射；NeoForge 1.21 运行时用官方名。 |
@@ -107,6 +108,7 @@
 | **History** | [history.md](history.md)：追加式过程记录（做了什么、证据、为什么）。状态只看 [status.md](status.md)。 |
 | **Registry adaptation（注册表适配）** | 贵妃级的路线：unfreeze + 重放 `RegisterEvent` + 重建依赖缓存，让注册表内容「就地」生效；只支持 add-only，且单向提交、不可回滚。见 [research-t4-registry.md](research-t4-registry.md)。 |
 | **Bake callback** | NeoForge 在 `freeze()` 时执行的回调；重算 BlockState id 映射、方块缓存/loot table、属性校验等。贵妃级适配的「依赖缓存重建」就靠它。 |
+| **Registration audit（注册审计）** | 热加前扫 jar 的类引用，找出它会注册的启动期 mod-bus 事件并按 `covered / recurring / datagen / crash / behavior / silent / base / other-side` 分级。`crash` 四类在 `VALIDATE` 变更前拒绝（`FailureKind.CLIENT_REGISTRATION`），其余只报告。见 [features/client-registration-audit.md](features/client-registration-audit.md)。 |
 | **One-shot replay（一次性事件重放）** | 把启动期只发生一次的事件（命令、payload、`RegisterEvent`）在热加后重新投递；按容器重放，避免全局重放导致已加载 mod 的监听器再跑一遍。 |
 | **单向提交（commit-only）** | 贵妃级适配的失败模型：注册表条目无法撤销，提交前尽量预检，提交后失败只能把运行时标记为不可信并要求重启。 |
 | **Registry window（注册表窗口）** | 贵妃级热加的 unfreeze → construct → RegisterEvent 重放 → 清空 state id → freeze 这一段；窗口内失败可以恢复冻结状态，freeze 之后不可回滚。 |

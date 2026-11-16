@@ -2,7 +2,7 @@
 
 让 Minecraft 模组在游戏运行时**安全地增删 / 更新 / 热重载**。
 
-> 状态（2026-11-15）：**分析器 v0 已可运行**；**A0（嫔级）已验证**；**A1.2（妃级/Mixin + 布局变更）主路径已在 NeoForge 1.21.1 dev client 验证**：热加 `lanserverproperties` 后进世界打开 Open to LAN。**A1.2 失败回滚已跑通**（post-ModList / post-pack 强制失败，恢复 ModList/module/config/类/资源包；post-ModList 重试 add 成功）。构造后事件监听器无法注销、存档回读未验证，按契约 A1.2 尚不算完成。**mods/inbox 监听 + 预检 + toast/弹窗 + 失败分析初版已跑通**（EasyLAN 检测→加载、坏 jar 失败屏、贵妃级实验性加载与警告）。**双端**：dedicated server 能热加嫔级，命令靠重放生效，payload 适配 E1/E2/E3（含跨进程）已验证。**贵妃级注册表内容（实验性 add-only）已跑通**：方块/物品热加、放置存盘、重启读档 PASS；客户端资源包/创造栏已在单人验证；真实 dogfood（众星捧月 1.5.0）注册层热加通过，但 datapack 配方/战利品/标签不加载；多人登录同步未做。**工程侧**：引擎与两端解耦（`PlatformHooks`）、启动有 `Capabilities` 锚点守卫、`dev/` 不进发布 jar、3 个无游戏 Java 单测。皇后级与软重启尚未开始。
+> 状态（2026-11-16，细节以 [docs/status.md](docs/status.md) 为准）：**分析器 v0 已可运行**；**A0（嫔级）已验证**；**A1.2（妃级/Mixin + 布局变更）主路径已在 NeoForge 1.21.1 dev client 验证**：热加 `lanserverproperties` 后进世界打开 Open to LAN。**A1.2 失败回滚已跑通**（post-ModList / post-pack 强制失败，恢复 ModList/module/config/类/资源包；post-ModList 重试 add 成功）。构造后事件监听器无法注销、存档回读未验证，按契约 A1.2 尚不算完成。**mods/inbox 监听 + 预检 + toast/弹窗 + 失败分析初版已跑通**（EasyLAN 检测→加载、坏 jar 失败屏、贵妃级实验性加载与警告）。**双端**：dedicated server 能热加嫔级，命令靠重放生效，payload 适配 E1/E2/E3（含跨进程）已验证。**贵妃级注册表内容（实验性 add-only）已跑通**：方块/物品热加、放置存盘、重启读档 PASS；客户端资源包/创造栏已在单人验证；真实 dogfood（众星捧月 1.5.0）注册层 + datapack 配方/战利品/标签都热加通过；多人 id 同步见 2026-11-16 段。**工程侧**：引擎与两端解耦（`PlatformHooks`）、启动有 `Capabilities` 锚点守卫、`dev/` 不进发布 jar、6 个无游戏 Java 单测。**2026-11-16**：JiJ 内嵌库抽取（jecharacters 转 PASS）、多人连接后的注册表 id 同步（跨进程两端 29475 行 id 一致，前提是两端热加同一批 jar）、MixinRuntime 反射化（构建不再需要 `libs/`）。皇后级与软重启尚未开始。
 > 短期目标是把工具做出来给社区用，论文/研究输出留到以后。
 >
 > **先读顺序**：[AGENTS.md](AGENTS.md) → [docs/status.md](docs/status.md)。状态只写在 status.md。
@@ -64,7 +64,7 @@ Missing or unsupported mandatory dependencies:
 ./gradlew runClient -PautoAdd=/tmp/lanmods/EasyLAN-neoforge-1.21.1-v1.6a.jar
 ```
 
-`runClient` 会自动使用 JBR 21（`~/Library/Java/JavaVirtualMachines/jbr-21.jdk`）并开启
+`runClient` 与 `runServer` 都会自动使用 JBR 21（`~/Library/Java/JavaVirtualMachines/jbr-21.jdk`）并开启
 `-XX:+AllowEnhancedClassRedefinition`；启动日志会打印 `enhancedRedefinition=true`。
 
 实现与限制见 [A0 文档](docs/features/a0-hot-add.md)。A0 只支持 **嫔级**（无 mixin、无注册表）；资源包已选中并重载；EasyLAN 的 GUI 按钮还需人工点一次（`/modreloader add` 已由 `-PverifyAddCommand` 验证）。
@@ -155,7 +155,7 @@ Missing or unsupported mandatory dependencies:
 
 断言的是 toast 队列本身（`ToastComponent.visible`/`queued` 里按标题匹配），不是只看日志。
 
-限制：仅 dev client + JBR；MixinRuntime 现在是**可选**依赖（缺它时妃级被拦、嫔级照常），但**构建**仍需要 `libs/` 里的 jar；构造后事件监听器无法注销、存档回读未验证，A1.2 仍不算契约完成；只验证了 `lanserverproperties`，不等于通用妃级支持。
+限制：仅 dev client + JBR；MixinRuntime 现在是**可选**依赖、只通过反射调用（缺它时妃级被拦、嫔级照常，**构建**不再需要 `libs/`）；构造后事件监听器无法注销、存档回读未验证，A1.2 仍不算契约完成；只验证了 `lanserverproperties`，不等于通用妃级支持。
 
 ## mods 文件夹监听与弹窗（初版）
 
@@ -223,7 +223,7 @@ sodium                     0.8.13+mc… fabric   HUANGHOU 0.85  needs full resta
 |---|---|---|---|
 | **嫔**（PIN） | 代码，无 mixin / 无注册表 | 毫秒级 | **A0 已验证（EasyLAN）** |
 | **妃**（FEI） | 代码 + Mixin，无注册表内容 | 0.5–2 秒 | **A1.2 主路径 + 失败回滚验证（lanserverproperties，JBR）；构造后 listener 不可注销** |
-| **贵妃**（GUIFEI） | 注册表内容（方块/物品/维度） | 5–30 秒 | **实验性 add-only 热加已验证（服务端闭环 + 单人客户端资源/创造栏 + datapack 配方/战利品/标签/机器数据）；多人登录同步、维度/生物群系等世界生成数据仍需重启** |
+| **贵妃**（GUIFEI） | 注册表内容（方块/物品/维度） | 5–30 秒 | **实验性 add-only 热加已验证（服务端闭环 + 单人客户端资源/创造栏 + datapack 配方/战利品/标签/机器数据 + 多人连接后的 id 同步）；维度/生物群系等世界生成数据仍需重启；客户端不装 jar 的多人场景不支持** |
 | **皇后**（HUANGHOU） | native / 性能核心 / 库模组 | 只能完整重启 | 拉黑或要求重启 |
 
 ## 文档
@@ -241,7 +241,7 @@ sodium                     0.8.13+mc… fabric   HUANGHOU 0.85  needs full resta
 | [贵妃级注册表热加](docs/features/t4-registry-hotadd.md) | 方块/物品 add-only 热加：unfreeze/RegisterEvent 重放/BlockState id、证据与限制 |
 | [贵妃级 datapack 热加载](docs/features/t4-datapack-hotadd.md) | 注入 pack + 原版 `/reload`：配方/战利品/标签/机器数据、真实合成与掉落、边界 |
 | [众星捧月玩法验收](docs/features/dogfood-gameplay.md) | 热加后真实交互（锤/筛/合成/创造栏）；抓到并修掉创造页签崩溃 |
-| [热加兼容性矩阵](docs/features/hotadd-compatibility-matrix.md) | 9 个真实模组实测：AT 是硬边界、JiJ 可补、1 个干净通过 |
+| [热加兼容性矩阵](docs/features/hotadd-compatibility-matrix.md) | 9 个真实模组实测：AT 是硬边界、JiJ 已补、2 个干净通过 |
 | [LAN Doctor 规格](docs/features/lan-doctor.md) | B 路线 fallback：状态 / offline / republish / 地址 |
 | [决策记录](docs/decisions/README.md) | ADR-0001..0009：目标、分层、顺序、论文、双端、注册表与 datapack 适配 |
 | [调研报告](docs/research-hot-mod-reload.md) | 启动流水线、JVM/Mixin/注册表约束、Hotwire 与 NHMJ 解剖 |

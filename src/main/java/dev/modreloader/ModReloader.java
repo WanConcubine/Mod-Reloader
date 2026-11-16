@@ -3,6 +3,8 @@ package dev.modreloader;
 import com.mojang.logging.LogUtils;
 import dev.modreloader.capability.Capabilities;
 import dev.modreloader.client.ClientBootstrap;
+import dev.modreloader.hotadd.ModNotice;
+import dev.modreloader.hotadd.RegistrySync;
 import dev.modreloader.inspect.MixinRuntimeSupport;
 import dev.modreloader.server.ServerBootstrap;
 import dev.modreloader.watch.ModWatcherConfig;
@@ -38,6 +40,12 @@ public final class ModReloader {
 
     public ModReloader(IEventBus modBus) {
         WATCHER_CONFIG = ModWatcherConfig.load();
+        // Our own play channel: the only way to hand a freshly hot-added
+        // registry to clients that are already connected (NeoForge only syncs
+        // registries during the login configuration phase).
+        modBus.addListener(RegistrySync::register);
+        // Hot-add notices: always tell connected players what changed and what to do.
+        modBus.addListener(ModNotice::register);
         if (Platform.isClient()) {
             ClientBootstrap.install();
         } else {

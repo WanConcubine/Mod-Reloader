@@ -33,6 +33,25 @@ public final class ServerBootstrap {
         NeoForge.EVENT_BUS.addListener(ReloaderCommands::registerServer);
         ServerCommands.install();
         NeoForge.EVENT_BUS.addListener(ServerStartedEvent.class, event -> onServerStarted());
+        installDevEntry();
+    }
+
+    /**
+     * Dev harnesses live in {@code src/dev} and are absent from release jars; they
+     * are loaded by name so the main source set never depends on them. The
+     * dedicated-server entry is separate from the client one because the client
+     * list references client-only classes.
+     */
+    private static void installDevEntry() {
+        try {
+            Class.forName("dev.modreloader.dev.ServerDev")
+                    .getMethod("install")
+                    .invoke(null);
+        } catch (ClassNotFoundException notShipped) {
+            ModReloader.LOGGER.debug("[ModReloader] dev harnesses are not on the classpath");
+        } catch (Throwable t) {
+            ModReloader.LOGGER.error("[ModReloader] cannot install server dev harnesses", t);
+        }
     }
 
     private static void onServerStarted() {

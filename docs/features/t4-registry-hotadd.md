@@ -128,7 +128,7 @@ rm run/mods/t4fixture-1.0.0.jar
 
 ## 7. 限制（按当前实现）
 
-- **单人多端验证**：客户端资源包、创造栏重建已在单人/集成服务器验证；多人登录同步未验证。
+- **多端**：客户端资源包、创造栏重建已在单人/集成服务器验证；专用服 + 独立客户端的 id 同步见 §9（已跨进程验证）。
 - **add-only**：没有删除/更新；删掉 mod 会让存档里的条目变成 missing entries（NeoForge 提示并丢弃）。
 - **不支持 datapack 内容** → **已补齐**：recipe / loot / tag / mod 自注册的 server reload listener 现在随热加载重载
   （见 [t4-datapack-hotadd.md](t4-datapack-hotadd.md)）；**世界生成注册表**（biome / dimension / structure）
@@ -138,11 +138,124 @@ rm run/mods/t4fixture-1.0.0.jar
   还没有接；方块 + 物品之外的实体类内容暂时不要指望。
 - **UI 已放行，但只有警告、没有确认框**：Load 一次点击即提交，且不可回滚。
 - **real mod 的 datapack 内容仍是空白** → **已补齐**（同上）：众星捧月热加后配方/战利品/标签/机器数据都会加载（§5 的后续注）。
-- **多人登录同步未验证**：连接建立后再热加，已在线客户端拿不到新的 registry snapshot（登录配置阶段是唯一同步点）；两端都必须在连接前热加。
+- **多人登录同步** → **已补上「连接后」这一半**（2026-11-16，见 §9）：两端都要热加同一批 jar，服务端把权威 id 映射用我们自己的 play 通道推给在线客户端；
+  两端条目集合不一致时客户端**拒绝应用**（不是部分应用），并提示把 jar 也装到客户端。**没有客户端那半（客户端不装 jar）仍然不行**——
+  registry 的「值」是客户端本地注册的对象，快照只重排 id，不会凭空造出方块。
 - **提交后失败不可回滚**：运行时被标记 dirty，只能重启。
 
 ## 8. 下一步
 
 1. **datapack 热加载**：已完成，见 [t4-datapack-hotadd.md](t4-datapack-hotadd.md)。
-2. 多人：两端在连接前热加 → 登录快照包含新条目；连接后热加则明确拒绝/提示。需要一个跨进程 harness。
+2. ~~多人：连接后热加~~ 已实现（§9）：play 通道 + `RegistryManager.applySnapshot`，跨进程 harness `-PverifyMpRegistry` 实测 PASS。
+   剩下的：客户端不装 jar 的场景（需要先解决资源/类的分发），以及「连接后**双方**热加的顺序」之外的复杂情况（部分 mod 只在一边）。
 3. 失败语义：construct 抛异常时确认 abort 能恢复 canonical id，并把 dirty 状态暴露给用户。
+
+## 9. 多人：连接后热加的 id 同步（2026-11-16）
+
+### 9.1 问题
+
+NeoForge 只在登录的 **configuration 阶段**同步注册表（`SyncRegistries` + `FrozenRegistryPayload` + `RegistryManager.applySnapshot`）。
+单人可以，因为集成服务器和客户端共用 `BuiltInRegistries`；**专用服 + 独立客户端**不行：
+服务端热加后，已在线客户端仍然用它自己算出来的 block/item id，区块段、物品栈、实体生成全部指错条目。
+而「两端都在连接前热加」也只是碰巧——两边的 id 顺序未必一样。
+
+### 9.2 做法
+
+play 阶段没有对应的 payload，所以本运行时自己开了一条通道（两端都跑 runtime，这和一直接受的 payload 适配前提一致）：
+
+```text
+服务端 commit 之后：
+  RegistryManager.takeSnapshot(SYNC_TO_CLIENT)
+    → 每个注册表一个 RegistrySyncPayload(registry, snapshot, last=最后一个)
+    → 发给所有已连接玩家（PlatformHooks.registrySyncTargets()）
+客户端收到：
+  累积整批 → 校验「两端条目集合完全一致」→ RegistryManager.applySnapshot(batch, false)
+    → 不一致：不发住应用，提示把 jar 也装到客户端（状态不变）
+    → applySnapshot 返回 missing：revertToFrozen() 回到登录快照 + 提示
+    → 成功：afterRegistryContent() 重建创造栏 + 聊天提示
+```
+
+另外还有反向的一半：**客户端热加后主动请求**（`RegistrySyncRequestPayload`，playToServer），服务端回它的当前映射——
+否则「客户端先加、服务端后加」的时序里客户端会一直用本地 id。决策与备选见 [ADR-0010](../decisions/0010-post-connect-registry-sync.md)。
+
+三个不显然的点：
+
+1. **`applySnapshot(map, false)` 就是登录期那段代码**，不是我们重写的：它 `unfreeze → clear(false) → registerIdMapping → freeze`，
+   `freeze` 触发 NeoForge 的 bake callback，**block state id 随之按新顺序重建**（`BlockCallbacks.onBake`）。这条依赖从 NeoForge 源码确认过。
+2. **必须整批、且两端集合一致**。`applySnapshot` 不会删客户端的多余条目：只重排 id。若快照是客户端集合的**子集**，
+   客户端多出来的条目会变成「没有 id」（`getId` = -1），区块/物品栈同样错位——所以客户端在应用前先比较 key 集合，不一致就完全不应用。
+3. **不踢人**。登录期不一致会断开连接（NeoForge 的做法），但游戏中间踢人比保持旧状态更糟：客户端拒绝 + 提示，
+   下次登录时 NeoForge 会自然带上新的注册表（热加之后进来的客户端不需要任何额外步骤）。
+
+### 9.3 证据（2026-11-16 10:40，dedicated server + 独立客户端，跨进程）
+
+`dev/MpRegistryCheck`（客户端）+ `dev/MpRegistryServerCheck`（服务端），通过 `run/` 下的 marker 文件协调：
+
+```bash
+# 服务端：等客户端 ready 后按「先众星捧月、后 t4fixture」热加
+./gradlew runServer -PmpRegistryServer=/abs/exnihilosatellitium-1.5.0.jar,/tmp/t4fixture/t4fixture-1.0.0.jar
+# 客户端：进世界后按「先 t4fixture、后众星捧月」热加（故意不同顺序 → id 必然不同）
+./gradlew runClient -PverifyMpRegistry=/tmp/t4fixture/t4fixture-1.0.0.jar,/abs/exnihilosatellitium-1.5.0.jar
+```
+
+```text
+[MpRegistry] client hot-add t4fixture: ok=true
+[MpRegistry] client hot-add exnihilosatellitium: ok=true
+[MpRegistry] client registries after its own adds: blocks=1141 items=1515
+[ModReloader] refusing the server registry snapshot: ... client has 182 entries the server does not ...
+[ModReloader] applied registry snapshot from the server: 30 registries, 5043 entries
+[MpRegistry] ids match the server exactly (29475 lines, blocks=1141, items=1515)
+[MpRegistry] RESULT: PASS
+```
+
+服务端侧：`registry snapshot: 30 registries -> 1 connected player(s)`（两次 push：众星捧月后、t4fixture 后），
+`answered a registry sync request from Dev with 30 registries`（客户端两次请求），datapack 仍正常应用（recipes 0→164）。
+
+断言是**全量**的：29475 行 = 每个方块 id + 每个物品 id + 每个 block state id，全部与服务端一致——
+包括 block state id，说明 `applySnapshot` 之后 bake 重建的映射与服务端相同。
+
+### 9.4 边界
+
+- **客户端必须也有同一批模组**（同一批 jar，各自热加或启动时就装好都可以）。不一致时客户端拒绝应用并提示；
+  没有「客户端只拿 id、不装 jar」这种模式——registry 的值是客户端本地注册的对象，快照只重排 id。
+- 这是**运行时自有通道**，所以两端都必须装 Mod Reloader；热加的那个 mod 不需要知道。
+- 只覆盖 `doesSync = true` 的 built-in 注册表（和登录同步同一个集合）。
+- 专用服上的 **mixin（妃级）热加需要 JBR**：`runServer` 目前不带 `-XX:+AllowEnhancedClassRedefinition`，
+  实测 ZeroCore2 在专用服上 redefine `Slot` 会失败（客户端同样的操作成功）。与 id 同步无关，但会让「服务端热加一个有 mixin 的内容 mod」失败。
+- **两端 runtime 版本不一致没有验证过**：通道由 `registrar("1")` 声明，旧端收到不认识的 payload 预期会被 NeoForge 断开；
+  没有握手、没有降级，也没有版本不匹配的测试。
+
+## 10. 客户端没有这个 mod 时会怎样（2026-11-16 实测）
+
+热加一个**双端**内容模组时，服务端在线玩家的处境（`dev/MpNoticeServerCheck` + `dev/MpNoticeClientCheck`，
+2026-11-16 11:48，专用服 + 一个**故意没有该 jar** 的客户端）：
+
+```text
+[11:48:28] [client] server hot-added t4fixture 1.0.0 (jar t4fixture-1.0.0.jar, sha256:a7168198…,
+                    tier guifei, registry content true); this client does NOT have it
+[11:48:28] [client] [CHAT] 服务端正在热加 T4 Registry Fixture 1.0.0（jar t4fixture-1.0.0.jar，sha256 a7168198…）。
+                    你没有这个模组：你很快会被断开，并且在把同一个 jar 放进 mods/ 并重启之前无法重新进入。
+[11:48:28] [client] still connected=true                       ← 通知先到
+[11:48:28] [client] DecoderException: Failed to decode packet 'clientbound/minecraft:update_recipes'
+                                                                ← datapack 同步把连接打死
+[11:48:28] [server] told 1 connected player(s) about [t4fixture]: T4 Registry Fixture 1.0.0 (jar …, sha256:…)
+[11:48:28] [server] WARN 1 player(s) connected: registry content cannot be undone. A client without this
+                    mod will be disconnected by the data pack sync and cannot rejoin until it installs…
+[11:48:28] [server] Dev has [] of the hot-added mod id(s) this runtime noticed; anything missing must
+                    be added on their client too                              ← 客户端回报的 ack
+```
+
+三条结论：
+
+1. **`update_recipes` 会踢人，不需要 mod 自己发包**：配方引用了客户端不认识的物品，解码直接失败。
+   所以「没有注册表内容的 mod 才安全」不成立——**带 datapack 的 mod 一样会踢**。
+2. **之后连不回来**：登录同步的快照含客户端不认识的条目 → NeoForge `server-with-unknown-keys` 再断一次。
+   这和「服务器启动时就装了该 mod」完全一致，只是热加把它变成了一件**在线时发生**的事。
+3. 通知必须**在 commit / datapack 重载之前**发。反例实测过：放在管线末尾时，notice 到达的是一条已经死掉的连接。
+
+**能同步的只有 id 映射**（§9），且前提是客户端本地已有这些条目；jar（类）、资源、payload channel 都推不过去。
+所以文案里只承诺「装上同一个 jar 之后就能回来」，不承诺「会自动装好」。
+
+安全网（已实现）：notice（不分 tier 都发）→ 客户端聊天 + toast（有/没有该 mod 两种文案）→ 客户端 ack → 服务端日志
+`<player> has [...] of the hot-added mod id(s)`；服务端在有玩家在线 + 注册表内容时，commit 前再打一条 WARN。
+决策与未决项见 [ADR-0011](../decisions/0011-hotadd-must-inform-clients.md)。

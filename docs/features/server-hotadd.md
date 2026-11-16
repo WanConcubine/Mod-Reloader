@@ -1,7 +1,7 @@
 # 服务端热加（嫔级 / 命令重放 / payload 适配）
 
 > 范围：runtime 在 **dedicated server** 上加载、发现、热加模组，以及两处必须"重放一次性事件"的适配。
-> 不覆盖：妃级在服务端（需要 JBR，未验证）、注册表内容（贵妃级）、一次性启动事件（`ServerStartedEvent` 等）。
+> 不覆盖：贵妃级注册表内容（改由 [t4-registry-hotadd.md](t4-registry-hotadd.md) 覆盖，含 §9 的多人 id 同步）、一次性启动事件（`ServerStartedEvent` 等）。
 > 状态：[status.md](../status.md) 的「服务端」相关表尺行。
 
 ## 1. 为什么不是"把客户端代码搬过去"
@@ -61,11 +61,16 @@ NeoForge 在注册阶段结束后把 `NetworkRegistry.setup` 置 true，之后�
 | payload E2 | 进世界后热加：`patched payload setup of an existing connection`（两条连接各一次）→ 3 秒后客户端收到 | 2026-11-15 18:12：`-PverifyPayload=... -PverifyPayloadAfterJoin=true` |
 | payload E3 | 两个独立 JVM：服务端 autoAdd + 客户端标题屏热加 → 连接 `127.0.0.1:25565` → `PING RECEIVED on side client` | 2026-11-15 20:20：`runServer -PautoAdd=payloadfix` + `runClient -PverifyPayloadRemote=payloadfix` |
 | 回归 | 双端化后客户端 `AddCmdCheck RESULT: PASS`；capabilities 服务端 `resource_packs=n/a`，其余 ok；servertest 仍能热加 | 2026-11-15 16:25 / 21:08 |
+| 控制台短名 add | 把 jar 放进 `mods/` → `/modreloader scan`（行尾 `→ /modreloader add t4fixture-1.0.0.jar`）→ `/modreloader add t4fixture-1.0.0.jar` 返回 1、`Loaded: hot-added [t4fixture]`、`isLoaded=true`；未知名字返回 0 并打印所有查找位置；TAB 补全列出 `[MixinRuntime-…, t4fixture-1.0.0.jar]` | 2026-11-16 11:17：`runServer -PserverAddCommand=<t4fixture>`（`ServerAddCmdCheck`） |
 
 ## 4. 限制与下一步
 
 - **没有握手**：两端各装各的 jar，靠人工保证一致；ADR-0007 第 3 条的登录期握手尚未实现。
-- **一次性启动事件**（`ServerStartedEvent` 等）不重放；注册表内容（贵妃级）不支持。
-- **服务端妃级**：需要 JBR + `-XX:+AllowEnhancedClassRedefinition`，未在专用服验证。
+- **控制台便捷性**：`add` 只做「名字 → 路径」的解析与补全，**不会**自动挑选候选、也不会自动加载；`watcher.json` 里的 `ignored`/`failed` 指纹仍由人维护（放回同名同大小同 mtime 的文件不会重新提示）。
+- **一次性启动事件**（`ServerStartedEvent` 等）不重放。
+- **服务端妃级**：需要 JBR + `-XX:+AllowEnhancedClassRedefinition`；2026-11-16 起 `runServer` 自动用 JBR，
+  实测 ZeroCore2 在专用服上 `redefined net.minecraft.world.inventory.Slot with mixins` 并 `hot-added [zerocore]`
+  （此前同一操作是 `ROLLBACK_PARTIAL`）。只验证了这一个模组；「服务端 + 客户端同时热加妃级 mod」未测。
+- **注册表内容（贵妃级）**：本页不覆盖，见 [t4-registry-hotadd.md](t4-registry-hotadd.md)（服务端闭环 + §9 的多人 id 同步）。
 - **重放的全局副作用**：命令监听器会执行两次（Brigadier 幂等，但副作用不可控）——这是已知问题 14/15。
 - **side 门禁只警告不拦**（ADR-0007 第 4 条），预检的 side 判定仍待补。

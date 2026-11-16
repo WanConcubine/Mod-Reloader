@@ -1,8 +1,8 @@
 package dev.modreloader.dev;
 
-import cn.ksmcbrigade.mr.utils.InstUtils;
 import dev.modreloader.ModReloader;
 import dev.modreloader.hotadd.HotAddEngine;
+import dev.modreloader.hotadd.ClassBytes;
 import dev.modreloader.hotadd.JvmAccess;
 import dev.modreloader.hotadd.MixinSupport;
 import org.objectweb.asm.ClassReader;
@@ -98,7 +98,7 @@ public final class RollbackCheck {
                 // The module has been removed from the layer, so reflection on
                 // fields can throw NoClassDefFoundError for the mod's types.
                 // Inspect the restored bytes instead.
-                byte[] bytes = InstUtils.getClassBytes(JvmAccess.get(), target);
+                byte[] bytes = ClassBytes.of(JvmAccess.get(), target);
                 ClassNode node = new ClassNode();
                 new ClassReader(bytes).accept(node, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG);
                 boolean field = node.fields.stream().anyMatch(f -> "lsp_objects".equals(f.name));

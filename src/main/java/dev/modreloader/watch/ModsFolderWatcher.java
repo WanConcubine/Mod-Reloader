@@ -122,19 +122,35 @@ public final class ModsFolderWatcher {
                 } catch (Throwable ignored) {
                     continue;
                 }
-                if (config.isIgnored(jar, fingerprint.size(), fingerprint.mtime())
-                        || config.isFailed(jar, fingerprint.size(), fingerprint.mtime())) {
+                if (config.isIgnored(jar, fingerprint.size(), fingerprint.mtime())) {
+                    skip(jar, "ignored (same size/mtime as the recorded ignore)");
+                    continue;
+                }
+                if (config.isFailed(jar, fingerprint.size(), fingerprint.mtime())) {
+                    skip(jar, "failed earlier with the same size/mtime");
                     continue;
                 }
                 ModInspection inspection = ModInspector.inspect(jar);
                 if (inspection.ok() && inspection.mods().stream()
                         .anyMatch(mod -> net.neoforged.fml.ModList.get().isLoaded(mod.modId()))) {
+                    skip(jar, "already loaded in ModList");
                     continue;
                 }
                 candidates.add(new Candidate(jar, fingerprint.size(), fingerprint.mtime(), inspection));
             }
         }
         return candidates;
+    }
+
+    /**
+     * Why a jar in the watched folders is not a candidate.
+     *
+     * <p>Without this line a "stale" list is undebuggable: the three filters
+     * (ignored / failed / already loaded) all look identical from the outside.
+     */
+    private static void skip(Path jar, String reason) {
+        ModReloader.LOGGER.info("[ModReloader] not a candidate: {} ({})",
+                jar.getFileName(), reason);
     }
 
     private void prepareDirectories() {

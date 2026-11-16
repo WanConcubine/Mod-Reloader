@@ -2,10 +2,13 @@ package dev.modreloader.hotadd;
 
 import cpw.mods.jarhandling.JarContents;
 import dev.modreloader.ModReloader;
+import dev.modreloader.Platform;
 import dev.modreloader.capability.Capabilities;
 import dev.modreloader.inspect.MixinRuntimeSupport;
 import dev.modreloader.inspect.ModInspection;
 import dev.modreloader.inspect.ModInspector;
+import dev.modreloader.inspect.RegistrationAudit;
+import dev.modreloader.inspect.RegistrationAuditScanner;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.loading.moddiscovery.ModFile;
@@ -45,7 +48,8 @@ public final class HotAddEngine {
     public enum FailureKind {
         NONE, MISSING_FILE, NOT_A_MOD, INVALID_METADATA, ALREADY_LOADED, MISSING_DEPENDENCY, JBR_REQUIRED,
         MIXIN_RUNTIME, NETWORK_PAYLOAD, UNSUPPORTED_TIER, CAPABILITY, MIXIN_CONFIG, MIXIN_TARGET, REDEFINE, MODULE, MODLIST, REGISTRY,
-        CONSTRUCT, EVENT, RESOURCE_PACK, DATAPACK, ACCESS_TRANSFORMER, ROLLBACK_PARTIAL, UNKNOWN
+        CONSTRUCT, EVENT, RESOURCE_PACK, DATAPACK, ACCESS_TRANSFORMER, CLIENT_REGISTRATION, JAR_IN_JAR,
+        ROLLBACK_PARTIAL, UNKNOWN
     }
 
     public record Result(boolean ok, String message, Stage stage, FailureKind kind,
@@ -141,8 +145,10 @@ public final class HotAddEngine {
             // the UI; use the same signal to decide whether the engine must open
             // a registry window around construction.
             boolean registryContent = false;
+            ModInspection inspectionForNotice = null;
             try {
                 ModInspection inspection = ModInspector.inspect(jar);
+                inspectionForNotice = inspection.ok() ? inspection : null;
                 registryContent = inspection.ok() && inspection.registry();
                 if (inspection.ok()) {
                     // A required dependency that is not loaded makes ModListInjector
@@ -172,6 +178,30 @@ public final class HotAddEngine {
             }
             ModReloader.LOGGER.info("[ModReloader] registry content detected: {}", registryContent);
 
+            // Registration audit (read-only): a hot-added mod misses every
+            // startup-only mod-bus event, and the client replay above is a
+            // hand-written list. Report every event the jar registers against and
+            // refuse the ones whose absence is known to crash as soon as the
+            // registered content is used (particles, recipe book, shaders,
+            // sprite sources). Behaviour-only gaps (capabilities, components,
+            // mod registries) are reported loudly but do not block the add.
+            // See docs/features/client-registration-audit.md.
+            try {
+                RegistrationAudit.Report audit = RegistrationAuditScanner.audit(jar, Platform.isClient());
+                ModReloader.LOGGER.info("[ModReloader] registration audit {}: {}",
+                        ids, audit.line());
+                if (audit.fatal()) {
+                    return fail(rollback, Stage.VALIDATE, FailureKind.CLIENT_REGISTRATION,
+                            ids + " registers "
+                                    + audit.shortNames(RegistrationAudit.Severity.CRASH)
+                                    + " on the mod bus, and this runtime does not replay that event "
+                                    + "yet; the content it registers would crash when used. "
+                                    + "Restart with the jar in mods/.");
+                }
+            } catch (Throwable t) {
+                ModReloader.LOGGER.warn("[ModReloader] registration audit failed for {}", jar, t);
+            }
+
             // Framework anchors first: if NeoForge drifted under us, say so
             // before anything is mutated instead of crashing halfway through.
             Capabilities.Result moduleCapability =
@@ -200,10 +230,43 @@ public final class HotAddEngine {
 
             // 1. module: the new mod's classes must be resolvable before Mixin
             //    reads its config or the mod constructor runs.
+            //
+            //    A mod's own META-INF/jarjar libraries are normally registered by
+            //    FML's jar-in-jar locator at startup. A hot-added mod skipped that
+            //    locator, so its bundled classes do not exist in the game layer
+            //    (jecharacters -> NoClassDefFoundError: me/towdium/pinin/Keyboard).
+            //    Extract them and put them on the module path in the same step.
             stage = Stage.MODULE;
+            JarInJar.Result nested;
+            try {
+                nested = JarInJar.extract(jar);
+            } catch (Throwable t) {
+                ModReloader.LOGGER.error("[ModReloader] cannot read jar-in-jar metadata of {}", jar, t);
+                return fail(rollback, Stage.MODULE, FailureKind.JAR_IN_JAR,
+                        "cannot read the jars nested in " + jar.getFileName() + ": " + t);
+            }
+            for (String skip : nested.skipped()) {
+                ModReloader.LOGGER.warn("[ModReloader] jar-in-jar skipped {}: {}",
+                        jar.getFileName(), skip);
+            }
+            if (!nested.nested().isEmpty()) {
+                ModReloader.LOGGER.info("[ModReloader] jar-in-jar: {} nested jar(s) from {} -> modules {}",
+                        nested.nested().size(), jar.getFileName(),
+                        nested.nested().stream().map(JarInJar.Nested::moduleName).toList());
+                for (JarInJar.Nested inner : nested.nested()) {
+                    if (inner.declaresMod()) {
+                        ModReloader.LOGGER.warn(
+                                "[ModReloader] nested mod {} is exposed as a module only; its @Mod "
+                                        + "constructor is not run (nested mods are not hot-added yet)",
+                                inner.declaredPath());
+                    }
+                }
+            }
+
             ModuleInjector.Snapshot moduleSnapshot = ModuleInjector.snapshot();
             rollback.add("module layer", () -> ModuleInjector.restore(moduleSnapshot));
-            Set<String> moduleNames = ModuleInjector.addToGameLayer(List.of(newFileInfo));
+            Set<String> moduleNames = ModuleInjector.addToGameLayer(
+                    List.of(newFileInfo), nested.secureJars());
 
             // 2. mixin: register configs, then redefine already-loaded targets.
             //    MixinStage keeps every MixinRuntime/MixinSupport reference behind
@@ -211,6 +274,18 @@ public final class HotAddEngine {
             stage = Stage.MIXIN;
             List<String> mixinSummary = new ArrayList<>();
             if (!mixinConfigs.isEmpty()) {
+                // A mixin that adds members or interfaces needs JBR's enhanced
+                // redefinition; a stock JVM answers `redefineClasses` with
+                // "attempted to change superclass or interfaces" *after* the configs
+                // are active. Refuse before touching anything, with the real reason
+                // (the UI already blocks this, the console path did not).
+                if (!dev.modreloader.inspect.JbrSupport.available()) {
+                    return fail(rollback, Stage.MIXIN, FailureKind.JBR_REQUIRED,
+                            ids + " declares mixins, which need JBR 21 with "
+                                    + "-XX:+AllowEnhancedClassRedefinition ("
+                                    + dev.modreloader.inspect.JbrSupport.describe()
+                                    + "). Restart on a JBR launcher.");
+                }
                 if (!MixinRuntimeSupport.available()) {
                     return fail(rollback, Stage.MIXIN, FailureKind.MIXIN_RUNTIME,
                             ids + " declares mixins but " + MixinRuntimeSupport.name()
@@ -276,6 +351,29 @@ public final class HotAddEngine {
                 constructed[0] = true;
                 loaded.add(container.getModId());
             }
+            // Informing layer — deliberately BEFORE the registry commit and the data
+            // pack reload. Measured: a connected client that lacks a content mod is
+            // disconnected by vanilla's recipe sync (decoding `update_recipes` fails
+            // on the unknown items) and afterwards cannot even rejoin (the login
+            // snapshot has entries it does not know). A notice sent after that would
+            // arrive at a dead connection, so it goes first, while the players can
+            // still act on it.
+            try {
+                ModNotice.notifyPlayers(jar, containers, registryContent, inspectionForNotice);
+            } catch (Throwable t) {
+                ModReloader.LOGGER.warn("[ModReloader] cannot tell connected clients about {}", ids, t);
+            }
+            if (registryContent) {
+                int players = hooks.connectedPlayers().size();
+                if (players > 0) {
+                    ModReloader.LOGGER.warn(
+                            "[ModReloader] {} player(s) connected: registry content cannot be undone. "
+                                    + "A client without this mod will be disconnected by the data pack "
+                                    + "sync and cannot rejoin until it installs the same jar.",
+                            players);
+                }
+            }
+
             if (registryContent) {
                 stage = Stage.REGISTRY;
                 RegistryStage.commit(containers);
@@ -285,6 +383,23 @@ public final class HotAddEngine {
                 } catch (Throwable t) {
                     ModReloader.LOGGER.warn(
                             "[ModReloader] post-registry client refresh failed", t);
+                }
+                // Clients that are already connected cannot see the new entries
+                // otherwise: NeoForge only syncs registries at login. Best effort —
+                // the commit above cannot be undone.
+                try {
+                    RegistrySync.broadcastAfterCommit();
+                } catch (Throwable t) {
+                    ModReloader.LOGGER.warn(
+                            "[ModReloader] cannot push the registry snapshot to connected clients", t);
+                }
+                // The other order: this side may itself be a client that just
+                // added content, and only the server can say which ids to use.
+                try {
+                    hooks.requestRegistrySnapshot();
+                } catch (Throwable t) {
+                    ModReloader.LOGGER.warn(
+                            "[ModReloader] cannot ask the server for its registry mapping", t);
                 }
             }
             stage = Stage.EVENT;

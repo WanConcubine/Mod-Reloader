@@ -7,7 +7,7 @@
 ## 1. 项目是什么
 
 - **目标**：让 Minecraft Java 版模组在游戏运行时**安全地增删 / 更新 / 热重载**。
-- **当前阶段**：只读分析器 v0 已完成；**A0（嫔级模组热加）已验证**；**A1.2（妃级/Mixin + 布局变更）主路径已在 dev client 验证**：`lanserverproperties` 热加后进世界打开 Open to LAN，LSP 控件可用；**失败回滚已覆盖 post-ModList / post-pack**（恢复 ModList/module/config/类/资源包，post-ModList 重试成功）。构造后事件监听器无法注销、存档回读未做，按 §6 尚不算完成。**mods/inbox 监听 + 预检 + toast/弹窗 + 失败分析初版已实现**（EasyLAN 检测→加载、坏 jar 失败屏、贵妃级实验性加载与警告）。贵妃级软重启未开始；**贵妃级注册表热加（实验性，add-only）已验证**：服务端热加一个方块 + BlockItem、放置存盘、重启读档 PASS（[t4-registry-hotadd.md](docs/features/t4-registry-hotadd.md)）；仍限 add-only；单人客户端资源包/创造栏已验证，多人登录同步未做，**datapack 热加载已验证**（注入 pack + 原版 `/reload`：配方/战利品/标签/机器数据，见 [t4-datapack-hotadd.md](docs/features/t4-datapack-hotadd.md)）；UI 已放行并显示实验性警告；真实 dogfood（众星捧月 1.5.0）注册层 + datapack 都通过（80 方块/181 物品；recipes 0→164、loot 0→75，真实合成与掉落 PASS；ADR-0008 Accepted，ADR-0009 Proposed）。剩余人工：点 EasyLAN 的 GUI 按钮（`/modreloader add` 已由 `-PverifyAddCommand` 自动化）。**服务端**：runtime 能在 dedicated server 加载并热加嫔级；命令注册通过重放 `RegisterCommandsEvent` 生效（根命令 93→94），重复触发的 `ServerTickEvent` 也能到达；payload 可通过 `NetworkAdaptation` 解冻注册表后注册，并修补已建立连接的 `PayloadSetup`（E1/E2 单人 + E3 跨进程均已验证）；一次性启动事件 / 世界生成注册表（维度/生物群系/结构）仍不支持（ADR-0007/0009）；built-in 注册表 add-only 的服务端热加已验证；**datapack（配方/战利品/标签/机器数据）在 dedicated server 上也会随热加重载**（fixture 热加 + 重启验证）。**工程侧（2026-11-15）**：引擎通过 `PlatformHooks` 与两端解耦，启动时有 `Capabilities` 反射锚点守卫，`src/dev` 独立 source set（不进发布 jar），`./gradlew test` 有 3 个无游戏 Java 单测。
+- **当前阶段**：只读分析器 v0 已完成；**A0（嫔级模组热加）已验证**；**A1.2（妃级/Mixin + 布局变更）主路径已在 dev client 验证**：`lanserverproperties` 热加后进世界打开 Open to LAN，LSP 控件可用；**失败回滚已覆盖 post-ModList / post-pack**（恢复 ModList/module/config/类/资源包，post-ModList 重试成功）。构造后事件监听器无法注销、存档回读未做，按 §6 尚不算完成。**mods/inbox 监听 + 预检 + toast/弹窗 + 失败分析初版已实现**（EasyLAN 检测→加载、坏 jar 失败屏、贵妃级实验性加载与警告）。贵妃级软重启未开始；**贵妃级注册表热加（实验性，add-only）已验证**：服务端热加一个方块 + BlockItem、放置存盘、重启读档 PASS（[t4-registry-hotadd.md](docs/features/t4-registry-hotadd.md)）；仍限 add-only；单人客户端资源包/创造栏已验证，**连接后热加的注册表 id 同步已验证**（运行时自有 play 通道 + `applySnapshot`，跨进程 29475 行 id 一致；前提是两端热加同一批 jar），**datapack 热加载已验证**（注入 pack + 原版 `/reload`：配方/战利品/标签/机器数据，见 [t4-datapack-hotadd.md](docs/features/t4-datapack-hotadd.md)）；UI 已放行并显示实验性警告；真实 dogfood（众星捧月 1.5.0）注册层 + datapack 都通过（80 方块/181 物品；recipes 0→164、loot 0→75，真实合成与掉落 PASS；ADR-0008 Accepted，ADR-0009 / ADR-0010 Proposed）。剩余人工：点 EasyLAN 的 GUI 按钮（`/modreloader add` 已由 `-PverifyAddCommand` 自动化）。**服务端**：runtime 能在 dedicated server 加载并热加嫔级；命令注册通过重放 `RegisterCommandsEvent` 生效（根命令 93→94），重复触发的 `ServerTickEvent` 也能到达；payload 可通过 `NetworkAdaptation` 解冻注册表后注册，并修补已建立连接的 `PayloadSetup`（E1/E2 单人 + E3 跨进程均已验证）；一次性启动事件 / 世界生成注册表（维度/生物群系/结构）仍不支持（ADR-0007/0009）；built-in 注册表 add-only 的服务端热加已验证；**datapack（配方/战利品/标签/机器数据）在 dedicated server 上也会随热加重载**（fixture 热加 + 重启验证）。**工程侧（2026-11-15）**：引擎通过 `PlatformHooks` 与两端解耦，启动时有 `Capabilities` 反射锚点守卫，`src/dev` 独立 source set（不进发布 jar），`./gradlew test` 有 20 个无游戏 Java 单测；`VALIDATE` 有**注册审计**（启动期 mod-bus 事件清单，已知崩溃四类变更前拒绝）。**热加覆盖面（2026-11-16 矩阵首轮）**：9 个真实模组 2 PASS / 6 AT 拒绝 / 1 缺依赖；**JiJ 内嵌库已补**（`META-INF/jarjar` 的嵌套 jar 进 game layer 的 module，jecharacters 转 PASS），AT 仍是硬边界。
 - **目标版本**：**Minecraft 1.21.1**；分析器支持 Fabric + NeoForge，语料与校准锁 1.21.1。
 - **运行时首发**：**NeoForge 1.21.1**（原因见 [ADR-0001](docs/decisions/0001-target-1.21.1-neoforge.md)）。
 - **首个 dogfood**：`../Ex-Nihilo-Satellitium`（NeoForge 1.21.1，贵妃级内容模组）。
@@ -38,7 +38,7 @@ python3 tools/analyzer/run.py scan ~/Projects/Ex-Nihilo-Satellitium/build/libs/e
 ### Mod Reloader（NeoForge 1.21.1 / Java 21）
 
 ```bash
-# 编译 + Java 单测（i18n 键/占位符、FailureKind 文案）+ 编译 dev harness
+# 编译 + Java 单测（i18n/占位符、FailureKind 文案、JiJ 路径）+ 编译 dev harness；不需要 libs/
 ./gradlew build
 
 # 只跑不需要游戏的 Java 单测
@@ -82,6 +82,21 @@ python3 tools/analyzer/run.py scan ~/Projects/Ex-Nihilo-Satellitium/build/libs/e
 ./gradlew runServer -PautoAdd=/tmp/payloadfix/payloadfix-1.0.0.jar
 ./gradlew runClient -PverifyPayloadRemote=/tmp/payloadfix/payloadfix-1.0.0.jar
 
+# 专用服控制台路径：把 jar 放进 mods/ → scan 看提示 → 短名 add（含 TAB 补全与未找到的报错）
+./gradlew runServer -PserverAddCommand=/tmp/t4fixture/t4fixture-1.0.0.jar
+
+# 热加告知层：专用服热加、客户端**故意不装**该 jar → 应收到通知（聊天+toast）再被踢，服务端日志显示 ack
+./gradlew runServer -PmpNoticeServer=/tmp/t4fixture/t4fixture-1.0.0.jar
+./gradlew runClient -PverifyMpNotice=true
+
+# 布局变更边界：先加载 EditBox，再热加一个给它加接口的 mixin（JBR 下应成功；无 JBR 应被拒）
+./gradlew runClient -PverifyMixinLayout=/tmp/user-mods/Searchables-neoforge-1.21.1-1.0.2.jar
+
+# 多人注册表 id 同步：客户端先连接并按自己的顺序热加，服务端按相反顺序热加后推快照
+# （两端顺序故意不同 → id 必然不同；客户端必须应用服务端映射才能 PASS。见 t4-registry-hotadd.md §9）
+./gradlew runServer -PmpRegistryServer=<modA.jar>,<modB.jar>
+./gradlew runClient -PverifyMpRegistry=<modB.jar>,<modA.jar>
+
 # 贵妃级注册表热加：热加夹具 → 放置/存盘 → 放进 run/mods → 重启读档（详见 experiments/t4-fixture/README.md）
 ./gradlew runServer -PautoAdd=/tmp/t4fixture/t4fixture-1.0.0.jar -Pt4fixtureSelftest=true
 
@@ -103,6 +118,12 @@ python3 tools/analyzer/run.py scan ~/Projects/Ex-Nihilo-Satellitium/build/libs/e
   -PverifyAddCommand=/Users/kaifengcrt/Projects/Ex-Nihilo-Satellitium/build/libs/exnihilosatellitium-1.21.1-1.5.0.jar \
   -PverifyAddCommandModId=exnihilosatellitium -PverifyGameplay=true -PverifyCreative=true -PverifyGameplayKeepOpen=true
 
+# AT「晚注入」可行性量测：只读，量 AT 目标类在标题屏/进世界时的加载比例（见 hotadd-compatibility-matrix.md §8）
+./gradlew runClient -PverifyAtSpike=/abs/jade.jar,/abs/jei.jar
+
+# 注册审计：只读扫 jar 的启动期事件并分级，再造一个必然被拒的致命 jar 验证拒绝点在注入之前（见 client-registration-audit.md）
+./gradlew runClient -PverifyRegAudit=/abs/a.jar[,/abs/b.jar]
+
 # 贵妃级调研：只读注册表探针（加 -PverifyRegistryRefreeze=true 会做一次受控 unfreeze/freeze，仅一次性世界）
 ./gradlew runClient -PverifyAddCommand=/tmp/lanmods/EasyLAN-neoforge-1.21.1-v1.6a.jar -PverifyRegistryProbe=true
 
@@ -120,7 +141,7 @@ python3 tools/analyzer/run.py scan ~/Projects/Ex-Nihilo-Satellitium/build/libs/e
   -PwatchJar=/tmp/lanmods/EasyLAN-neoforge-1.21.1-v1.6a.jar
 ```
 
-- 游戏内入口：`/modreloader add <jar>`（已注册；自动触发路径与世界内执行均由 harness 验证）。
+- 游戏内入口：`/modreloader add <jar>`。**控制台可以用短名**：`/modreloader add t4fixture-1.0.0.jar`（先在当前目录找，再找 `mods/` 与 `modreloader/inbox/`；`probe` 同样），TAB 会补全两个目录里的 jar；`/modreloader scan` 每一行末尾直接给出可粘贴的 `→ /modreloader add <名字>`。自动触发路径与世界内执行均由 harness 验证（`-PverifyAddCommand` 客户端、`-PserverAddCommand` 专用服控制台）。
 - **服务端**：`./gradlew runServer -PautoAdd=<jar>`；夹具见 [experiments/server-fixture](experiments/server-fixture/README.md)：`./build.sh` → `servertest-1.0.0.jar`（命令+tick，应成功）、`./build-payload.sh` → `payloadfix-1.0.0.jar`（payload，应成功，配 `-PverifyPayload` 使用）。
 - 测试目标：`EasyLAN`（嫔级、无 mixin）、`lanserverproperties`（妃级、A1.2）。日志与限制见 [docs/features/a0-hot-add.md](docs/features/a0-hot-add.md) / [a1-mixin-hotadd.md](docs/features/a1-mixin-hotadd.md)。
 
@@ -140,14 +161,15 @@ cd experiments/self-attach-poc && ./build.sh
 
 `/usr/libexec/java_home` 看不到它。要在 Gradle 之外启动 1.21.1，显式用这个路径，或安装系统级 JDK 21 / JBR。
 
-**JBR 21 已安装并接入 `runClient`：**
+**JBR 21 已安装并接入 `runClient` 与 `runServer`：**
 
 ```
 ~/Library/Java/JavaVirtualMachines/jbr-21.jdk/Contents/Home
 JBR-21.0.11+10-1163.125-nomod
 ```
 
-`runClient` 会自动使用 JBR 并加 `-XX:+AllowEnhancedClassRedefinition`；启动日志会打印
+`runClient` 和 `runServer` 都会自动使用 JBR 并加 `-XX:+AllowEnhancedClassRedefinition`（`build.gradle` 里的 `useJbr` helper；
+JBR 不存在时只 warn，不静默降级）；启动日志会打印
 `[ModReloader] JVM JetBrains s.r.o. 21.0.11; enhancedRedefinition=true`。
 Gradle 编译仍用 Temurin 21 toolchain，只有游戏运行用 JBR。
 
@@ -162,11 +184,18 @@ Gradle 编译仍用 Temurin 21 toolchain，只有游戏运行用 JBR。
 7. **没跑过就不要写“已验证”**：静态分析结果不等于真实切换成功；区分“预测”和“验证”。
 8. **不跨界改 Ex Nihilo**：它只是 dogfood / 语料；除非所有者明确要求，否则只读。
 9. **不要夸大 A0**：A0 只支持嫔级（无 mixin、无注册表）；不要在文档/UI 里写成“支持任意模组”。
-10. **不要夸大 A1**：A1.2 只验证了 `lanserverproperties` + JBR + dev client；MixinRuntime 是**可选**依赖（缺它妃级被拦、嫔级照常，但构建仍需 `libs/` 的 jar）；失败回滚只覆盖 post-ModList/post-pack，构造后事件监听器和存档回读未解决；不等于通用妃级支持。
+10. **不要夸大 A1**：A1.2 只验证了 `lanserverproperties` + JBR + dev client；MixinRuntime 是**可选**依赖、**只通过反射调用**（缺它妃级被拦、嫔级照常；构建不需要 `libs/`）；失败回滚只覆盖 post-ModList/post-pack，构造后事件监听器和存档回读未解决；不等于通用妃级支持。
 11. **不要夸大 GUI/监听**：只验证了 EasyLAN、坏 jar、Ex Nihilo 贵妃级三个场景；`scan`/`gui` 命令、失败重试、忽略记录跨重启未自动验证（`add` 命令、世界内 toast、主菜单入口与忽略恢复已有 harness）；**皇后级只提示重启**；贵妃级走实验性 add-only 热加（UI 有警告，仅验证过 fixture）。
-12. **客户端启动期注册/快照：主要项已重放/补齐，还剩两项**：已重放 `FMLClientSetupEvent` / `RegisterKeyMappingsEvent` / `RegisterMenuScreensEvent` / `EntityRenderersEvent.RegisterRenderers`（并重建两个 dispatcher）/ `RegisterColorHandlersEvent.Block/.Item` / `RegisterClientExtensionsEvent`，`RegisterClientReloadListenersEvent`（临时 manager + 按类名去重），并补齐 `ItemRenderer` 的 item→model 快照（否则物品图标是紫黑方块）；**仍未重放** `RegisterLayerDefinitions`（模型层启动时已 bake）与 `ColorResolvers`。另外热加 mod 的 **config 不会自动加载**（`registerConfig` 只登记），已由 `hotadd/ModConfigs` 按容器调 `ConfigTracker.openConfig` 补上；`SERVER` config 仍跳过。别写「客户端完全正常」，见 [status.md](docs/status.md) 已知问题 21/22。
-13. **不要夸热火加覆盖面**：兼容性矩阵首轮（9 个真实模组）只有 1 个干净通过；6 个带 access transformer 的被变更前拒绝（AT 是硬边界），1 个 JiJ 内嵌依赖失败，1 个缺依赖。tier 只描述内容形状，不描述 AT/JiJ/依赖；别写“支持任意模组”，见 [hotadd-compatibility-matrix.md](docs/features/hotadd-compatibility-matrix.md)。
-14. **不要夸大 datapack**：只覆盖 `RegistryLayer.RELOADABLE`（配方/战利品/标签/附魔/伤害类型/纹饰/物品修饰器 + mod 自注册的 server reload listener）；**世界生成注册表**（维度/生物群系/结构）仍需重启或新世界。只能 add、不能删/改；提交后不可回滚；存档会绑定 `mod/<modId>` 这个 data pack。只验证过众星捧月 1.5.0 与 t4fixture，不要写成"支持任意 datapack"。
+12. **多人（专用服 + 独立客户端）**：连接后热加同一批 jar 时，id 由服务端快照同步给客户端（见 [t4-registry-hotadd.md](docs/features/t4-registry-hotadd.md) §9）；
+    两端条目集合不一致时客户端**拒绝应用**并提示，不会部分应用、不踢人。**客户端不装 jar 的模式仍不行**（registry 的值必须本地存在）。
+    `runServer` 与 `runClient` 都走 JBR + `-XX:+AllowEnhancedClassRedefinition`，专用服妃级热加已验证（2026-11-16，status 已知问题 22）。
+13. **客户端启动期注册/快照：仍然是一张手写清单（结构性）**：已重放 `FMLClientSetupEvent` / `RegisterKeyMappingsEvent` / `RegisterMenuScreensEvent` / `EntityRenderersEvent.RegisterRenderers`（并重建两个 dispatcher）/ `RegisterColorHandlersEvent.Block/.Item` / `RegisterClientExtensionsEvent`，`RegisterClientReloadListenersEvent`（临时 manager + 按类名去重），并补齐 `ItemRenderer` 的 item→model 快照（否则物品图标是紫黑方块）；**仍未重放** `RegisterLayerDefinitions`（模型层启动时已 bake）与 `ColorResolvers`。另外热加 mod 的 **config 不会自动加载**（`registerConfig` 只登记），已由 `hotadd/ModConfigs` 按容器调 `ConfigTracker.openConfig` 补上；`SERVER` config 仍跳过。别写「客户端完全正常」：NeoForge 1.21.1 的 mod bus 上一批一次性事件，我们只重放其中十几个，2026-11-16 又漏了 `RegisterClientTooltipComponentFactoriesEvent`（AppleSkin 悬停崩）；现在是**注册审计**（`-PverifyRegAudit`）：`VALIDATE` 打印每个 jar 的 covered/recurring/datagen/crash/behavior/silent 清单，四个「一用就崩」的事件变更前拒绝（`FailureKind.CLIENT_REGISTRATION`），其余只 warn——清单仍手写，但漏了哪个可报告；见 [status.md](docs/status.md) 已知问题 21 / 26 与 [client-registration-audit.md](docs/features/client-registration-audit.md)。
+14. **不要夸热火加覆盖面**：兼容性矩阵首轮（9 个真实模组）只有 2 个干净通过（ZeroCore2、jecharacters）；6 个带 access transformer 的被变更前拒绝（**AT 是硬边界**），1 个缺依赖。**JiJ 内嵌库已补**（嵌套 jar 进 game layer 的 module，jecharacters 因此转 PASS），但嵌套 **mod**（带 `mods.toml`）只有 module 没有 container、coremod 不运行——「能热加」不等于「功能完整」。tier 只描述内容形状，不描述 AT/JiJ/依赖；别写“支持任意模组”，见 [hotadd-compatibility-matrix.md](docs/features/hotadd-compatibility-matrix.md)。
+15. **热加必须告知在线客户端**：服务端热加后要给所有在线玩家发 `server_mod_notice`（mod 名/版本/jar/sha256/tier/是否注册表内容），
+    并**在注册表提交与 datapack 重载之前**发——实测反例：放在末尾时通知到达的是一条已经被 `update_recipes` 弄死的连接。
+    客户端没装该 jar 时会被踢、且装回之前**连不回来**（jar/资源/channel 都无法同步，只有 id 映射能同步），文案必须说清这一点。
+    见 [t4-registry-hotadd.md](docs/features/t4-registry-hotadd.md) §10、[ADR-0011](docs/decisions/0011-hotadd-must-inform-clients.md)。
+16. **不要夸大 datapack**：只覆盖 `RegistryLayer.RELOADABLE`（配方/战利品/标签/附魔/伤害类型/纹饰/物品修饰器 + mod 自注册的 server reload listener）；**世界生成注册表**（维度/生物群系/结构）仍需重启或新世界。只能 add、不能删/改；提交后不可回滚；存档会绑定 `mod/<modId>` 这个 data pack。只验证过众星捧月 1.5.0 与 t4fixture，不要写成"支持任意 datapack"。
 
 ## 4. 目录
 
@@ -177,7 +206,7 @@ docs/
   design.md                # 架构、分层、不变量
   glossary.md              # 术语（嫔/妃/贵妃/皇后、软重启、sidecar、registry…）
   use-cases.md             # 真实场景：什么情况下无需重启最有价值
-  features/                # 功能规格与验证：a0-hot-add.md / a1-mixin-hotadd.md / gui-mod-watcher.md / server-hotadd.md / t4-registry-hotadd.md / t4-datapack-hotadd.md / dogfood-gameplay.md / hotadd-compatibility-matrix.md / lan-doctor.md
+  features/                # 功能规格与验证：a0-hot-add.md / a1-mixin-hotadd.md / gui-mod-watcher.md / server-hotadd.md / t4-registry-hotadd.md / t4-datapack-hotadd.md / dogfood-gameplay.md / hotadd-compatibility-matrix.md / client-registration-audit.md / lan-doctor.md
   decisions/               # ADR：为什么这样定
   research-hot-mod-reload.md  # 2026-11 调研报告；历史背景，结论以 status 为准
   research-t4-registry.md    # 贵妃级注册表适配调研（机制/边界/实验计划）

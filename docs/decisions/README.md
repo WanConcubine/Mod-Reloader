@@ -14,6 +14,9 @@
 | [0007](0007-dual-side-server-hotadd.md) | 双端热加：client 与 dedicated server 都要支持 | Accepted |
 | [0008](0008-t4-registry-adaptation-poc.md) | T4 先做「注册表适配」评估；产品仍走 managed relaunch | Accepted（datapack 条款被 0009 取代） |
 | [0009](0009-datapack-hotadd.md) | datapack 热加载走「注入 pack + 原版 `/reload`」 | Proposed（已实现并验证） |
+| [0010](0010-post-connect-registry-sync.md) | 连接后的注册表 id 同步走「运行时自有 play 通道 + 复用 `applySnapshot`」 | Proposed（已实现并跨进程验证） |
+| [0011](0011-hotadd-must-inform-clients.md) | 热加必须主动告知在线客户端（id/版本/jar/hash + 该怎么办） | Proposed（已实现并跨进程验证） |
+| [0012](0012-registration-audit-severity.md) | 注册审计分级：崩溃类变更前拒绝，行为类只 warn | Proposed（已实现并用 16 个真实 jar 校准） |
 
 ## 模板
 

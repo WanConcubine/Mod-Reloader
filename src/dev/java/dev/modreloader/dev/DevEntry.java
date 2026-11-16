@@ -88,6 +88,27 @@ public final class DevEntry {
         if (!verifyCompat.isEmpty()) {
             CompatCheck.start(verifyCompat);
         }
+        String verifyAtSpike = System.getProperty("modreloader.verifyAtSpike", "").trim();
+        if (!verifyAtSpike.isEmpty()) {
+            AtSpikeCheck.start(verifyAtSpike);
+        }
+        String verifyRegAudit = System.getProperty("modreloader.verifyRegAudit", "").trim();
+        if (!verifyRegAudit.isEmpty()) {
+            RegAuditCheck.start(verifyRegAudit);
+        }
+        String verifyMixinLayout = System.getProperty("modreloader.verifyMixinLayout", "").trim();
+        if (!verifyMixinLayout.isEmpty()) {
+            MixinLayoutCheck.start(verifyMixinLayout,
+                    System.getProperty("modreloader.verifyMixinLayoutTarget",
+                            "net.minecraft.client.gui.components.EditBox"));
+        }
+        if (Boolean.getBoolean("modreloader.verifyMpNotice")) {
+            MpNoticeClientCheck.start();
+        }
+        String verifyMpRegistry = System.getProperty("modreloader.verifyMpRegistry", "").trim();
+        if (!verifyMpRegistry.isEmpty()) {
+            MpRegistryCheck.start(verifyMpRegistry);
+        }
         String watchJar = System.getProperty("modreloader.watchJar", "").trim();
         if (Boolean.getBoolean("modreloader.verifyWatch")) {
             if (watchJar.isEmpty()) {

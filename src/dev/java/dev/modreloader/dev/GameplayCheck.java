@@ -20,6 +20,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.CraftingInput;
@@ -650,6 +651,39 @@ public final class GameplayCheck {
             return;
         }
         if (ticks < 40) {
+            return;
+        }
+        // Opening the screen is what asks vanilla to rebuild the tab contents, so the
+        // assertion has to run afterwards. The regression it guards: a mod hot-added
+        // at the title screen used to leave the tabs unbuilt, because
+        // `tryRebuildTabContents` short-circuits on its cached parameters and a grown
+        // registry is invisible to that comparison - items existed (/give worked,
+        // textures were fine) but no tab listed them.
+        String hotNamespace = System.getProperty("modreloader.verifyGameplayModId",
+                "exnihilosatellitium").trim();
+        int inTabs = 0;
+        List<String> tabNames = new ArrayList<>();
+        List<String> emptyTabs = new ArrayList<>();
+        for (CreativeModeTab tab : CreativeModeTabs.allTabs()) {
+            tabNames.add(tab.getDisplayName().getString());
+            int before = inTabs;
+            for (var stack : tab.getDisplayItems()) {
+                var key = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
+                if (key != null && key.getNamespace().equals(hotNamespace)) {
+                    inTabs++;
+                }
+            }
+            if (inTabs == before) {
+                emptyTabs.add(tab.getDisplayName().getString());
+            }
+        }
+        ModReloader.LOGGER.info(
+                "[GameplayCheck] creative tabs list {} tab(s): {}; items from '{}' visible: {}",
+                tabNames.size(), tabNames, hotNamespace, inTabs);
+        if (inTabs == 0) {
+            fail("no item from '" + hotNamespace + "' is listed in any creative tab after the screen "
+                    + "opened; the tabs were not rebuilt after the hot-add (tabs without a match: "
+                    + emptyTabs + ")");
             return;
         }
         ModReloader.LOGGER.info(

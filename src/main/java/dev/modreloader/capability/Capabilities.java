@@ -3,6 +3,7 @@ package dev.modreloader.capability;
 import cpw.mods.cl.ModuleClassLoader;
 import dev.modreloader.ModReloader;
 import dev.modreloader.Platform;
+import dev.modreloader.hotadd.MixinRuntimeApi;
 import dev.modreloader.hotadd.UnsafeAccess;
 import dev.modreloader.inspect.MixinRuntimeSupport;
 import net.minecraft.core.MappedRegistry;
@@ -51,6 +52,7 @@ public final class Capabilities {
         NETWORK_ADAPTATION("network payload adaptation", false),
         MIXIN_HOTADD("mixin hot-add", false),
         REGISTRY_ADAPTATION("registry content hot-add (guifei)", false),
+        REGISTRY_SYNC("registry snapshot sync to connected clients", false),
         DATAPACK_RELOAD("data pack reload (guifei)", false),
         RESOURCE_PACKS("resource pack injection", false);
 
@@ -97,6 +99,7 @@ public final class Capabilities {
         RESULTS.put(Capability.NETWORK_ADAPTATION, checkNetworkAdaptation());
         RESULTS.put(Capability.MIXIN_HOTADD, checkMixinHotAdd());
         RESULTS.put(Capability.REGISTRY_ADAPTATION, checkRegistryAdaptation());
+        RESULTS.put(Capability.REGISTRY_SYNC, checkRegistrySync());
         RESULTS.put(Capability.DATAPACK_RELOAD, checkDatapackReload());
         RESULTS.put(Capability.RESOURCE_PACKS, checkResourcePacks());
 
@@ -205,19 +208,9 @@ public final class Capabilities {
             method(environment, "getActiveTransformer", new Class<?>[0], missing);
             statics(environment, List.of("compatibility"), missing);
 
-            Class<?> processorUtils = Class.forName(
-                    "cn.ksmcbrigade.mr.utils.mixin.MixinProcessorUtils", false,
-                    Capabilities.class.getClassLoader());
-            for (String name : List.of("getProcessor", "getConfigs", "getPendingConfigs",
-                    "setConfigs", "setPendingConfigs")) {
-                method(processorUtils, name, null, missing);
-            }
-            Class<?> configUtils = Class.forName(
-                    "cn.ksmcbrigade.mr.utils.mixin.MixinConfigUtils", false,
-                    Capabilities.class.getClassLoader());
-            for (String name : List.of("prepare", "onSelect")) {
-                method(configUtils, name, null, missing);
-            }
+            // The exact MixinRuntime surface is resolved by the facade that calls
+            // it, so there is one list to keep in sync instead of two.
+            missing.addAll(MixinRuntimeApi.probe());
         } catch (Throwable t) {
             missing.add("mixin classes: " + t.getClass().getSimpleName());
         }
@@ -261,6 +254,29 @@ public final class Capabilities {
      * here would only show up <em>after</em> the registry commit, which is
      * already unrecoverable, so it is worth knowing up front.
      */
+    /**
+     * Anchors the play-phase registry sync needs. The client half reuses NeoForge's
+     * own snapshot application (the login-phase code path), so drift here would
+     * silently desync ids instead of failing loudly.
+     */
+    private static Result checkRegistrySync() {
+        List<String> missing = new ArrayList<>();
+        try {
+            statics(net.neoforged.neoforge.registries.RegistrySnapshot.class,
+                    List.of("STREAM_CODEC"), missing);
+            method(net.neoforged.neoforge.registries.RegistryManager.class, "takeSnapshot",
+                    new Class<?>[]{net.neoforged.neoforge.registries.RegistryManager.SnapshotType.class},
+                    missing);
+            method(net.neoforged.neoforge.registries.RegistryManager.class, "applySnapshot",
+                    new Class<?>[]{java.util.Map.class, boolean.class}, missing);
+            method(net.neoforged.neoforge.registries.RegistryManager.class, "revertToFrozen",
+                    new Class<?>[0], missing);
+        } catch (Throwable t) {
+            missing.add("registry sync anchors: " + t.getClass().getSimpleName());
+        }
+        return result(Capability.REGISTRY_SYNC, missing);
+    }
+
     private static Result checkDatapackReload() {
         List<String> missing = new ArrayList<>();
         try {

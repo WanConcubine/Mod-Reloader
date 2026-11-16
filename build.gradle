@@ -46,8 +46,9 @@ repositories {
 }
 
 dependencies {
-    // A1.2 dev dependency; the runtime jar is placed in run/mods for dev.
-    compileOnly files('libs/MixinRuntime-1.0.2-mc1.21.jar')
+    // MixinRuntime (modId `mr`) is optional and reached only through reflection
+    // (hotadd/MixinRuntimeApi), so nothing here compiles against it: the jar is
+    // placed in run/mods for dev and is not needed to build.
 
     // Plain JUnit tests, no game: language-file parity and failure-key coverage.
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
@@ -181,6 +182,47 @@ neoForge {
                 // at a time, and log a verdict per jar (comma-separated, deps first).
                 systemProperty 'modreloader.verifyCompat', verifyCompat
             }
+            if (providers.gradleProperty('verifyMixinLayout').orNull) {
+                // Boundary check: an interface mixin against an already-loaded class
+                // must be refused before anything is mutated.
+                systemProperty 'modreloader.verifyMixinLayout',
+                        providers.gradleProperty('verifyMixinLayout').get()
+            }
+            if (providers.gradleProperty('verifyMixinLayoutTarget').orNull) {
+                systemProperty 'modreloader.verifyMixinLayoutTarget',
+                        providers.gradleProperty('verifyMixinLayoutTarget').get()
+            }
+            if (providers.gradleProperty('verifyMpNotice').orNull) {
+                // Client half: connect and assert the server's hot-add notice arrives
+                // even though this client does not have the mod.
+                systemProperty 'modreloader.verifyMpNotice', 'true'
+            }
+            if (providers.gradleProperty('mpNoticeAddress').orNull) {
+                systemProperty 'modreloader.mpNoticeAddress',
+                        providers.gradleProperty('mpNoticeAddress').get()
+            }
+            if (providers.gradleProperty('verifyMpRegistry').orNull) {
+                // Multiplayer registry sync: connect, hot-add on the client, then
+                // compare every id against the server's dump.
+                systemProperty 'modreloader.verifyMpRegistry',
+                        providers.gradleProperty('verifyMpRegistry').get()
+            }
+            if (providers.gradleProperty('mpRegistryAddress').orNull) {
+                systemProperty 'modreloader.mpRegistryAddress',
+                        providers.gradleProperty('mpRegistryAddress').get()
+            }
+            if (providers.gradleProperty('verifyRegAudit').orNull) {
+                // Read-only registration audit: grade the mod-bus events each jar
+                // registers against, and prove a known-crashing one is refused.
+                systemProperty 'modreloader.verifyRegAudit',
+                        providers.gradleProperty('verifyRegAudit').get()
+            }
+            if (providers.gradleProperty('verifyAtSpike').orNull) {
+                // Read-only measurement: how many access-transformer target classes
+                // are still unloaded at the title screen and in a world.
+                systemProperty 'modreloader.verifyAtSpike',
+                        providers.gradleProperty('verifyAtSpike').get()
+            }
             if (providers.gradleProperty('verifyCreative').orNull) {
                 // After the gameplay checks: switch to creative and render the
                 // creative inventory (regression check for the tab-paging crash).
@@ -220,6 +262,24 @@ neoForge {
             if (t4fixtureSelftestRead) {
                 systemProperty 't4fixture.selftest.read', 'true'
             }
+            if (providers.gradleProperty('mpNoticeServer').orNull) {
+                // Server half of the hot-add notice check: hot-add once a player is
+                // connected, then the unmodified client must still be told about it.
+                systemProperty 'modreloader.mpNoticeServer',
+                        providers.gradleProperty('mpNoticeServer').get()
+            }
+            if (providers.gradleProperty('serverAddCommand').orNull) {
+                // Console-path check: short-name /modreloader add + TAB completion
+                // through the server's own command manager.
+                systemProperty 'modreloader.serverAddCommand',
+                        providers.gradleProperty('serverAddCommand').get()
+            }
+            if (providers.gradleProperty('mpRegistryServer').orNull) {
+                // Server half of the multiplayer registry-sync check: hot-add once a
+                // client says it is ready, then publish the authoritative ids.
+                systemProperty 'modreloader.mpRegistryServer',
+                        providers.gradleProperty('mpRegistryServer').get()
+            }
         }
     }
 
@@ -236,14 +296,23 @@ tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 
-// A1 needs JBR's enhanced class redefinition. If JBR 21 is installed in the
-// standard user JDK location, runClient uses it and enables the flag.
+// A1 needs JBR's enhanced class redefinition (mixin targets that add fields or
+// interfaces cannot be redefined by a stock JVM). Both run tasks use it: the
+// dedicated server has its own fei-tier hot-add path, and without the flag
+// ZeroCore2's `Slot` redefine failed there while the same add succeeded on the
+// client (status known issue 22).
 def jbrJava = file("${System.getProperty('user.home')}/Library/Java/JavaVirtualMachines/jbr-21.jdk/Contents/Home/bin/java")
-tasks.named('runClient', JavaExec).configure {
+
+def useJbr = { JavaExec task ->
     if (jbrJava.exists()) {
-        doFirst {
+        task.doFirst {
             executable = jbrJava.absolutePath
         }
-        jvmArgs '-XX:+AllowEnhancedClassRedefinition'
+        task.jvmArgs '-XX:+AllowEnhancedClassRedefinition'
+    } else {
+        task.logger.warn('JBR 21 not found at {}; {} runs on the toolchain JVM and ' +
+                'fei-tier (mixin) hot-add will fail', jbrJava, task.name)
     }
 }
+tasks.named('runClient', JavaExec).configure { useJbr(it) }
+tasks.named('runServer', JavaExec).configure { useJbr(it) }

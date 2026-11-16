@@ -2,12 +2,16 @@ package dev.modreloader.hotadd;
 
 import dev.modreloader.ModReloader;
 import net.minecraft.network.Connection;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.loading.moddiscovery.ModFile;
 import net.neoforged.fml.loading.moddiscovery.ModFileInfo;
+import net.neoforged.neoforge.registries.RegistrySnapshot;
 import net.neoforged.neoforgespi.language.IModFileInfo;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -48,6 +52,42 @@ public interface PlatformHooks {
      * a dedicated server has nothing to do.
      */
     void afterRegistryContent();
+
+    /**
+     * Players reachable from this side's server. Used for anything that has to be
+     * pushed to already-connected clients (registry snapshots, hot-add notices).
+     *
+     * <p>NeoForge only syncs registries in the login configuration phase, so a
+     * registry change on a running server is invisible to connected players. The
+     * side hook is only asked <em>who</em> to send to: a dedicated server returns
+     * its player list, a client returns the integrated server's non-memory
+     * connections (the host shares {@code BuiltInRegistries} with its own
+     * integrated server, so it must be skipped — the same rule NeoForge applies at
+     * login).
+     */
+    List<ServerPlayer> connectedPlayers();
+
+    /**
+     * A registry snapshot arrived from the server. The client applies it; a
+     * dedicated server has no one to apply it to and logs that it was ignored.
+     */
+    void acceptRegistrySnapshot(Map<ResourceLocation, RegistrySnapshot> snapshots);
+
+    /**
+     * Asks the server for its authoritative id mapping. Client only, and only when
+     * the client is <em>not</em> the server (single-player shares the registries,
+     * so the local mapping is already authoritative there).
+     */
+    void requestRegistrySnapshot();
+
+    /**
+     * The server hot-added mods: turn the notice into something the player can act
+     * on (chat + toast), and answer with the ids this client already has.
+     */
+    void acceptServerModNotice(List<ServerModNoticePayload.Notice> notices);
+
+    /** A client answered a notice; the server logs who still misses what. */
+    void acceptModNoticeAck(String playerName, List<String> knownModIds);
 
     /**
      * Applies the hot-added mod's server data pack (recipes, loot tables, tags)

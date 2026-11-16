@@ -43,6 +43,8 @@ public final class FailureKeys {
             case RESOURCE_PACK -> "resource_pack";
             case DATAPACK -> "datapack";
             case ACCESS_TRANSFORMER -> "access_transformer";
+            case CLIENT_REGISTRATION -> "client_registration";
+            case JAR_IN_JAR -> "jar_in_jar";
             case ROLLBACK_PARTIAL -> "rollback_partial";
             case NONE, UNKNOWN -> "unknown";
         };

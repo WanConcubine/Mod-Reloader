@@ -3,6 +3,7 @@ package dev.modreloader.hotadd;
 import cpw.mods.cl.JarModuleFinder;
 import cpw.mods.cl.ModuleClassLoader;
 import cpw.mods.jarhandling.SecureJar;
+import dev.modreloader.ModReloader;
 import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.fml.loading.moddiscovery.ModFile;
 import net.neoforged.fml.loading.moddiscovery.ModFileInfo;
@@ -15,8 +16,10 @@ import java.lang.module.ModuleDescriptor;
 import java.lang.module.ModuleReference;
 import java.lang.module.ResolvedModule;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -103,6 +106,17 @@ public final class ModuleInjector {
     }
 
     public static Set<String> addToGameLayer(java.util.Collection<ModFileInfo> newFiles) throws Throwable {
+        return addToGameLayer(newFiles, java.util.List.of());
+    }
+
+    /**
+     * @param newFiles   mod files that carry a mods.toml (they also get a ModContainer)
+     * @param extraJars  jars without a mod definition — a mod's {@code META-INF/jarjar}
+     *                   libraries. They only need to be resolvable as modules; see
+     *                   {@link JarInJar}.
+     */
+    public static Set<String> addToGameLayer(java.util.Collection<ModFileInfo> newFiles,
+                                             java.util.Collection<SecureJar> extraJars) throws Throwable {
         var gameLayer = FMLLoader.getGameLayer();
         ClassLoader gameLoader = gameLayer.findLoader("neoforge");
         if (!(gameLoader instanceof ModuleClassLoader moduleClassLoader)) {
@@ -159,39 +173,65 @@ public final class ModuleInjector {
         Set<Module> added = new HashSet<>();
         Set<String> addedNames = new HashSet<>();
 
+        record Source(SecureJar jar, ModuleReference reference, boolean extra) {
+        }
+        List<Source> sources = new ArrayList<>();
         for (ModFileInfo modFileInfo : newFiles) {
             ModFile modFile = (ModFile) modFileInfo.getFile();
             SecureJar secureJar = modFile.getSecureJar();
             for (ModuleReference reference : JarModuleFinder.of(secureJar).findAll()) {
-                String moduleName = reference.descriptor().name();
-                Module module = DEFINED_MODULES.get(moduleName);
-                java.nio.file.Path primaryPath = secureJar.getPrimaryPath();
-                if (module == null) {
-                    module = (Module) moduleCtor.invoke(gameLayer, moduleClassLoader,
-                            reference.descriptor(), reference.location().orElseThrow());
-                    DEFINED_MODULES.put(moduleName, module);
-                    DEFINED_PATHS.put(moduleName, primaryPath);
-                } else {
-                    java.nio.file.Path previous = DEFINED_PATHS.get(moduleName);
-                    if (previous != null && !previous.equals(primaryPath)) {
-                        throw new IllegalStateException("Module name " + moduleName
-                                + " was already used by " + previous
-                                + "; restart is required to load " + primaryPath);
-                    }
+                sources.add(new Source(secureJar, reference, false));
+            }
+        }
+        for (SecureJar extraJar : extraJars) {
+            for (ModuleReference reference : JarModuleFinder.of(extraJar).findAll()) {
+                sources.add(new Source(extraJar, reference, true));
+            }
+        }
+
+        for (Source source : sources) {
+            SecureJar secureJar = source.jar();
+            ModuleReference reference = source.reference();
+            String moduleName = reference.descriptor().name();
+            Module module = DEFINED_MODULES.get(moduleName);
+            java.nio.file.Path primaryPath = secureJar.getPrimaryPath();
+            if (module == null) {
+                module = (Module) moduleCtor.invoke(gameLayer, moduleClassLoader,
+                        reference.descriptor(), reference.location().orElseThrow());
+                DEFINED_MODULES.put(moduleName, module);
+                DEFINED_PATHS.put(moduleName, primaryPath);
+            } else {
+                java.nio.file.Path previous = DEFINED_PATHS.get(moduleName);
+                if (previous != null && !previous.equals(primaryPath)) {
+                    throw new IllegalStateException("Module name " + moduleName
+                            + " was already used by " + previous
+                            + "; restart is required to load " + primaryPath);
                 }
-                ResolvedModule resolved = (ResolvedModule) resolvedCtor.invoke(configuration, reference);
+            }
+            ResolvedModule resolved = (ResolvedModule) resolvedCtor.invoke(configuration, reference);
 
-                modules.add(module);
-                added.add(module);
-                addedNames.add(reference.descriptor().name());
+            modules.add(module);
+            added.add(module);
+            addedNames.add(reference.descriptor().name());
 
-                nameToModule.put(reference.descriptor().name(), module);
-                nameToModule.put(secureJar.name(), module);
-                configurationModules.add(resolved);
-                configurationNameToModule.put(reference.descriptor().name(), resolved);
-                configurationNameToModule.put(secureJar.name(), resolved);
-                resolvedRoots.put(reference.descriptor().name(), reference);
-                for (String pkg : reference.descriptor().packages()) {
+            nameToModule.put(reference.descriptor().name(), module);
+            nameToModule.put(secureJar.name(), module);
+            configurationModules.add(resolved);
+            configurationNameToModule.put(reference.descriptor().name(), resolved);
+            configurationNameToModule.put(secureJar.name(), resolved);
+            resolvedRoots.put(reference.descriptor().name(), reference);
+            for (String pkg : reference.descriptor().packages()) {
+                if (source.extra()) {
+                    // A bundled library must never shadow the mod's own packages:
+                    // the mod jar is the primary owner of a package it also ships.
+                    ResolvedModule previous = packageLookup.putIfAbsent(pkg, resolved);
+                    if (previous != null && !previous.name().equals(resolved.name())) {
+                        ModReloader.LOGGER.warn(
+                                "[ModReloader] nested jar {} claims package {} which already belongs "
+                                        + "to {}; keeping the existing owner",
+                                secureJar.name(), pkg, previous.name());
+                    }
+                } else {
                     packageLookup.put(pkg, resolved);
                 }
             }

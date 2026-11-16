@@ -1,9 +1,5 @@
 package dev.modreloader.hotadd;
 
-import cn.ksmcbrigade.mr.utils.InstUtils;
-import cn.ksmcbrigade.mr.utils.mixin.MixinConfigUtils;
-import cn.ksmcbrigade.mr.utils.mixin.MixinProcessorUtils;
-import cn.ksmcbrigade.mr.utils.mixin.MixinTransformerUtils;
 import dev.modreloader.ModReloader;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.loading.moddiscovery.ModFileParser;
@@ -85,10 +81,9 @@ public final class MixinSupport {
         List<String> errors = new ArrayList<>();
         Set<String> targets = new LinkedHashSet<>();
 
-        try {
-            ensureMixinRuntimeReadable();
-        } catch (Throwable t) {
-            errors.add("cannot access MixinRuntime: " + t);
+        List<String> apiProblems = MixinRuntimeApi.probe();
+        if (!apiProblems.isEmpty()) {
+            errors.add("MixinRuntime (mr) is unusable: " + apiProblems);
             return new Report(configNames, registered, skipped, List.of(), List.of(), List.of(),
                     List.of(), errors);
         }
@@ -133,14 +128,14 @@ public final class MixinSupport {
         if (errors.isEmpty() && !registered.isEmpty()) {
             Map<String, Class<?>> loadedNow = loadedClasses();
             Map<String, byte[]> originals = captureOriginals(targets, loadedNow);
-            IMixinTransformer transformer = MixinTransformerUtils.getTransformer();
+            IMixinTransformer transformer = MixinRuntimeApi.getTransformer();
             for (LoadedConfig loaded : loadedConfigs) {
                 if (!registered.contains(loaded.name())) {
                     continue;
                 }
                 try {
-                    MixinProcessorUtils.addIntoProcessor(
-                            MixinProcessorUtils.getProcessor(transformer), loaded.config());
+                    MixinRuntimeApi.addIntoProcessor(
+                            MixinRuntimeApi.getProcessor(transformer), loaded.config());
                     raiseCompatibilityLevel(loaded.config(), loaded.name());
                 } catch (Throwable t) {
                     errors.add("activate " + loaded.name() + ": " + t.getClass().getSimpleName()
@@ -161,9 +156,9 @@ public final class MixinSupport {
 
     public static boolean isConfigRegistered(String configName) {
         try {
-            IMixinTransformer transformer = MixinTransformerUtils.getTransformer();
-            Object processor = MixinProcessorUtils.getProcessor(transformer);
-            List<Object> active = MixinProcessorUtils.getConfigs(processor);
+            IMixinTransformer transformer = MixinRuntimeApi.getTransformer();
+            Object processor = MixinRuntimeApi.getProcessor(transformer);
+            List<Object> active = MixinRuntimeApi.getConfigs(processor);
             if (active != null) {
                 for (Object candidate : active) {
                     if (candidate instanceof IMixinConfig config && configName.equals(config.getName())) {
@@ -171,7 +166,7 @@ public final class MixinSupport {
                     }
                 }
             }
-            List<Object> pending = MixinProcessorUtils.getPendingConfigs(processor);
+            List<Object> pending = MixinRuntimeApi.getPendingConfigs(processor);
             if (pending != null) {
                 for (Object candidate : pending) {
                     if (candidate instanceof IMixinConfig config && configName.equals(config.getName())) {
@@ -221,7 +216,7 @@ public final class MixinSupport {
         if (!config.hasDecoration(FabricUtil.KEY_MOD_ID)) {
             config.decorate(FabricUtil.KEY_MOD_ID, modId);
         }
-        MixinConfigUtils.onSelect(config);
+        MixinRuntimeApi.onSelect(config);
         return new LoadedConfig(configName, config, false);
     }
 
@@ -232,8 +227,8 @@ public final class MixinSupport {
             ModReloader.LOGGER.warn("[ModReloader] cannot reset MixinConfig.prepared for {}", configName, t);
         }
 
-        IMixinTransformer transformer = MixinTransformerUtils.getTransformer();
-        MixinConfigUtils.prepare(config, transformer);
+        IMixinTransformer transformer = MixinRuntimeApi.getTransformer();
+        MixinRuntimeApi.prepare(config, transformer);
         postInitialise(config, transformer);
         raiseCompatibilityLevel(config, configName);
     }
@@ -302,13 +297,75 @@ public final class MixinSupport {
             return new Applied(redefined, eager, deferred);
         }
 
+        // Pass 1: transform the already-loaded targets and refuse the whole batch
+        // if any of them would change its superclass/interface list.
+        //
+        // JBR's enhanced redefinition can add fields and methods, but it cannot
+        // change a loaded class's superclass or interfaces - `redefineClasses`
+        // answers with `attempted to change superclass or interfaces`. That is
+        // exactly what an accessor/interface mixin does (e.g. Searchables'
+        // `AccessEditBox`, measured 2026-11-16), so applying it would fail after
+        // the mixin configs were already activated. Detect it here, while nothing
+        // has been mutated, and report it as its own failure instead of a
+        // mysterious redefine error.
+        Map<String, byte[]> mixedBytes = new HashMap<>();
+        for (String target : targets) {
+            String dotted = target.replace('/', '.');
+            Class<?> type = loaded.get(dotted);
+            if (type == null) {
+                continue;
+            }
+            byte[] original = originals.get(dotted);
+            if (original == null) {
+                errors.add("cannot read the original bytes of " + dotted
+                        + "; refusing rather than redefining blind (restart to load this mod)");
+                continue;
+            }
+            byte[] mixed;
+            try {
+                mixed = transformBytes(original, dotted);
+            } catch (Throwable t) {
+                errors.add("transform " + dotted + ": " + t.getClass().getSimpleName() + ": "
+                        + t.getMessage());
+                continue;
+            }
+            if (mixed == null) {
+                errors.add("mixin transform returned null: " + dotted);
+                continue;
+            }
+            String layout = layoutChange(original, mixed);
+            if (layout != null) {
+                if (!dev.modreloader.inspect.JbrSupport.available()) {
+                    // Measured: JBR's enhanced redefinition does accept an added
+                    // interface (LSP redefines AbstractWidget with one), so this is
+                    // not a layout rule - it is the plain "no enhanced redefinition"
+                    // case, which cannot be undone once the config is active.
+                    errors.add("layout: " + dotted + " " + layout
+                            + " (target is already loaded and this JVM cannot do enhanced "
+                            + "redefinition; " + dev.modreloader.inspect.JbrSupport.describe()
+                            + " - restart the game to load this mod)");
+                    continue;
+                }
+                ModReloader.LOGGER.warn(
+                        "[ModReloader] mixins change the layout of the already-loaded {}: {}; "
+                                + "attempting it because enhanced redefinition is available",
+                        dotted, layout);
+            }
+            mixedBytes.put(dotted, mixed);
+        }
+        if (!errors.isEmpty()) {
+            // Nothing was redefined: the caller rolls the mixin configs back and the
+            // client keeps working.
+            return new Applied(redefined, eager, deferred);
+        }
+
         for (String target : targets) {
             String dotted = target.replace('/', '.');
             Class<?> type = loaded.get(dotted);
             if (type != null) {
                 rollback.add("restore class " + dotted,
                         () -> redefineBack(instrumentation, type, originals.get(dotted), dotted));
-                redefine(instrumentation, type, dotted, redefined, errors);
+                redefine(instrumentation, type, mixedBytes.get(dotted), dotted, redefined, errors);
                 continue;
             }
             // Not loaded before registration. Load it now (without initializing)
@@ -329,18 +386,70 @@ public final class MixinSupport {
         return new Applied(List.copyOf(redefined), List.copyOf(eager), List.copyOf(deferred));
     }
 
-    private static void redefine(Instrumentation instrumentation, Class<?> type, String dotted,
-                                 List<String> redefined, List<String> errors) {
+    /**
+     * Applies the active mixin configs to class bytes <em>without</em> touching the
+     * live class.
+     *
+     * <p>This is Mixin's own byte-level entry point. MixinRuntime's
+     * {@code transform(Class)} must not be used here: it retransforms the class to
+     * read it (which applies prepared configs as a side effect) and then redefines
+     * it, so a refused layout change would still land on the class.
+     */
+    private static byte[] transformBytes(byte[] original, String dotted) {
+        IMixinTransformer transformer = MixinRuntimeApi.getTransformer();
+        return transformer.transformClassBytes(dotted, dotted, original);
+    }
+
+    /**
+     * @return {@code null} when the mixed class keeps its superclass and interfaces,
+     *         otherwise a human-readable description of what changed
+     */
+    private static String layoutChange(byte[] original, byte[] mixed) {
+        if (original == null) {
+            // No bytes captured before activation; cannot compare, so do not block.
+            return null;
+        }
+        try {
+            org.objectweb.asm.ClassReader before = new org.objectweb.asm.ClassReader(original);
+            org.objectweb.asm.ClassReader after = new org.objectweb.asm.ClassReader(mixed);
+            List<String> addedInterfaces = new ArrayList<>(List.of(after.getInterfaces()));
+            addedInterfaces.removeAll(List.of(before.getInterfaces()));
+            List<String> removedInterfaces = new ArrayList<>(List.of(before.getInterfaces()));
+            removedInterfaces.removeAll(List.of(after.getInterfaces()));
+            boolean superChanged = !java.util.Objects.equals(before.getSuperName(), after.getSuperName());
+            if (!superChanged && addedInterfaces.isEmpty() && removedInterfaces.isEmpty()) {
+                return null;
+            }
+            StringBuilder builder = new StringBuilder();
+            if (superChanged) {
+                builder.append("wants superclass ").append(before.getSuperName())
+                        .append(" -> ").append(after.getSuperName());
+            }
+            if (!addedInterfaces.isEmpty()) {
+                if (!builder.isEmpty()) {
+                    builder.append("; ");
+                }
+                builder.append("adds interface(s) ").append(addedInterfaces);
+            }
+            if (!removedInterfaces.isEmpty()) {
+                if (!builder.isEmpty()) {
+                    builder.append("; ");
+                }
+                builder.append("removes interface(s) ").append(removedInterfaces);
+            }
+            return builder.toString();
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private static void redefine(Instrumentation instrumentation, Class<?> type, byte[] mixed,
+                                 String dotted, List<String> redefined, List<String> errors) {
         if (!instrumentation.isModifiableClass(type)) {
             errors.add("target is not modifiable: " + dotted);
             return;
         }
         try {
-            byte[] mixed = MixinTransformerUtils.transform(type);
-            if (mixed == null) {
-                errors.add("mixin transform returned null: " + dotted);
-                return;
-            }
             instrumentation.redefineClasses(new ClassDefinition(type, mixed));
             redefined.add(dotted);
             ModReloader.LOGGER.info("[ModReloader] redefined {} with mixins ({} bytes)",
@@ -375,9 +484,19 @@ public final class MixinSupport {
             String dotted = target.replace('/', '.');
             try {
                 Class<?> type = loaded.get(dotted);
-                byte[] bytes = type != null
-                        ? InstUtils.getClassBytes(instrumentation, type)
-                        : readClassResource(dotted);
+                // Read the class file from the defining loader instead of
+                // retransforming. A retransform runs the whole transformer chain -
+                // Mixin included - so by the time it hands us the "original" bytes it
+                // has already applied the newly prepared configs to the live class.
+                // Measured 2026-11-16: a refused interface mixin still ended up on
+                // `EditBox` while `redefined=[]`, i.e. the capture itself mutated it.
+                byte[] bytes = readClassResource(dotted);
+                if (bytes == null && type != null) {
+                    ModReloader.LOGGER.warn(
+                            "[ModReloader] no class-file resource for {}; falling back to a "
+                                    + "retransform capture (this applies prepared mixins)", dotted);
+                    bytes = ClassBytes.of(instrumentation, type);
+                }
                 if (bytes == null) {
                     ModReloader.LOGGER.warn("[ModReloader] no original bytes for {}; rollback limited",
                             dotted);
@@ -419,19 +538,19 @@ public final class MixinSupport {
                 REMOVED_CONFIGS.put(configName, new RemovedConfig(config, handle, prepared));
             }
 
-            IMixinTransformer transformer = MixinTransformerUtils.getTransformer();
-            Object processor = MixinProcessorUtils.getProcessor(transformer);
-            List<Object> active = MixinProcessorUtils.getConfigs(processor);
+            IMixinTransformer transformer = MixinRuntimeApi.getTransformer();
+            Object processor = MixinRuntimeApi.getProcessor(transformer);
+            List<Object> active = MixinRuntimeApi.getConfigs(processor);
             if (active != null) {
                 active.removeIf(candidate -> candidate instanceof IMixinConfig c
                         && configName.equals(c.getName()));
-                MixinProcessorUtils.setConfigs(processor, active);
+                MixinRuntimeApi.setConfigs(processor, active);
             }
-            List<Object> pending = MixinProcessorUtils.getPendingConfigs(processor);
+            List<Object> pending = MixinRuntimeApi.getPendingConfigs(processor);
             if (pending != null) {
                 pending.removeIf(candidate -> candidate instanceof IMixinConfig c
                         && configName.equals(c.getName()));
-                MixinProcessorUtils.setPendingConfigs(processor, pending);
+                MixinRuntimeApi.setPendingConfigs(processor, pending);
             }
             UnsafeAccess.setBoolean(processor, processor.getClass(), "errorState", false);
 
@@ -469,14 +588,5 @@ public final class MixinSupport {
             ModReloader.LOGGER.warn("[ModReloader] cannot list loaded classes", t);
         }
         return loaded;
-    }
-
-    private static void ensureMixinRuntimeReadable() throws Throwable {
-        Module ours = MixinSupport.class.getModule();
-        Class<?> runtimeMod = Class.forName("cn.ksmcbrigade.mr.MixinRuntimeMod");
-        Module mr = runtimeMod.getModule();
-        if (ours.isNamed() && mr.isNamed() && ours != mr) {
-            JvmAccess.get().redefineModule(ours, Set.of(mr), Map.of(), Map.of(), Set.of(), Map.of());
-        }
     }
 }

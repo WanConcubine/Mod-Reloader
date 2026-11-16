@@ -91,8 +91,13 @@ CreativeModeTabRegistry.sortTabs()
 - 客户端 `ClientPayloadHandler` 收齐后 `RegistryManager.applySnapshot(...)`；有客户端不认识的 key 就**断开连接**。
 - **没有**"连接建立后再同步一次"的路径（payload 是登录协商的一部分）。
 
-**推论**：T4 热加必须在**建连接之前**完成，才能进入登录快照；连接后再热加，客户端拿不到新的
+**推论（当时）**：T4 热加必须在**建连接之前**完成，才能进入登录快照；连接后再热加，客户端拿不到新的
 block/item id 映射（这一点和 payload 的 E2 不同：payload 可以补 `PayloadSetup`，注册表快照没有等价机制）。
+
+> **2026-11-16 更新**：这个推论只对「NeoForge 内置的登录同步」成立。运行时可以自己开一条 play 通道，
+> 把 `RegistryManager.takeSnapshot(SYNC_TO_CLIENT)` 发给在线客户端，客户端用同一个
+> `RegistryManager.applySnapshot`（登录期那段代码）应用它——连接后的 id 同步已经实现并跨进程验证，
+> 见 [features/t4-registry-hotadd.md](features/t4-registry-hotadd.md) §9。前提仍是两端都有同一批模组。
 
 ### 1.5 创造栏与资源
 

@@ -84,7 +84,9 @@ mods/*.jar
 
 ```
 [ModReloader] → 读 jar / identifyMods（含 [[mixins]]）
-              → Module 注入 game layer
+              → VALIDATE：AT / 缺依赖 / 注册审计（未重放的启动期事件；已知崩溃四类拒绝）
+              → 抽取 META-INF/jarjar 嵌套 jar（JarInJar）
+              → Module 注入 game layer（mod 的 module + 嵌套库的 module）
               → MixinSupport：addConfiguration → onSelect → prepare → postInitialise
               → 已加载 target：transform + JBR redefine
               → 未加载 target：首载织入（Class.forName(..., false)）
@@ -92,7 +94,7 @@ mods/*.jar
               → 资源包选中 + reloadResourcePacks()
 ```
 
-失败回滚：`Rollback` LIFO undo；module / ModList / mixin config / target 原始字节 / 资源包各自注册 undo。post-ModList 与 post-pack 强制失败已验证；构造后的 `@Mod` 构造器/事件监听器不能注销，JVM 不能 undefine module（Module 对象缓存供重试）。
+失败回滚：`Rollback` LIFO undo；module / ModList / mixin config / target 原始字节 / 资源包各自注册 undo。post-ModList 与 post-pack 强制失败已验证；构造后的 `@Mod` 构造器/事件监听器不能注销，JVM 不能 undefine module（Module 对象缓存供重试，所以嵌套 jar 抽到按内容哈希命名的稳定路径，重试才能复用同一个 module）。
 
 限制：只验证了 `lanserverproperties`（1 个妃级模组）；需要 JBR + MixinRuntime（第三方前置、`mr` 为 optional）；构造后 listener 回滚、存档回读、依赖校验、注册表内容未做。详见 [features/a1-mixin-hotadd.md](features/a1-mixin-hotadd.md)。
 
@@ -104,6 +106,7 @@ mods/*.jar
               → constructMod + 注册（DeferredRegister 挂监听）
               → RegistryStage.commit  （按注册表重放 RegisterEvent → 清 BlockState id → freeze）
               → 客户端：资源包 + 创造栏重建
+              → RegistrySync.broadcastAfterCommit（推 id 快照给已连接客户端；客户端 commit 后反向拉）
               → DatapackStage.apply   （注入 pack → MinecraftServer.reloadResources）
               → 广播 recipe/tag 给已连接玩家
 ```
@@ -112,6 +115,9 @@ mods/*.jar
 - **端无关**：`PlatformHooks.reloadDataPacks` 由两端各自取服务器（集成 / 专用）；不在服务器线程时投递过去再等。
 - **幂等**：pack id = `mod/<modId>`；已有数据（标题屏热加 + 世界加载已发现）直接短路。
 - **客户端注册重放**：`ClientRegistrationReplay` 重放 key mappings / menu screens / renderers（并重建两个 dispatcher）/颜色 / 客户端扩展；`DEFAULT_TABS` 先清空再 `sortTabs()`（该方法非幂等）。
+- **id 同步（多人）**：NeoForge 只在登录 configuration 阶段同步注册表，所以运行时自己开一条 play 通道（推 + 拉），
+  客户端先用「两端条目集合一致」把关，再复用 `RegistryManager.applySnapshot`（登录期那段代码，含 blockstate bake）。
+  两端必须热加同一批 jar；客户端不装 jar 的模式不支持。见 [ADR-0010](decisions/0010-post-connect-registry-sync.md)。
 - **单向提交**：注册表无删除接口，datapack 只 add；失败后运行时标记 dirty、只能重启。详见 [features/t4-registry-hotadd.md](features/t4-registry-hotadd.md) / [features/t4-datapack-hotadd.md](features/t4-datapack-hotadd.md)、[ADR-0008](decisions/0008-t4-registry-adaptation-poc.md) / [ADR-0009](decisions/0009-datapack-hotadd.md)。
 
 ### Watcher / GUI（dev 初版）
@@ -145,6 +151,10 @@ mods/*.jar
 ```
 
 - **依赖方向单向**：引擎不认识两端，端把实现注册进来；`ActiveConnections` 只枚举两端共有的服务端玩家连接，客户端连接由 hook 追加。
+- **注册审计（`VALIDATE`）**：`inspect/RegistrationAuditScanner` 只读扫 jar 的类引用，`Class.forName(...,false)` 判 `IModBusEvent`，
+  按 covered / recurring / datagen / crash / behavior / silent / base 分级；`crash` 四类（粒子/配方书/shader/sprite source）在注入 module 之前拒绝
+  （`FailureKind.CLIENT_REGISTRATION`），capabilities 等只 warn。分级规则本身是纯函数（`RegistrationAudit`），可无游戏单测。
+  见 [features/client-registration-audit.md](features/client-registration-audit.md)。
 - **Capabilities 先声明后使用**：启动时只读探测 module / modlist / network / mixin / registry / datapack / resource pack 的反射锚点，缺失时对应阶段 fail-fast（带 `data/` 的 jar 在变更前就检查 datapack 锚点），资源包只 warn + 跳过。
 - **dev 不入发布包**：`src/dev/java` 是独立 source set；主源集只按名字反射 `DevEntry.install()`，所以生产 jar 里没有 harness，也不会被顺手调用。
 

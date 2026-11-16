@@ -194,7 +194,7 @@ java.lang.IllegalStateException: Cannot get config value before config is loaded
 
 ## 4. 未覆盖 / 已知
 
-- **多人**：两端「登录前热加」未验证；连接后热加仍不支持（注册表快照）。
+- **多人**：连接后的注册表 id 同步已实现并跨进程验证（见 [t4-registry-hotadd.md](t4-registry-hotadd.md) §9）；众星捧月本身没有跑过「专用服 + 客户端两端都热加」的组合，dogfood 的多人玩法未验证。
 - **删除 / 更新**：仍是 add-only。
 - 桶/坩埚/堆肥只有手动清单，没有自动断言（需要流体/热量/时间的组合状态）。
 - **客户端注册还剩两项没重放**：`EntityRenderersEvent.RegisterLayerDefinitions`（模型层在启动时已 bake，

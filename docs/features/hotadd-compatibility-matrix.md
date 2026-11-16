@@ -12,13 +12,13 @@
   **不测 datapack**（标题屏加时世界加载会自然带上，见 [t4-datapack-hotadd.md](t4-datapack-hotadd.md) §3.3）。
 - **不按预测改行为**：预测为皇后级的也照样尝试——矩阵就是要检验预测。
 
-## 2. 结果（2026-11-16 09:38–09:41）
+## 2. 结果（2026-11-16 09:38–09:41；jecharacters 行于 09:56 复跑）
 
 | jar | 预测 | AT | mixin | 结果 | 证据 |
 |---|---|---|---|---|---|
 | ZeroCore2 2.4.9 | 贵妃 | 无 | 有（1） | **PASS** | `ok=true`、`isLoaded=true`、items 1333→1334；redefine `Slot` / `GuiGraphics` / `ModelBakery` |
 | Jade 15.10.6 | 贵妃 | **有** | 有 | 拒绝（干净） | `stage=VALIDATE kind=ACCESS_TRANSFORMER`，blocks/items 未变，客户端不崩 |
-| jecharacters 4.5.15 | 嫔 | 无 | 无 | 失败 | `CONSTRUCT`：`NoClassDefFoundError: me/towdium/pinin/Keyboard`（`META-INF/jarjar` 内嵌依赖未抽出） |
+| jecharacters 4.5.15 | 嫔 | 无 | 无 | **PASS**（JiJ 抽取后） | 2026-11-16 09:56 复跑：`ok=true`、`isLoaded=true`、`jar-in-jar: 2 nested jar(s) -> modules [JustEnoughCharacters.coremod.neoforge, PinIn]`、`modules [jecharacters, PinIn, JustEnoughCharacters.coremod.neoforge]`、`mod/jecharacters` 资源包选中并重载。边界见 §3.2 |
 | MekanismGenerators 10.7.19 | 嫔 | 无 | 无 | 拒绝（干净） | `stage=VALIDATE kind=MISSING_DEPENDENCY`：`needs [mekanism [10.7.19]] first` |
 | JEI 19.27.0.34 | 贵妃 | **有** | 无 | 拒绝（干净） | `stage=VALIDATE kind=ACCESS_TRANSFORMER` |
 | Mekanism 10.7.19 | 贵妃 | **有** | 无 | 扫描确认 AT，同 Jade 路径（未逐个跑） | `META-INF/accesstransformer.cfg` |
@@ -26,7 +26,8 @@
 | guideme 21.1.22 | 贵妃 | **有** | 有 | 扫描确认 AT | 同上 |
 | ExtremeReactors2 2.4.9 | 贵妃 | **有** | 无 | 扫描确认 AT | 同上 |
 
-**汇总**：9 个真实模组里 **6 个带 AT**（67%）、1 个 JiJ 内嵌依赖失败、1 个缺依赖、**只有 1 个干净通过**。
+**汇总**：9 个真实模组里 **6 个带 AT**（67%）、1 个缺依赖、**2 个干净通过**（ZeroCore2、jecharacters）。
+jecharacters 原先因 JiJ 内嵌依赖在 CONSTRUCT 失败，修好抽取后转为 PASS——**JiJ 是可补的缺口，AT 不是**。
 
 ## 3. 发现
 
@@ -34,40 +35,63 @@
    `IllegalAccessError`（Jade 实测）。对**已加载的原版类**做 AT 式 redefinition 不安全（会丢 NeoForge 对同一类的 patch），
    所以这是"要么重启、要么软重启"的边界，不是能顺手补的缺口。
    现在改为**变更前拒绝**：`FailureKind.ACCESS_TRANSFORMER` + 中英文案 + UI 预检（`ModInspection.canHotLoad` 直接返回 false）。
-2. **JiJ（jar-in-jar）内嵌依赖是第二个缺口，且可补**。FML 正常启动由 `JarJarLocator` 把嵌套 jar 注册成独立 `IModFile`；
-   我们只 `JarContents.of(外层 jar)`，所以 `pinin` 这类依赖不可见。补法是把嵌套 jar 也读成 `IModFile` + module layer。
+2. **JiJ（jar-in-jar）内嵌依赖是第二个缺口，且已经补上**。FML 正常启动由 `JarJarLocator`
+   （`JarInJarDependencyLocator`）读 `META-INF/jarjar/metadata.json`，把嵌套 jar 注册成独立 `IModFile` 并放进 game layer 的 module path；
+   我们只 `JarContents.of(外层 jar)`，所以 `pinin` 这类依赖对热加 mod 不可见。
+   现在 `hotadd/JarInJar` 做 locator 的前半段：读 metadata（用 NeoForge 自己的 `MetadataIOHandler`）→ 把每个嵌套 jar 抽到
+   `<gamedir>/modreloader/jarjar/<内容哈希>/<原名>.jar` → `SecureJar.from(...)`；
+   `ModuleInjector.addToGameLayer(files, extraJars)` 把它们和 mod 的 module 一起塞进 game layer（双向 read 边 + `packageLookup`）。
+   实测 jecharacters：`modules [jecharacters, PinIn, JustEnoughCharacters.coremod.neoforge]`，构造通过、资源包重载、`PASS`。
+   **剩下的边界**：① 只恢复类路径——带 `mods.toml` 的嵌套 mod 会拿到 module，但**没有 `ModContainer`**，它的 `@Mod` 构造器不跑
+   （语料里两个嵌套 jar 都是纯库，没有触发这条）；② `isObfuscated: true` 的嵌套 jar 需要 FML 构建期的反混淆，直接跳过并 warn；
+   ③ jecharacters 的 coremod（`FMLCorePlugin` / `ICoreMod`）**不会运行**——它的类能加载，但 `JeiTransformer` 之类的字节码变换不会应用，
+   所以「能热加」不等于「功能完整」，真正的拼音搜索要重启后和 JEI 一起验证（见 §7 边界）。
 3. **依赖顺序**：依赖方必须先热加被依赖方。原先会在 MODLIST 报含糊的 `no ModContainer built`，现在 VALIDATE 直接
    `MISSING_DEPENDENCY` 并给出需要的 id/版本（MekanismGenerators 实测）。
-4. **预测 tier 不足以决定成败**：jecharacters / mekanismgenerators 预测嫔级却失败（JiJ / 缺依赖）；ZeroCore 预测贵妃却通过。
-   tier 描述的是"注册表内容"，不描述"加载期依赖（AT/JiJ）"。`ModInspector` 已补 AT 维度。
+4. **预测 tier 不足以决定成败**：矩阵首轮 jecharacters / mekanismgenerators 预测嫔级却失败（当时的 JiJ / 缺依赖，JiJ 已修）；ZeroCore 预测贵妃却通过。
+   tier 描述的是"注册表内容"，不描述"加载期依赖（AT/JiJ）"。`ModInspector` 已补 AT 维度；JiJ 现在能跑通，但预测仍不体现它
+   （有 JiJ 的模组**可能**因为嵌套 jar 缺失/混淆/coremod 失败，这属于运行期才看得出来）。
 5. 失败语义仍然成立：拒绝都发生在**任何变更之前**，`blocks/items` 不变、`isLoaded=false`、客户端不崩。
 
 ## 4. 对产品的含义
 
-- 热加能覆盖的是「无 AT + 无 JiJ 依赖 + 无 worldgen + 无 native」的模组；在真实语料里这是**少数**。
+- 热加能覆盖的是「无 AT + 无 worldgen + 无 native / coremod」的模组；JiJ 内嵌**库**已不再是边界（嵌套 mod 仍是）。
+  在真实语料里可覆盖的仍是**少数**——6/9 卡在 AT。
   tier 表（嫔/妃/贵妃/皇后）描述的是内容形状，**不是**能否热加的完整判据。
 - managed relaunch / soft restart 仍是"大范围覆盖"的正解（[ADR-0006](../decisions/0006-t4-managed-relaunch.md)）；
   热加是"能省一次重启就省"，不是"替代重启"。
 - 下一步优先级（建议）：
-  1. **JiJ 抽取**（可补的实事，能救回一类"库依赖"模组）；
-  2. **AT 应用可行性 spike**：只对"热加后才加载"的类注入 AT 规则，已加载类明确不支持——先量一下 Jade/Mekanism 里有多少 AT 目标是晚加载的；
+  1. ~~**JiJ 抽取**~~ 已做（2026-11-16，见 §3.2 与 §5）；
+  2. ~~**AT 应用可行性 spike**~~ 已量（2026-11-16，见 §8）：最好情况下也只有 19% 的 AT 目标类还没加载，**结论是不做**；
   3. 依赖预检已做；矩阵扩到 20–30 个模组，校准"预测 vs 实际"。
 
-## 5. 交接：下一步从这里开始（2026-11-16）
+## 5. JiJ 抽取：做了什么（2026-11-16）
 
-**JiJ 抽取**的具体落点（下一会话直接照做）：
+原计划落点写在这里，实际实现与结论：
 
 - 嵌套 jar 由 `META-INF/jarjar/metadata.json` 描述：`jars[].path` 是 jar 内路径（如
-  `META-INF/jarjar/PinIn-1.6.0.jar`），`isObfuscated` 先忽略。
-- 本次语料里的两个嵌套 jar **都没有 `mods.toml`**（纯库）→ 不需要 `IModFile`/container，
-  只要把它的类放进 game layer 的 module 路径，外层 mod 的 automatic module 就能读到。
-- 锚点：[HotAddEngine.add](../../src/main/java/dev/modreloader/hotadd/HotAddEngine.java)（`JarContents.of(jar)` 之后、module 注入之前）；
-  [ModuleInjector.addToGameLayer](../../src/main/java/dev/modreloader/hotadd/ModuleInjector.java)（当前只接受 `Collection<ModFileInfo>`，
-  需要支持额外 `SecureJar`/路径）。
-- 验收：`runClient -PverifyCompat=<jecharacters jar>` 从 `CONSTRUCT / NoClassDefFoundError: me/towdium/pinin/Keyboard`
-  变为通过或进入下一阶段；更新本文 §2 的矩阵行。
-- 风险：嵌套 jar 的临时文件生命周期（进程内可留 tmp）；automatic module 名冲突；
-  `JustEnoughCharacters.coremod-neoforge.jar` 是 `FMLCorePlugin` coremod，热加大概率不支持——记录，不阻塞。
+  `META-INF/jarjar/PinIn-1.6.0.jar`）。解析用 NeoForge 自己的
+  `net.neoforged.jarjar.metadata.MetadataIOHandler`（和 locator 同一套代码，不自己拼 JSON）。
+- 语料里的两个嵌套 jar **都没有 `mods.toml`**（纯库）→ 不需要 `IModFile`/container，
+  把它们的类放进 game layer 的 module path 即可，外层 mod 的 automatic module 就能读到。
+- 落点：新增 [hotadd/JarInJar](../../src/main/java/dev/modreloader/hotadd/JarInJar.java)（读 metadata + 抽取 + `SecureJar`）；
+  [HotAddEngine.add](../../src/main/java/dev/modreloader/hotadd/HotAddEngine.java) 在 `Stage.MODULE` 里、`ModuleInjector.snapshot()` 之前调用它；
+  [ModuleInjector.addToGameLayer](../../src/main/java/dev/modreloader/hotadd/ModuleInjector.java) 增加
+  `addToGameLayer(Collection<ModFileInfo>, Collection<SecureJar>)` 重载（旧签名保留并委托）。
+- 抽取位置是 **内容寻址** 的：`<gamedir>/modreloader/jarjar/<sha256 前 16 位>/<原文件名>`。这样重试（回滚后再 add）会拿到
+  **同一个路径**，`ModuleInjector` 的「同名 module 必须同路径」检查才能通过——JVM 不能 undefine module，
+  路径一变就会抛 `Module name X was already used by ...`。
+- 新增 `FailureKind.JAR_IN_JAR`（中英文案 + `FailureKeys`）：metadata 读不出来时在 `Stage.MODULE` 明确失败，而不是等到构造期 `NoClassDefFoundError`。
+- 验收（2026-11-16 09:56）：`runClient -PverifyCompat=<jecharacters jar>` →
+  `jar-in-jar: 2 nested jar(s) ... -> modules [JustEnoughCharacters.coremod.neoforge, PinIn]`、
+  `hot-added [jecharacters] (modules [jecharacters, PinIn, JustEnoughCharacters.coremod.neoforge])`、
+  `isLoaded=true`、`mod/jecharacters` 资源包重载、`RESULT ... ok=true`（终版代码 10:01 复跑同样 `ok=true`）。回归：同一次进程里先 ZeroCore2（mixin redefine）再 jecharacters，
+  两个都 `ok=true`（09:57）。
+- 重试路径也验证过（这是内容寻址路径的目的）：`-PverifyCompat=<jecharacters>,<jecharacters> -PfailAfterModList=true` →
+  两次都在 `stage=MODLIST` 被注入的失败打断（`rollback: mod list ok` / `rollback: module layer ok`），
+  第二次**没有** `Module name PinIn was already used by ...`（09:58）。
+- 仍未做（记录，不阻塞）：嵌套 **mod**（带 `mods.toml`）目前只拿到 module、没有 `ModContainer`，构造器不跑；
+  coremod（`FMLCorePlugin`）不会运行。
 
 ## 6. 复现
 
@@ -77,8 +101,49 @@
 # 想留在世界/进世界测试，用 -PverifyGameplay=true -PverifyGameplayKeepOpen=true（见 dogfood-gameplay.md）
 ```
 
-## 6. 边界
+## 7. 边界
 
 - 只测了标题屏热加；进世界后的 datapack/玩法另见 [dogfood-gameplay.md](dogfood-gameplay.md)。
 - 语料是作者本机 9 个模组，不是随机抽样；6/9 带 AT 这个比例不能直接外推，但足以说明 AT 不是边缘情况。
-- `CompatCheck` 会跳过崩溃后的继续测试（一个进程一个 jar），崩溃只能从 exit code + 日志判断。
+- 「jecharacters PASS」= 引擎层通过（module/ModList/构造/客户端注册/资源包）。它的 coremod 变换不生效，
+  拼音搜索这类**功能**没有验证——别把它写成「jecharacters 能用」。
+- `CompatCheck` 一次热加一个 jar；某个 jar 把进程搞崩了，后面的 jar 就不会跑——崩溃只能从 exit code + 日志判断。
+
+## 8. AT 应用可行性量测（2026-11-16，只读，不实装）
+
+「只对晚加载的类注入 AT」值不值得做？先量再说。AT 是**类粒度**生效的（一个类加载时，它的全部 AT 规则一起应用），
+所以正确的指标就是：真实 jar 的 AT 目标类里，有多少在热加那一刻**还没加载**。
+
+`dev/AtSpikeCheck`（`-PverifyAtSpike=<jar>[,<jar>]`，只读）解析每个 jar 的 `META-INF/accesstransformer.cfg`，
+在**标题屏**（≈世界加载前）和**进世界后**各量一次「已加载类集合」，然后按类统计。
+
+| jar | 规则 | 目标类 | 标题屏已加载 | 进世界已加载 |
+|---|---|---|---|---|
+| Jade 15.10.6 | 57 | 39 | 32（**18% 未加载**） | 36（8%） |
+| JEI 19.27.0.34 | 21 | 12 | 9（25%） | 11（8%） |
+| Mekanism 10.7.19 | 94 | 45 | 38（16%） | 42（7%） |
+| AE2 19.2.18 | 75 | 37 | 27（27%） | 34（8%） |
+| guideme 21.1.22 | 47 | 17 | 16（6%） | 16（6%） |
+| ExtremeReactors2 2.4.9 | 1 | 1 | 0（100%） | 0（100%） |
+| **合计** | **295** | **151** | **122（81% 已加载，19% 未加载）** | **139（92% 已加载，8% 未加载）** |
+
+上下文：标题屏已加载 25 964 个类，进世界后 31 249 个。明细见 `run/logs`（`[AtSpike]` 前缀）。
+
+**未加载的都是什么**：客户端 GUI（`EditBox`、`CreativeModeInventoryScreen`、`ConnectScreen`、`AbstractSelectionList`、
+`Screen$DeferredTooltipRendering`）、datagen/gametest（`RecipeProvider`、`BlockModelGenerators`、`GameTestHelper`）、
+服务端专用（`ChunkMap`、`ServerGamePacketListenerImpl`）。也就是说，剩下那 8–19% 里很大一部分是客户端热加**基本不会碰**的类。
+
+**结论：不做。** 理由三条：
+
+1. **收益上限就是「未加载占比」**：最好的时机（标题屏、世界都没加载）也只有 19%，进世界后 8%，且集中在 datagen/服务端类上。
+   而「晚 AT」要解决的是「mod 在构造期就要用某个被放宽的成员」——那种目标类几乎必然已经加载。
+2. **一个已加载目标上缺一条规则就足够失败**：Jade 就是构造期 `IllegalAccessError`（§3.1），不会因为我们补上了另外 32 个类的 AT 就好起来。
+3. **代价与失败语义都不划算**：要在类定义期挂 transformer，和 NeoForge 的 patch 流水线、Mixin 的变换顺序竞争；
+   而失败点会落在「注册表已提交、不可回滚」之后。相比之下，软重启（[ADR-0006](../decisions/0006-t4-managed-relaunch.md)）是确定能覆盖的办法。
+
+**顺带发现（记录，未做）**：ExtremeReactors2 唯一一条 AT 目标是 `net.minecraft.data.recipes.RecipeProvider`——datagen 类，
+运行期永不加载。也就是说「带 AT 就一律变更前拒绝」会误伤「AT 只服务 datagen」的模组。可做的小改进是：
+拒绝文案里写清 AT 目标的组成（已加载/未加载、是否 datagen 命名空间），让用户而不是框架去判断；**放行不在本次结论内**。
+
+复现：`./gradlew runClient -PverifyAtSpike=<jar>[,<jar>]`。它会像 `-PverifyAddCommand` 那样新建一个世界来取「进世界」那组数字
+（会留下一个 `run/saves` 里的测试存档），除读类和读 jar 外不做任何写操作。

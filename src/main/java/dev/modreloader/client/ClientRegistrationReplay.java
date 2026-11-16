@@ -10,6 +10,8 @@ import net.minecraft.client.renderer.ItemModelShaper;
 import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.Item;
+import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent;
+import net.minecraft.world.inventory.tooltip.TooltipComponent;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.neoforged.fml.ModContainer;
@@ -17,10 +19,13 @@ import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterColorHandlersEvent;
 import net.neoforged.neoforge.client.extensions.common.ClientExtensionsManager;
 import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
+import net.neoforged.neoforge.client.event.RegisterClientTooltipComponentFactoriesEvent;
+import net.neoforged.neoforge.client.gui.ClientTooltipComponentManager;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 
 import java.lang.invoke.MethodType;
 import java.util.HashMap;
+import java.util.function.Function;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -65,6 +70,58 @@ public final class ClientRegistrationReplay {
         replayColorHandlers(container);
         replayClientExtensions(container);
         replayClientReloadListeners(container);
+        replayTooltipComponentFactories(container);
+    }
+
+    /**
+     * Custom tooltip components ({@code TooltipComponent} -> {@code
+     * ClientTooltipComponent}) are a startup-only registration too.
+     *
+     * <p>Measured 2026-11-16 with AppleSkin: hot-adding it and hovering a food item
+     * crashed the client with {@code IllegalArgumentException: Unknown
+     * TooltipComponent} inside {@code ClientTooltipComponent.create} - the mod's
+     * component type had no client factory, because its
+     * {@code RegisterClientTooltipComponentFactoriesEvent} listener never ran. This
+     * is the same class of gap as menu screens and block-entity renderers, not a
+     * per-mod incompatibility.
+     *
+     * <p>NeoForge keeps the factories in an {@code ImmutableMap}, so the entries have
+     * to be merged into a fresh map and swapped in; only classes the real map does
+     * not have yet are added, so a second registration cannot throw.
+     */
+    @SuppressWarnings("unchecked")
+    private static void replayTooltipComponentFactories(ModContainer container) {
+        try {
+            Map<Class<? extends TooltipComponent>,
+                    Function<TooltipComponent, ClientTooltipComponent>> fresh = new HashMap<>();
+            container.acceptEvent(new RegisterClientTooltipComponentFactoriesEvent(fresh));
+            if (fresh.isEmpty()) {
+                ModReloader.LOGGER.info(
+                        "[ModReloader] tooltip component factories replayed: 0 new");
+                return;
+            }
+            Map<Class<? extends TooltipComponent>,
+                    Function<TooltipComponent, ClientTooltipComponent>> merged = new HashMap<>();
+            Object current = UnsafeAccess.getStatic(ClientTooltipComponentManager.class, "FACTORIES");
+            if (current instanceof Map<?, ?> map) {
+                map.forEach((key, value) -> merged.put((Class<? extends TooltipComponent>) key,
+                        (Function<TooltipComponent, ClientTooltipComponent>) value));
+            }
+            int added = 0;
+            for (Map.Entry<Class<? extends TooltipComponent>,
+                    Function<TooltipComponent, ClientTooltipComponent>> entry : fresh.entrySet()) {
+                if (merged.putIfAbsent(entry.getKey(), entry.getValue()) == null) {
+                    added++;
+                }
+            }
+            UnsafeAccess.setStatic(ClientTooltipComponentManager.class, "FACTORIES",
+                    com.google.common.collect.ImmutableMap.copyOf(merged));
+            ModReloader.LOGGER.info(
+                    "[ModReloader] tooltip component factories replayed: {} new, {} total",
+                    added, merged.size());
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn("[ModReloader] tooltip component factory replay failed", t);
+        }
     }
 
     /**
