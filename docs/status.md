@@ -12,6 +12,7 @@
 （运行时自有 play 通道，跨进程两端 29475 行 id 一致；前提是两端热加同一批 jar）、**MixinRuntime 反射化（构建不再需要 `libs/`）**、
 **注册审计**（16 个真实 jar 的启动期事件清单；已知崩溃四类变更前拒绝，不再靠手写枚举碰运气）、
 **capability 重放**（`RegisterCapabilitiesEvent` 只投新容器；众星捧月桶/坩埚/机器的 item/fluid/energy provider 热加后可用）。
+同日收尾：in-world add 的 **id 重建竞态**（`No value with id -1`，已知问题 28）已修——「清 id + freeze」改在服务器线程执行，3 次回归 PASS。
 **硬边界**：access transformer（6/9 真实模组）、世界生成注册表、一次性启动事件的**重放**（审计只能报告/拒绝）、删除/更新、软重启未开始。
 失败回滚只覆盖 post-ModList / post-pack。按 [§6 契约](../AGENTS.md) 尚不算「完成」的项见文末「未验证」。
 
@@ -56,6 +57,7 @@
 | **注册审计（启动期事件）**（[ADR-0012](decisions/0012-registration-audit-severity.md)） | 16 个真实 jar、**129 处事件引用**：66 covered / 24 recurring / 6 datagen / 19 silent / **10 behavior** / **3 crash** / 1 base；3 处 crash 全在 AE2/Mekanism（本就被 AT 拒）→ 没有任何当前 PASS 的模组变成被拒；合成 jar 证明 crash 事件在 module 注入前被 `CLIENT_REGISTRATION` 拒绝；专用服上纯客户端事件记为 `other-side` | `-PverifyRegAudit=<jars>`；[client-registration-audit.md](features/client-registration-audit.md) §5 |
 | **capability 重放（`RegisterCapabilitiesEvent`）** | 众星捧月热加后五项全部 present：桶 item/fluid、坩埚 fluid、机器 item/energy；A/B：`-PskipCapabilityReplay=true` 时五项全 MISSING（FAIL），重放后 PASS；provider 计数 `item 16/48、fluid 24/27、energy 4/4`（本模组/总数） | `-PverifyCapabilities=<jar>`；[dogfood-gameplay.md](features/dogfood-gameplay.md) §1.1 |
 | **AT「晚注入」量测（只读）** | 6 个带 AT 的 jar 共 295 条规则 / 151 个目标类；标题屏 19%、进世界 8% 还没加载 → **结论：不做** | `-PverifyAtSpike=<jars>`；[matrix](features/hotadd-compatibility-matrix.md) §8 |
+| **注册表 id 重建的线程**（修已知问题 28） | commit/abort 的「清 `BLOCKSTATE_TO_ID_MAP` + `freezeData`」投到服务器线程（日志 `registry freeze: hopping from the thread 'Render thread' to the server thread`），`RegisterEvent` 重放仍留调用线程；**连跑 3 次** `-PverifyAddCommand` + `-PverifyGameplay`：3/3 `AddCmdCheck`/`GameplayCheck RESULT: PASS`、capability 五项 present、`stoneId 1 -> 1 (stable)`、0 处 `No value with id`；专用服 guifei commit 在 `[Server thread]` 直跑（`RESULT: PLACED` + datapack PASS）、嫔级 add 回归 PASS | 2026-11-16 19:27–19:31：`-PverifyAddCommand=<dogfood> -PverifyAddCommandModId=exnihilosatellitium -PverifyGameplay=true` / `runServer -PautoAdd=<t4fixture> -Pt4fixtureSelftest=true` / `-PverifyAddCommand=<EasyLAN>`；[t4-registry-hotadd.md](features/t4-registry-hotadd.md) §11 |
 | **工程底座** | `capabilities: module_injection … registry_sync … resource_packs` 全 ok（server `resource_packs=n/a`）；**无 `libs/` 可 `clean build`**；**21 个无游戏单测** | `./gradlew test`；[tech-debt.md](tech-debt.md) |
 | **JDK / JBR 21** | 编译用 Temurin 21 toolchain；**`runClient` 与 `runServer` 都**用 JBR 21.0.11 + `-XX:+AllowEnhancedClassRedefinition`（`enhancedRedefinition=true`） | 启动日志 `[ModReloader] JVM … enhancedRedefinition=` |
 
@@ -75,6 +77,7 @@
 - **兼容性矩阵首轮 + 两个缺口的处理**：AT 变更前拒绝（含 UI 预检）、缺依赖前置拒绝、JiJ 内嵌库抽取、AT 晚注入量测与否定结论，见 [hotadd-compatibility-matrix.md](features/hotadd-compatibility-matrix.md)。
 - **注册审计**：纯规则 9 个单测；`-PverifyRegAudit` 扫 16 个真实 jar（129 处引用）+ 合成致命 jar 断言 `VALIDATE` 拒绝、零副作用；真实 `-PverifyCompat=<AppleSkin>` 仍 PASS。见 [client-registration-audit.md](features/client-registration-audit.md)。
 - **capability 重放**：`hotadd/CapabilityReplay` 在 registry commit 之后、common setup 之前只对新容器重放 `RegisterCapabilitiesEvent`；众星捧月五项 provider 在主菜单热加与进世界 add 两条路径都 present，`-PskipCapabilityReplay=true` 反证全 MISSING。见 [dogfood-gameplay.md](features/dogfood-gameplay.md) §1。
+- **注册表 id 重建的线程**：`hotadd/ServerThreadHop` 把 commit/abort 的「清 `BLOCKSTATE_TO_ID_MAP` + `freezeData`」投到服务器线程（已在服务器线程时直跑，超时回退 + warn，原子 claim 防重复）；`-PverifyAddCommand + -PverifyGameplay` 连跑 3 次全 PASS、无 `No value with id -1`。见 [t4-registry-hotadd.md](features/t4-registry-hotadd.md) §11。
 
 ### 未验证
 
@@ -141,19 +144,22 @@
     页签都在第 2/2 页、`>` 可达、182 项；1.4.2 与 1.5.0 发布 jar 内容一致（只差 MANIFEST/mods.toml 的版本号，`ModCreativeTabs.class` 哈希相同），
     版本解释不了差异。失败那次的日志没拿到，所有者放弃复现；四条 harness 留作回归。若再现：看那台 `logs/latest.log` 有没有
     `creative tabs sorted at the title screen`（没有 = 旧构建）以及 `hot-add` 是否 `ok=true`。详见 [dogfood-gameplay.md](features/dogfood-gameplay.md) §2.1.1。
-28. **in-world 热加与区块发送的竞态（一次性复现，2026-11-16 18:50，未定位）**：进世界后热加众星捧月时，客户端收到一个 chunk 包报
-    `IllegalArgumentException: No value with id -1`（`LinearPalette.read`），随后服务端以「网络协议错误」断开玩家。同一次 add 刚做过
-    `registry commit`（清 BlockState id 映射 → re-freeze）。怀疑是 render 线程上的 id 重建与服务器线程的 chunk 序列化并发；之后同路径重跑两次都正常。
-    **建议修法**：把 `RegistryStage.commit` 的「清 id + freeze」投到服务器线程（或暂停 chunk 发送）串行化；需要稳定复现后再改。
+28. ✅ **in-world 热加与区块发送的竞态（2026-11-16 18:50 复现 / 19:28 修，留作坑）**：进世界后热加众星捧月时，客户端收到一个 chunk 包报
+    `IllegalArgumentException: No value with id -1`（`LinearPalette.read`），随后服务端以「网络协议错误」断开玩家。根因：`RegistryStage.commit`
+    在**调用线程**（dev harness 是 render 线程）做「清 `BLOCKSTATE_TO_ID_MAP`（就是 `Block.BLOCK_STATE_REGISTRY`）→ `freezeData()`」，
+    而区块序列化在服务器线程上——清空到 bake 重建之间 `getId` 一律返回 -1，服务器把 -1 写进 palette。
+    修法：新增 `hotadd/ServerThreadHop`，把「清 id + freeze」（commit 与 abort 两处）投到服务器线程，已在服务器线程/还没有服务器时直跑；
+    超时回退 + warn，原子 claim 防止执行两次；`RegisterEvent` 重放仍留调用线程。
+    证据：`-PverifyAddCommand + -PverifyGameplay` 连跑 3 次全 PASS、capability 五项 present、无 `No value with id`。
+    **剩余**：单人两端共享同一张表，窗口只是被挪到服务器线程并缩小（详细边界见 [t4-registry-hotadd.md](features/t4-registry-hotadd.md) §11.5）。
 
 ## 下一步
 
-> 下一会话从 **P0-1** 开始。所有 harness 命令见 [AGENTS §2](../AGENTS.md)，细节在对应 feature 文档。
+> 下一会话从 **P0-2** 开始。所有 harness 命令见 [AGENTS §2](../AGENTS.md)，细节在对应 feature 文档。
 > **热加类 harness 要求 `run/mods/` 里没有众星捧月 jar**（已加载就不能再热加）；备份在 `/tmp/dogfood-runmods-backup.jar`。
 
 | 优先 | 任务 | 关键点 / 落点 | 验收 |
 |---|---|---|---|
-| **P0-1** | 修 in-world add 的 BlockState id 竞态（已知问题 28） | 把 `RegistryStage.commit` 的「清 `BLOCKSTATE_TO_ID_MAP` + `GameData.freezeData()`」投到服务器线程（`server.isSameThread()` 时直跑，否则 `execute` + 等完成；超时回退并 warn）；`RegisterEvent` 重放仍留在调用线程 | `-PverifyAddCommand=<dogfood> -PverifyAddCommandModId=exnihilosatellitium -PverifyGameplay=true` 连跑 3 次：无 `No value with id -1`、每次 `GameplayCheck RESULT: PASS`、capability 五项 present |
 | **P0-2** | 重放 `RegisterGuiLayersEvent`（语料 3/16，HUD 静默） | 先读 NeoForge 注册面（`LayeredDraw`）再定临时 sink/合并；加进 `RegistrationAudit.COVERED`；新 harness 断言层数 +1、渲染不崩 | `-PverifyRegAudit` 里该事件变 `covered`；harness `RESULT: PASS`；`-PverifyGameplay -PverifyCreative` 回归 |
 | **P1-1** | AT「晚注入」逐 jar 复核（只读） | 扩展 `dev/AtSpikeCheck`：每个 jar 输出「是否**所有** AT 目标都未加载（排除 datagen）」；决定这条是否彻底关闭 | 6 个 AT jar 跑一次，表补进 [matrix](features/hotadd-compatibility-matrix.md) §8 |
 | **P1-2** | WORLDGEN 边界实验 | 做一个带 dimension 的夹具：标题屏热加 → **新建世界** → 断言维度可进；决定「WORLDGEN 需重启」能否改写成「需新世界」 | 新 harness `-PverifyWorldgen` PASS + 文档 |
@@ -173,13 +179,14 @@
 ./gradlew runClient -PverifyCapabilities=<dogfood.jar> -PskipCapabilityReplay=true  # 五项 MISSING，RESULT: FAIL（反证）
 ./gradlew runClient -PverifyAddCommand=<dogfood.jar> -PverifyAddCommandModId=exnihilosatellitium -PverifyGameplay=true
 #   -> GameplayCheck RESULT: PASS，capability providers 五项 present
+#   -> 连跑 3 次（id 重建竞态回归）：3/3 PASS，日志 0 处 "No value with id"
 ./gradlew runClient -PverifyRegAudit=<16 jars>          # 66 covered / 10 behavior，RESULT: PASS
 ./gradlew runClient -PverifyCreativeAtTitle=<dogfood.jar>  # 创造栏路径之一：RESULT: PASS
 ```
 
 已知问题 27（1.4.2 创造栏缺失）仍需要那台机器的 `logs/latest.log` 才能继续，不阻塞上面任何一项。
 
-已完成（保留参考，细节见 history 与对应 feature 文档）：**多人连接后注册表 id 同步**；**MixinRuntime 反射化（构建不再需要 `libs/`）**；
+已完成（保留参考，细节见 history 与对应 feature 文档）：**注册表 id 重建的线程（服务器线程 hop）**；**多人连接后注册表 id 同步**；**MixinRuntime 反射化（构建不再需要 `libs/`）**；
 **AT 晚注入量测（结论：不做，P1-1 复核）**；**JiJ 内嵌依赖抽取**；**datapack 热加载**；**dogfood 玩法验收 + 五个客户端 bug**；
 **兼容性矩阵首轮 + AT/缺依赖的变更前拒绝**；**注册审计**；**capability 重放**。
 
@@ -187,6 +194,14 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近几条。
 
+- **2026-11-16（in-world add 的 id 重建竞态修掉了：`No value with id -1`）**：18:50 一次性复现的客户端 chunk 解码崩溃，
+  根因是 `RegistryStage.commit` 在调用线程（dev harness 里是 render 线程）做「清 `BLOCKSTATE_TO_ID_MAP`（= `Block.BLOCK_STATE_REGISTRY`）→ `freezeData()`」，
+  而区块序列化在服务器线程上，清空到 bake 重建之间 `getId` 返回 -1，服务器把 -1 写进 palette。
+  新增 `hotadd/ServerThreadHop`：commit 与 abort 的「清 id + freeze」都投到服务器线程（`isSameThread`/无服务器时直跑，
+  否则 `execute` + 等完成；超时回退 + warn；原子 claim 防重复执行），`RegisterEvent` 重放仍留调用线程。
+  证据：`-PverifyAddCommand=<dogfood> … -PverifyGameplay=true` 连跑 3 次（19:27:07 / 19:27:53 / 19:28:32），3/3 PASS、capability 五项 present、
+  `stoneId 1 -> 1 (stable)`、0 处 `No value with id`。剩余边界（单人两端共享同一张表，窗口只是被挪到服务器线程并缩小）写在
+  [t4-registry-hotadd.md](features/t4-registry-hotadd.md) §11.5。见已知问题 28、[tech-debt.md](tech-debt.md) §4。
 - **2026-11-16（capability 重放：桶/坩埚/机器终于有 item/fluid/energy provider 了）**：注册审计指出的第一个真实缺口。
   新增 `hotadd/CapabilityReplay`：在 registry commit 之后、common setup 之前，用 `container.acceptEvent(new RegisterCapabilitiesEvent())`
   **只投新容器**，并临时复位 `CapabilityHooks.initFinished` 让 `setProxyable` 可用；失败只 warn，不让 add 失败。

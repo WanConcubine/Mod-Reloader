@@ -182,3 +182,22 @@
   证据（2026-11-16 19:0x–19:1x，当前代码）：`capability providers replayed for exnihilosatellitium: item 16/48, fluid 24/27, energy 4/4 block(s) for this mod/total; dispatch reached 1 listener(s)`；`[CapabilityCheck] providers: [barrel.item=present, barrel.fluid=present, crucible.fluid=present, machine.item=present, machine.energy=present]`、`RESULT: PASS`。**A/B 反证**：`-PskipCapabilityReplay=true` → 五项全 `MISSING`、`RESULT: FAIL`（BE 存在，所以确实是 provider 缺失）。进世界 `/modreloader add` 的 `GameplayCheck` 也加了同样五项断言并 PASS。`./gradlew test` 21 passed（新增 capability=covered 规则测试）。
   审计随之把 `RegisterCapabilitiesEvent` 从 `behavior` 移入 `covered`；16 个 jar 复跑：**66 covered / 24 recurring / 6 datagen / 19 silent / 10 behavior / 3 crash / 1 base**（仍 129 处引用，零 PASS 变拒绝）。文档：status 表尺/已知问题 26/下一步 0、[dogfood-gameplay.md](features/dogfood-gameplay.md) §1.1、[client-registration-audit.md](features/client-registration-audit.md) §3.2/§4/§5/§7、[ADR-0012](decisions/0012-registration-audit-severity.md) 补充、glossary。
   顺带记录一个**一次性复现的竞态**（已知问题 28）：进世界 add 时客户端收到一个 chunk 包报 `No value with id -1`，同一次 add 刚做过 BlockState id 重建；之后同路径重跑两次正常。怀疑是 render 线程的 id 重建与服务器线程的 chunk 序列化并发，未定位；建议修法是把「清 id + freeze」投到服务器线程。
+
+- **（注册表 id 重建的竞态修掉了 / P0-1）**：把 18:50 那次一次性复现的 `No value with id -1` 定位并修掉。定位靠读代码而不是复现：
+  `BLOCKSTATE_TO_ID_MAP` 就是 `Block.BLOCK_STATE_REGISTRY`（NeoForge `NeoForgeRegistryCallbacks$BlockCallbacks` 里的
+  `ClearableObjectIntIdentityMap`），`RegistryStage.commit` 原来在调用线程做「`clear()` → `GameData.freezeData()`」，
+  而 dev harness 的 `-PverifyAddCommand` 是从客户端 tick 直接 `dispatcher.execute("modreloader add …")`（render 线程）；
+  清空到 bake 重建之间 `IdMapper.getId` 一律 -1，服务器线程同时在序列化 chunk → -1 进 palette → 客户端 `LinearPalette.read` 崩。
+  新增 `hotadd/ServerThreadHop`（`ServerLifecycleHooks.getCurrentServer()`；`isSameThread()` 或没有服务器时直跑，否则
+  `server.execute` + 等完成；超时回退到调用线程并 WARN；`AtomicBoolean` claim 保证队列里那份不会与回退重复执行），
+  commit 与 abort 两处「清 id + freeze」都走它；`RegisterEvent` 重放仍留调用线程。
+  证据（2026-11-16 19:27:07 / 19:27:53 / 19:28:32，dev client + 众星捧月 1.5.0，`-PverifyAddCommand … -PverifyGameplay=true` 连跑 3 次）：
+  每次都有 `registry freeze: hopping from the thread 'Render thread' to the server thread`；
+  `registry commit: 89 registries replayed; blocks 1060 -> 1140, items 1333 -> 1514, states 26684 -> 26818 (cleared 26684 entries), stoneId 1 -> 1 (stable)`；
+  3/3 `AddCmdCheck RESULT: PASS` + `GameplayCheck RESULT: PASS`，capability 五项 present，三次日志 0 处 `No value with id`。
+  `./gradlew build` 通过（21 单测）。文档：[t4-registry-hotadd.md](features/t4-registry-hotadd.md) §11（含剩余边界：单人两端共享同一张表，
+  窗口只是被挪到服务器线程并缩小）、[tech-debt.md](tech-debt.md) §4、status 表尺/已知问题 28/下一步（下一条是 P0-2 GuiLayers）。
+  改动后另跑两条回归（2026-11-16 19:30–19:31）：专用服 `runServer -PautoAdd=/tmp/t4fixture/t4fixture-1.0.0.jar -Pt4fixtureSelftest=true`
+  → commit 打在 `[Server thread]`（没有 hop 日志，`isSameThread()` 分支生效）、`stoneId 1 -> 1 (stable)`、`world saved; RESULT: PLACED`、
+  `datapack (after hot-add) RESULT: PASS`；嫔级 `-PverifyAddCommand=<EasyLAN>` → `AddCmdCheck RESULT: PASS`（不经过 hop）。
+  顺带记一笔：run3 的日志里有一条 authlib 取皮肤的 `JsonSyntaxException`（离线环境返回非 JSON），与本次改动无关。

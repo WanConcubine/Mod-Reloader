@@ -24,6 +24,10 @@ commit  → for registry in GameData.getRegistrationOrder():
 2. **freeze 前必须清空 BlockState id 映射**。`BlockCallbacks.onBake` 用 `IdMapper.add()` 重建，
    而 `add()` 无条件分配新 id；不清空的话 stone 的 id 会从 1 变成 26685（见 research §2），
    之后写出的区块会引用重启后不存在的 id。
+3. **「清 id + freeze」必须跑在服务器线程**（2026-11-16，修已知问题 28）。这是整个 stage 里唯一「id 映射不完整」的窗口：
+   `clear()` 之后到 bake 把 state 全部加回来之前，`IdMapper` 对任何 state 都给出 -1，而区块序列化在服务器线程上。
+   调用方不在服务器线程时（dev harness、inbox watcher、GUI 都可能）用 `hotadd/ServerThreadHop` 投过去并等完成；
+   已经在服务器线程（聊天里敲 `/modreloader add`、控制台）就直接跑。细节、证据与剩余边界见 §11。
 
 失败语义是**单向提交**：注册表条目无法撤销。`begin` 时注册的 undo 只在 commit 之前有效
 （清空 state map 后重新 freeze，id 回到 canonical）；commit 之后失败只记录
@@ -259,3 +263,66 @@ play 阶段没有对应的 payload，所以本运行时自己开了一条通道�
 安全网（已实现）：notice（不分 tier 都发）→ 客户端聊天 + toast（有/没有该 mod 两种文案）→ 客户端 ack → 服务端日志
 `<player> has [...] of the hot-added mod id(s)`；服务端在有玩家在线 + 注册表内容时，commit 前再打一条 WARN。
 决策与未决项见 [ADR-0011](../decisions/0011-hotadd-must-inform-clients.md)。
+
+## 11. id 重建与区块发送的竞态（2026-11-16，已修）
+
+### 11.1 症状
+
+进世界后热加众星捧月时，客户端收到一个 chunk 包报 `IllegalArgumentException: No value with id -1`
+（`LinearPalette.read`），随后服务端以「网络协议错误」断开玩家（[status](../status.md) 已知问题 28）。
+只复现过一次（2026-11-16 18:50，capability 重放那一轮），之后同路径两次正常。
+
+### 11.2 为什么
+
+`commit` 原来在**调用线程**上做「清 `BLOCKSTATE_TO_ID_MAP` → `GameData.freezeData()`」。
+那张表就是 `Block.BLOCK_STATE_REGISTRY`（NeoForge 的 `ClearableObjectIntIdentityMap`，区块 palette 读写的就是它），
+而 `clear()` 到 bake 把 state 全部加回来之间是唯一「表不完整」的窗口：`IdMapper.getId` 对任何 state 都返回 -1。
+区块序列化在**服务器线程**上；dev harness 是从客户端 tick 里直接 `dispatcher.execute("modreloader add …")`，
+也就是 **render 线程**。两个线程一撞，服务器就把 -1 写进 palette，客户端解码必失败
+（聊天里敲同一条命令不会：那条路径本来就在服务器线程上）。
+
+### 11.3 修法
+
+新增 `hotadd/ServerThreadHop`：
+
+- 取 `ServerLifecycleHooks.getCurrentServer()`；**没有服务器**（标题屏 / 专用服还没起来）或
+  **`server.isSameThread()`** 时直跑；
+- 否则 `server.execute(...)` 投过去并等完成（日志 `registry freeze: hopping from the thread '…' to the server thread`）；
+- 超时（服务器在停 / 不 tick）回退到调用线程并 WARN；队列里那份用原子 claim 保证**不会执行两次**。
+
+`abort()`（失败回滚）里的「清 id + freeze」走同一条路——它有完全相同的窗口。
+`RegisterEvent` 重放仍留在调用线程（本次设计如此；注册本身不碰 id 表）。
+
+### 11.4 证据（2026-11-16 19:27–19:28，dev client，众星捧月 1.5.0）
+
+```text
+[19:27:07] [Render thread/INFO] [ModReloader] registry freeze: hopping from the thread 'Render thread' to the server thread
+[19:27:07] [Render thread/INFO] [ModReloader] registry commit: 89 registries replayed; blocks 1060 -> 1140,
+           items 1333 -> 1514, states 26684 -> 26818 (cleared 26684 entries), stoneId 1 -> 1 (stable)
+...
+[GameplayCheck] capability providers: [barrel.item=present, barrel.fluid=present, crucible.fluid=present,
+                machine.item=present, machine.energy=present]
+[GameplayCheck] RESULT: PASS
+```
+
+`-PverifyAddCommand=<dogfood> -PverifyAddCommandModId=exnihilosatellitium -PverifyGameplay=true` **连跑 3 次**
+（19:27:07 / 19:27:53 / 19:28:32）：3/3 都出现 hop 日志、3/3 `AddCmdCheck RESULT: PASS` + `GameplayCheck RESULT: PASS`、
+capability 五项 present、每次 `registry commit … stoneId 1 -> 1 (stable)`、
+三次日志里 **0 处** `No value with id`（也没有 `RESULT: FAIL` / 断线）。
+
+改动后另跑两条回归：
+
+- **专用服 guifei 路径**（`runServer -PautoAdd=/tmp/t4fixture/t4fixture-1.0.0.jar -Pt4fixtureSelftest=true`）：
+  commit 打在 `[Server thread]` 上、**没有** hop 日志（`isSameThread()` 分支生效），
+  `blocks 1060 -> 1061 … stoneId 1 -> 1 (stable)`、`world saved; RESULT: PLACED`、`datapack (after hot-add) RESULT: PASS`。
+- **嫔级路径**（`-PverifyAddCommand=/tmp/lanmods/EasyLAN-neoforge-1.21.1-v1.6a.jar`）：`AddCmdCheck RESULT: PASS`；
+  这条不打开注册表窗口，本来就不经过 hop。
+
+### 11.5 剩余边界
+
+- 挪走的只是「清 id + freeze」。单人游戏里客户端与服务器**共享同一张表**：如果 add 走聊天命令（服务器线程），
+  render 线程在那一瞬间仍可能解码一个**已经编码好**的包，读到清空窗口。修复后三次实测都没有问题，
+  但这是**把窗口从编码端挪走 + 缩小**，不是把它变成「不可能」。彻底做法是让 bake 不重建整张表（append-only），
+  或在重建期间暂停区块编解码；两者都还没做，也没有稳定复现手段。
+- harness / watcher / GUI 这条路径上 render 线程自己就在 hop 里阻塞，解码不会与窗口重叠，所以这条路径的风险实际被消除了。
+- 同一套线程假设没有单测覆盖（要真服务器）；回归靠 `-PverifyAddCommand -PverifyGameplay`。

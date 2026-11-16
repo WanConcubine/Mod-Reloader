@@ -113,6 +113,10 @@ mods/*.jar
 
 - **顺序不变量**：datapack 阶段必须在注册表提交之后——数据里的 item id 要对着已提交的注册表解析。
 - **端无关**：`PlatformHooks.reloadDataPacks` 由两端各自取服务器（集成 / 专用）；不在服务器线程时投递过去再等。
+- **线程不变量**：注册表的「清 `BLOCKSTATE_TO_ID_MAP` + `GameData.freezeData()`」**必须在服务器线程**上执行
+  （`hotadd/ServerThreadHop`：已在服务器线程/还没有服务器时直跑，否则 `execute` + 等完成，超时回退 + warn）。
+  那段清空到 bake 重建之间，`IdMapper` 对任何 BlockState 都给 -1，而区块序列化在服务器线程；
+  在 render 线程上重建会写出带 `-1` 的 palette（status 已知问题 28）。`RegisterEvent` 重放不在这个约束里。
 - **幂等**：pack id = `mod/<modId>`；已有数据（标题屏热加 + 世界加载已发现）直接短路。
 - **客户端注册重放**：`ClientRegistrationReplay` 重放 key mappings / menu screens / renderers（并重建两个 dispatcher）/颜色 / 客户端扩展；`DEFAULT_TABS` 先清空再 `sortTabs()`（该方法非幂等）。
 - **id 同步（多人）**：NeoForge 只在登录 configuration 阶段同步注册表，所以运行时自己开一条 play 通道（推 + 拉），

@@ -31,7 +31,9 @@ import java.util.Map;
  *   <li>construct the mod (its {@code DeferredRegister}s attach listeners).</li>
  *   <li><b>commit</b>: replay {@code RegisterEvent} per registry and per
  *       container, in {@code GameData.getRegistrationOrder()} order; clear the
- *       BlockState id map and re-freeze.</li>
+ *       BlockState id map and re-freeze. The replay happens on the calling
+ *       thread, the clear + freeze on the server thread — see the comment in
+ *       {@link #commit} and {@link ServerThreadHop}.</li>
  * </ol>
  *
  * <p><b>Not rollback-able.</b> Registries have no public "remove" and deleting
@@ -103,9 +105,20 @@ public final class RegistryStage {
         // callback, but IdMapper#add always appends: without clearing, every
         // existing BlockState would get a new id and chunks saved afterwards
         // would reference ids that do not exist after a restart.
-        int cleared = clearBlockStateIds();
-
-        GameData.freezeData();
+        //
+        // The clear-to-rebuild window is the only moment in this stage where the
+        // block-state map is incomplete: between clear() and the bake's last
+        // add(), getting a state id yields -1. Vanilla encodes chunks on the
+        // server thread, so the section must run there. Doing it on the calling
+        // thread (dev harness, GUI, inbox watcher - all off the server thread)
+        // raced with chunk serialisation and wrote -1 into a palette, which the
+        // client then failed to decode (status known issue 28). The RegisterEvent
+        // replay above stays on the calling thread on purpose.
+        int cleared = ServerThreadHop.call("registry freeze", () -> {
+            int idsBefore = clearBlockStateIds();
+            GameData.freezeData();
+            return idsBefore;
+        });
         committed = true;
         active = false;
 
@@ -147,8 +160,14 @@ public final class RegistryStage {
             // No content was committed, but construct may have registered some
             // entries directly. Re-freeze with a cleared state map so the
             // canonical ids survive; report growth as a dirty registry.
-            int cleared = clearBlockStateIds();
-            GameData.freezeData();
+            // Same hazard as commit: the incomplete map must not be visible to
+            // whoever encodes a chunk, so the clear + freeze runs on the server
+            // thread.
+            int cleared = ServerThreadHop.call("registry abort freeze", () -> {
+                int idsBefore = clearBlockStateIds();
+                GameData.freezeData();
+                return idsBefore;
+            });
             Map<ResourceLocation, Integer> after = sizes();
             List<String> grown = new ArrayList<>();
             sizesBefore.forEach((name, before) -> {
