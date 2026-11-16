@@ -172,7 +172,9 @@
   断言菜单被填充（46 个非空 ItemStack）并再渲染 40 tick：`creative RESULT: PASS`（2026-11-16 15:45）。
   证据与未覆盖项见 [dogfood-gameplay.md](features/dogfood-gameplay.md) §2.1。
   另外补了**主菜单热加**这条此前未实测的路径：`dev/CreativeTitleCheck`（`-PverifyCreativeAtTitle=<jar>`）标题屏热加 → 建世界 →
-  创造栏 → 发现页签在第 2/2 页 → 按真实 `>` 翻页按钮 → 选中 182 项 → 渲染 PASS（2026-11-16 15:52）。
+  创造栏 → 发现页签在第 2/2 页 → 按真实 `>` 翻页按钮 → 选中 182 项 → 渲染 PASS（2026-11-16 15:52）；
+  再加两个对照 **warm cache**（先开过创造栏再回标题屏热加）与**正常安装**（jar 在 `run/mods`）也都是 PASS（16:03–16:05）。
+  四条路径唯一「打开时看不到」的原因都是页签在第 2 页；「翻页也没有」仍未复现。
 
 - **2026-11-16（注册审计：漏了哪个启动期事件，现在是数据而不是运气）**：起因是 AppleSkin 悬停崩溃暴露的第六个「漏重放」缺口。
   新增 `inspect/RegistrationAudit`（纯分级规则，无 ASM / 无游戏类，8 个单测）+ `inspect/RegistrationAuditScanner`

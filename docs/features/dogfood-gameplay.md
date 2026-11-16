@@ -116,6 +116,16 @@ creative RESULT: PASS
 唯一“打开时看不到”的原因是它不在第 1 页——第 1 页是 10 个 vanilla 页签 + hotbar/search/inventory，页签按钮在屏幕左上/右上的 `<` `>`。
 旧构建上是否失败没有对照（那次报告发生在 title-screen 分支和 `CACHED_PARAMETERS` 失效逻辑加入之前/之后不明），所以这里不写“修好了”，只写“这条路径第一次被自动验证，当前通过”。
 
+另外两个对照（2026-11-16 16:03–16:05）：
+
+- **warm cache**（`-PverifyCreativeAtTitleWarm`：先进世界 → 开一次创造栏（`CACHED_PARAMETERS` 被填）→ 暂停菜单 "Save and Quit to Title" → 标题屏热加 → 再建世界）：
+  `at add: sortedTabs=10 modTabsInSorted=0 server=null` → `title-screen add ok=true` → 页签仍在第 **2/2** 页、182 项 → `RESULT: PASS`。
+  这正是此前被标记为「未实测」的序列；缓存失效逻辑有效。
+- **正常安装对照**（jar 放在 `run/mods/`，`-PverifyCreativeAtTitleInstalled`，完全不热加）：同样 15 个页签、第 **2/2** 页、182 项、翻页可达 → `RESULT: PASS`。
+
+所以「打开创造栏时看不到」在三条路径（进世界后 add / 标题屏 add / 正常安装）上都是同一个原因：**页签在第 2 页**。
+「翻页也找不到」目前**没有复现**（四条路径全过）；如果确实出现，需要那次会话的 `latest.log`（里面有 `registration audit`、`creative tabs sorted at the title screen`、`registry commit` 和异常）或者截图。
+
 ### 2.2 机器 GUI 打不开（已修）
 
 手动验收时打开 `exnihilosatellitium:fuel_machine`，日志只有一行警告、界面不出来：

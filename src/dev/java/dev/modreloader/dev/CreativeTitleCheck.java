@@ -7,6 +7,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractButton;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
+import net.minecraft.client.gui.screens.PauseScreen;
+import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.gui.screens.worldselection.CreateWorldScreen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -18,7 +20,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.gui.CreativeTabsScreenPage;
+import net.neoforged.neoforge.common.CreativeModeTabRegistry;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 import java.lang.invoke.MethodHandle;
 import java.nio.file.Path;
@@ -44,7 +48,9 @@ import java.util.List;
  */
 public final class CreativeTitleCheck {
     private enum Stage {
-        WAIT_TITLE, ADD, WAIT_ADDED, OPEN_CREATE, WAIT_CREATE_SCREEN, WAIT_WORLD,
+        WAIT_TITLE, WARM_OPEN_CREATE, WARM_WAIT_CREATE_SCREEN, WARM_WAIT_WORLD,
+        WARM_PREPARE_CREATIVE, WARM_OPEN_SCREEN, WARM_RENDER, WARM_QUIT, WARM_WAIT_TITLE,
+        ADD, WAIT_ADDED, OPEN_CREATE, WAIT_CREATE_SCREEN, WAIT_WORLD,
         PREPARE_CREATIVE, OPEN_SCREEN, VERIFY, SELECTED, DONE
     }
 
@@ -54,6 +60,22 @@ public final class CreativeTitleCheck {
     private static final String MOD_ID = System.getProperty(
             "modreloader.verifyCreativeAtTitleModId", "exnihilosatellitium").trim();
 
+    /**
+     * -PverifyCreativeAtTitleWarm: first enter a world and open the creative
+     * inventory once (so vanilla's cached ItemDisplayParameters is populated),
+     * then go back to the title screen, hot-add, and enter a world again. This is
+     * the sequence that was flagged as never measured.
+     */
+    private static final boolean WARM = Boolean.getBoolean("modreloader.verifyCreativeAtTitleWarm");
+
+    /**
+     * -PverifyCreativeAtTitleInstalled: the mod is already in mods/ (normal
+     * startup). Skip the add entirely and only verify the tab — the control case
+     * for "is this hot-add specific or does a normal install show it too".
+     */
+    private static final boolean INSTALLED =
+            Boolean.getBoolean("modreloader.verifyCreativeAtTitleInstalled");
+
     private static Path jar;
     private static Stage stage = Stage.WAIT_TITLE;
     private static int ticks;
@@ -61,6 +83,10 @@ public final class CreativeTitleCheck {
     private static boolean started;
     private static boolean pressedCreate;
     private static boolean creativeSet;
+    private static boolean warmed;
+    private static boolean warmPressedCreate;
+    private static boolean warmCreativeSet;
+    private static boolean pauseOpened;
     private static CreativeModeTab ownTab;
 
     private CreativeTitleCheck() {
@@ -92,10 +118,146 @@ public final class CreativeTitleCheck {
                 if (ticks < TITLE_SETTLE_TICKS || mc.getOverlay() != null) {
                     return;
                 }
+                if (WARM) {
+                    stage = Stage.WARM_OPEN_CREATE;
+                } else if (INSTALLED) {
+                    stage = Stage.OPEN_CREATE;
+                } else {
+                    stage = Stage.ADD;
+                }
+                ticks = 0;
+            }
+            case WARM_OPEN_CREATE -> {
+                if (mc.getOverlay() != null) {
+                    return;
+                }
+                try {
+                    CreateWorldScreen.openFresh(mc, mc.screen);
+                } catch (Throwable t) {
+                    fail("warm-up: cannot open the create-world screen: " + t);
+                    return;
+                }
+                stage = Stage.WARM_WAIT_CREATE_SCREEN;
+                ticks = 0;
+            }
+            case WARM_WAIT_CREATE_SCREEN -> {
+                if (!(mc.screen instanceof CreateWorldScreen screen)) {
+                    if (ticks > 20 * 30) {
+                        fail("warm-up: the create-world screen never appeared");
+                    }
+                    return;
+                }
+                if (warmPressedCreate) {
+                    return;
+                }
+                AbstractButton button = findButton(screen, "selectWorld.create");
+                if (button == null) {
+                    return;
+                }
+                warmPressedCreate = true;
+                button.onPress();
+                stage = Stage.WARM_WAIT_WORLD;
+                ticks = 0;
+            }
+            case WARM_WAIT_WORLD -> {
+                if (mc.level == null || mc.player == null) {
+                    if (ticks > 20 * 180) {
+                        fail("warm-up: the first world never loaded");
+                    }
+                    return;
+                }
+                stage = Stage.WARM_PREPARE_CREATIVE;
+                ticks = 0;
+            }
+            case WARM_PREPARE_CREATIVE -> {
+                MinecraftServer server = mc.getSingleplayerServer();
+                if (server == null) {
+                    fail("warm-up: no integrated server");
+                    return;
+                }
+                if (!warmCreativeSet) {
+                    warmCreativeSet = true;
+                    server.execute(() -> {
+                        ServerPlayer player = server.getPlayerList().getPlayers().stream()
+                                .findFirst().orElse(null);
+                        if (player != null) {
+                            player.setGameMode(GameType.CREATIVE);
+                        }
+                    });
+                    return;
+                }
+                if (mc.player == null || !mc.player.isCreative()) {
+                    if (ticks > 100) {
+                        fail("warm-up: the player never became creative");
+                    }
+                    return;
+                }
+                stage = Stage.WARM_OPEN_SCREEN;
+                ticks = 0;
+            }
+            case WARM_OPEN_SCREEN -> {
+                try {
+                    mc.setScreen(new CreativeModeInventoryScreen(
+                            mc.player, mc.level.enabledFeatures(), true));
+                } catch (Throwable t) {
+                    fail("warm-up: opening the creative inventory threw " + t);
+                    return;
+                }
+                stage = Stage.WARM_RENDER;
+                ticks = 0;
+            }
+            case WARM_RENDER -> {
+                if (ticks < 40) {
+                    return;
+                }
+                ModReloader.LOGGER.info(
+                        "[CreativeTitle] warm-up: creative inventory rendered; "
+                                + "CACHED_PARAMETERS is now populated");
+                stage = Stage.WARM_QUIT;
+                ticks = 0;
+            }
+            case WARM_QUIT -> {
+                // Exactly the player path: pause screen -> "Save and Quit to Title".
+                if (!pauseOpened) {
+                    pauseOpened = true;
+                    mc.setScreen(new PauseScreen(true));
+                    return;
+                }
+                AbstractButton quit = findButton(mc.screen, "menu.returnToMenu");
+                if (quit == null) {
+                    if (ticks > 100) {
+                        fail("warm-up: the pause screen has no 'menu.returnToMenu' button (screen="
+                                + (mc.screen == null ? "null" : mc.screen.getClass().getSimpleName()) + ")");
+                    }
+                    return;
+                }
+                quit.onPress();
+                stage = Stage.WARM_WAIT_TITLE;
+                ticks = 0;
+            }
+            case WARM_WAIT_TITLE -> {
+                if (mc.level != null || mc.player != null) {
+                    if (ticks > 20 * 60) {
+                        fail("warm-up: still in a world after disconnect");
+                    }
+                    return;
+                }
+                warmed = true;
+                ModReloader.LOGGER.info(
+                        "[CreativeTitle] warm-up done (title screen, level={}, server={}); "
+                                + "hot-adding now",
+                        mc.level, ServerLifecycleHooks.getCurrentServer() == null ? "null" : "present");
                 stage = Stage.ADD;
                 ticks = 0;
             }
             case ADD -> {
+                if (WARM) {
+                    ModReloader.LOGGER.info(
+                            "[CreativeTitle] at add: sortedTabs={} modTabsInSorted={} server={}",
+                            CreativeModeTabRegistry.getSortedCreativeModeTabs().size(),
+                            countSortedModTabs(),
+                            ServerLifecycleHooks.getCurrentServer() == null ? "null" : "present");
+                }
                 HotAddEngine.Result result = HotAddEngine.add(jar);
                 ModReloader.LOGGER.info("[CreativeTitle] title-screen add: ok={} stage={} kind={} msg={}",
                         result.ok(), result.stage(), result.kind(), result.message());
@@ -372,6 +534,17 @@ public final class CreativeTitleCheck {
             out.add(names.toString());
         }
         return out.toString();
+    }
+
+    private static int countSortedModTabs() {
+        int count = 0;
+        for (CreativeModeTab tab : CreativeModeTabRegistry.getSortedCreativeModeTabs()) {
+            ResourceLocation key = BuiltInRegistries.CREATIVE_MODE_TAB.getKey(tab);
+            if (key != null && key.getNamespace().equals(MOD_ID)) {
+                count++;
+            }
+        }
+        return count;
     }
 
     /** Tabs of a page, as registry keys (for log lines). */

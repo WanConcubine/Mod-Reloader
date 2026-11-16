@@ -166,3 +166,7 @@
   也就是说：**当前代码上主菜单热加这条路径是通过的**；唯一“打开时看不到”的原因是页签在第 2 页（第 1 页是 10 个 vanilla 页签 + hotbar/search/inventory）。
   旧构建上是否失败没有对照（那次报告与 title-screen 分支/`CACHED_PARAMETERS` 失效逻辑的先后不明），所以只写「这条路径第一次被自动验证，当前通过」，不写「修好了」。
   文档：[dogfood-gameplay.md](features/dogfood-gameplay.md) §2.1.1、status。
+  又补了两个对照（2026-11-16 16:03–16:05）：**warm cache**（`-PverifyCreativeAtTitleWarm`：先进世界开一次创造栏 → 暂停菜单 Save and Quit → 标题屏热加 → 再进世界）——
+  `at add: sortedTabs=10 modTabsInSorted=0 server=null`、add ok、页签第 2/2 页、182 项、PASS；**正常安装**（jar 在 `run/mods`，`-PverifyCreativeAtTitleInstalled`，不热加）——同样第 2/2 页、182 项、PASS。
+  结论：三条路径（进世界后 add / 标题屏 add / 正常安装）唯一「打开时看不到」的原因都是**页签在第 2 页**（NeoForge 分页，`>` 在屏幕左上/右上）；
+  用户选的「翻页也找不到任何页签」在四条路径上**没有复现**，需要那次会话的 `latest.log`/截图才能继续。

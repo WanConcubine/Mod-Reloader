@@ -217,6 +217,15 @@ neoForge {
                 systemProperty 'modreloader.verifyCreativeAtTitle',
                         providers.gradleProperty('verifyCreativeAtTitle').get()
             }
+            if (providers.gradleProperty('verifyCreativeAtTitleInstalled').orNull) {
+                // Control case: the mod is already in mods/; skip the add.
+                systemProperty 'modreloader.verifyCreativeAtTitleInstalled', 'true'
+            }
+            if (providers.gradleProperty('verifyCreativeAtTitleWarm').orNull) {
+                // Same check after entering a world and opening the creative
+                // inventory once (vanilla's tab-content cache is populated).
+                systemProperty 'modreloader.verifyCreativeAtTitleWarm', 'true'
+            }
             if (providers.gradleProperty('verifyCreativeAtTitleModId').orNull) {
                 systemProperty 'modreloader.verifyCreativeAtTitleModId',
                         providers.gradleProperty('verifyCreativeAtTitleModId').get()
