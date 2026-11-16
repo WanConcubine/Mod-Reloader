@@ -87,7 +87,9 @@
 | **BuiltInRegistries** | 内置注册表的静态入口。 |
 | **DeferredRegister** | NeoForge 的延迟注册器；`DeferredRegister#register` 是分析器的强信号。 |
 | **RegisterEvent** | NeoForge 的注册事件；`RegisterEvent#register` 也是强信号。 |
-| **Datapack registry** | 由数据包加载的注册表（附魔、伤害类型、纹饰等），`/reload` 可重建。 |
+| **Datapack registry** | 由数据包加载的注册表（附魔、伤害类型、纹饰等），`/reload` 可重建。分两层：`RELOADABLE` 层随 `/reload` 重建，`WORLDGEN` 层（维度/生物群系/结构）要世界加载才生效。 |
+| **PackRepository** | 服务端数据包 / 客户端资源包的仓库；世界加载时由 `WorldLoader` 建，`/reload` 从它重新打开选中的包。热加用的 pack 通过 `addPackFinder` 注入这里。 |
+| **Datapack 热加载** | 把热加 mod 的 jar 当成 data pack 塞进服务器 `PackRepository`，再走 `MinecraftServer#reloadResources`（= 原版 `/reload`），让配方/战利品/标签/mod 自注册的 reload listener 不重启生效；只覆盖 `RELOADABLE` 层，add-only。见 [features/t4-datapack-hotadd.md](features/t4-datapack-hotadd.md)。 |
 | **Freeze** | 注册表在 bootstrap 后冻结；再注册会抛异常。 |
 | **Numeric ID** | 注册表条目的整数 ID；会进存档和网络包，删除条目会让后面的 ID 前移。 |
 

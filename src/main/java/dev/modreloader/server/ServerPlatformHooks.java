@@ -1,12 +1,15 @@
 package dev.modreloader.server;
 
 import dev.modreloader.ModReloader;
+import dev.modreloader.hotadd.DatapackStage;
 import dev.modreloader.hotadd.PlatformHooks;
 import dev.modreloader.hotadd.Rollback;
 import net.minecraft.network.Connection;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.loading.moddiscovery.ModFile;
 import net.neoforged.fml.loading.moddiscovery.ModFileInfo;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
+import net.neoforged.neoforgespi.language.IModFileInfo;
 
 import java.util.List;
 import java.util.Set;
@@ -46,5 +49,10 @@ public final class ServerPlatformHooks implements PlatformHooks {
     @Override
     public void afterRegistryContent() {
         // No creative tabs on a dedicated server.
+    }
+
+    @Override
+    public DatapackStage.Result reloadDataPacks(IModFileInfo fileInfo, Set<String> modIds) {
+        return DatapackStage.apply(ServerLifecycleHooks.getCurrentServer(), fileInfo, modIds);
     }
 }

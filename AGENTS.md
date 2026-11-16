@@ -7,7 +7,7 @@
 ## 1. 项目是什么
 
 - **目标**：让 Minecraft Java 版模组在游戏运行时**安全地增删 / 更新 / 热重载**。
-- **当前阶段**：只读分析器 v0 已完成；**A0（嫔级模组热加）已验证**；**A1.2（妃级/Mixin + 布局变更）主路径已在 dev client 验证**：`lanserverproperties` 热加后进世界打开 Open to LAN，LSP 控件可用；**失败回滚已覆盖 post-ModList / post-pack**（恢复 ModList/module/config/类/资源包，post-ModList 重试成功）。构造后事件监听器无法注销、存档回读未做，按 §6 尚不算完成。**mods/inbox 监听 + 预检 + toast/弹窗 + 失败分析初版已实现**（EasyLAN 检测→加载、坏 jar 失败屏、贵妃级实验性加载与警告）。贵妃级软重启未开始；**贵妃级注册表热加（实验性，add-only）已验证**：服务端热加一个方块 + BlockItem、放置存盘、重启读档 PASS（[t4-registry-hotadd.md](docs/features/t4-registry-hotadd.md)）；仍限 add-only；单人客户端资源包/创造栏已验证，多人登录同步与 datapack 未做；UI 已放行并显示实验性警告；真实 dogfood（众星捧月 1.5.0）注册层热加通过（80 方块/181 物品），但 datapack 配方/战利品/标签不加载（ADR-0008 Accepted）。剩余人工：点 EasyLAN 的 GUI 按钮（`/modreloader add` 已由 `-PverifyAddCommand` 自动化）。**服务端**：runtime 能在 dedicated server 加载并热加嫔级；命令注册通过重放 `RegisterCommandsEvent` 生效（根命令 93→94），重复触发的 `ServerTickEvent` 也能到达；payload 可通过 `NetworkAdaptation` 解冻注册表后注册，并修补已建立连接的 `PayloadSetup`（E1/E2 单人 + E3 跨进程均已验证）；一次性启动事件 / datapack 注册表仍不支持（ADR-0007/0008）；built-in 注册表 add-only 的服务端热加已验证。**工程侧（2026-11-15）**：引擎通过 `PlatformHooks` 与两端解耦，启动时有 `Capabilities` 反射锚点守卫，`src/dev` 独立 source set（不进发布 jar），`./gradlew test` 有 3 个无游戏 Java 单测。
+- **当前阶段**：只读分析器 v0 已完成；**A0（嫔级模组热加）已验证**；**A1.2（妃级/Mixin + 布局变更）主路径已在 dev client 验证**：`lanserverproperties` 热加后进世界打开 Open to LAN，LSP 控件可用；**失败回滚已覆盖 post-ModList / post-pack**（恢复 ModList/module/config/类/资源包，post-ModList 重试成功）。构造后事件监听器无法注销、存档回读未做，按 §6 尚不算完成。**mods/inbox 监听 + 预检 + toast/弹窗 + 失败分析初版已实现**（EasyLAN 检测→加载、坏 jar 失败屏、贵妃级实验性加载与警告）。贵妃级软重启未开始；**贵妃级注册表热加（实验性，add-only）已验证**：服务端热加一个方块 + BlockItem、放置存盘、重启读档 PASS（[t4-registry-hotadd.md](docs/features/t4-registry-hotadd.md)）；仍限 add-only；单人客户端资源包/创造栏已验证，多人登录同步未做，**datapack 热加载已验证**（注入 pack + 原版 `/reload`：配方/战利品/标签/机器数据，见 [t4-datapack-hotadd.md](docs/features/t4-datapack-hotadd.md)）；UI 已放行并显示实验性警告；真实 dogfood（众星捧月 1.5.0）注册层 + datapack 都通过（80 方块/181 物品；recipes 0→164、loot 0→75，真实合成与掉落 PASS；ADR-0008 Accepted，ADR-0009 Proposed）。剩余人工：点 EasyLAN 的 GUI 按钮（`/modreloader add` 已由 `-PverifyAddCommand` 自动化）。**服务端**：runtime 能在 dedicated server 加载并热加嫔级；命令注册通过重放 `RegisterCommandsEvent` 生效（根命令 93→94），重复触发的 `ServerTickEvent` 也能到达；payload 可通过 `NetworkAdaptation` 解冻注册表后注册，并修补已建立连接的 `PayloadSetup`（E1/E2 单人 + E3 跨进程均已验证）；一次性启动事件 / 世界生成注册表（维度/生物群系/结构）仍不支持（ADR-0007/0009）；built-in 注册表 add-only 的服务端热加已验证；**datapack（配方/战利品/标签/机器数据）在 dedicated server 上也会随热加重载**（fixture 热加 + 重启验证）。**工程侧（2026-11-15）**：引擎通过 `PlatformHooks` 与两端解耦，启动时有 `Capabilities` 反射锚点守卫，`src/dev` 独立 source set（不进发布 jar），`./gradlew test` 有 3 个无游戏 Java 单测。
 - **目标版本**：**Minecraft 1.21.1**；分析器支持 Fabric + NeoForge，语料与校准锁 1.21.1。
 - **运行时首发**：**NeoForge 1.21.1**（原因见 [ADR-0001](docs/decisions/0001-target-1.21.1-neoforge.md)）。
 - **首个 dogfood**：`../Ex-Nihilo-Satellitium`（NeoForge 1.21.1，贵妃级内容模组）。
@@ -85,6 +85,15 @@ python3 tools/analyzer/run.py scan ~/Projects/Ex-Nihilo-Satellitium/build/libs/e
 # 贵妃级注册表热加：热加夹具 → 放置/存盘 → 放进 run/mods → 重启读档（详见 experiments/t4-fixture/README.md）
 ./gradlew runServer -PautoAdd=/tmp/t4fixture/t4fixture-1.0.0.jar -Pt4fixtureSelftest=true
 
+# 贵妃级 datapack 热加载：世界内热加后断言配方/战利品/标签/合成/掉落（详见 docs/features/t4-datapack-hotadd.md）
+./gradlew runClient \
+  -PverifyAddCommand=/Users/kaifengcrt/Projects/Ex-Nihilo-Satellitium/build/libs/exnihilosatellitium-1.21.1-1.5.0.jar \
+  -PverifyAddCommandModId=exnihilosatellitium -PverifyDatapack=true
+# 同一断言，但先在标题屏热加（GUI 路径），数据由世界加载/延迟注入生效
+./gradlew runClient \
+  -PverifyAddCommand=/Users/kaifengcrt/Projects/Ex-Nihilo-Satellitium/build/libs/exnihilosatellitium-1.21.1-1.5.0.jar \
+  -PverifyAddCommandModId=exnihilosatellitium -PverifyDatapack=true -PverifyDatapackAtTitle=true
+
 # 贵妃级调研：只读注册表探针（加 -PverifyRegistryRefreeze=true 会做一次受控 unfreeze/freeze，仅一次性世界）
 ./gradlew runClient -PverifyAddCommand=/tmp/lanmods/EasyLAN-neoforge-1.21.1-v1.6a.jar -PverifyRegistryProbe=true
 
@@ -146,6 +155,7 @@ Gradle 编译仍用 Temurin 21 toolchain，只有游戏运行用 JBR。
 9. **不要夸大 A0**：A0 只支持嫔级（无 mixin、无注册表）；不要在文档/UI 里写成“支持任意模组”。
 10. **不要夸大 A1**：A1.2 只验证了 `lanserverproperties` + JBR + dev client；MixinRuntime 是**可选**依赖（缺它妃级被拦、嫔级照常，但构建仍需 `libs/` 的 jar）；失败回滚只覆盖 post-ModList/post-pack，构造后事件监听器和存档回读未解决；不等于通用妃级支持。
 11. **不要夸大 GUI/监听**：只验证了 EasyLAN、坏 jar、Ex Nihilo 贵妃级三个场景；`scan`/`gui` 命令、失败重试、忽略记录跨重启未自动验证（`add` 命令、世界内 toast、主菜单入口与忽略恢复已有 harness）；**皇后级只提示重启**；贵妃级走实验性 add-only 热加（UI 有警告，仅验证过 fixture）。
+12. **不要夸大 datapack**：只覆盖 `RegistryLayer.RELOADABLE`（配方/战利品/标签/附魔/伤害类型/纹饰/物品修饰器 + mod 自注册的 server reload listener）；**世界生成注册表**（维度/生物群系/结构）仍需重启或新世界。只能 add、不能删/改；提交后不可回滚；存档会绑定 `mod/<modId>` 这个 data pack。只验证过众星捧月 1.5.0 与 t4fixture，不要写成"支持任意 datapack"。
 
 ## 4. 目录
 
@@ -156,11 +166,11 @@ docs/
   design.md                # 架构、分层、不变量
   glossary.md              # 术语（嫔/妃/贵妃/皇后、软重启、sidecar、registry…）
   use-cases.md             # 真实场景：什么情况下无需重启最有价值
-  features/                # 功能规格与验证：a0-hot-add.md / a1-mixin-hotadd.md / gui-mod-watcher.md / server-hotadd.md / t4-registry-hotadd.md / lan-doctor.md
+  features/                # 功能规格与验证：a0-hot-add.md / a1-mixin-hotadd.md / gui-mod-watcher.md / server-hotadd.md / t4-registry-hotadd.md / t4-datapack-hotadd.md / lan-doctor.md
   decisions/               # ADR：为什么这样定
   research-hot-mod-reload.md  # 2026-11 调研报告；历史背景，结论以 status 为准
   research-t4-registry.md    # 贵妃级注册表适配调研（机制/边界/实验计划）
-  research-t4-datapack-reload.md # 下一步：datapack 热加载（配方/战利品/标签）调研与 PoC 计划
+  research-t4-datapack-reload.md # 贵妃级 datapack 热加载调研（已完成；结论见 features/t4-datapack-hotadd.md）
   roadmap.md               # 长期路线；短期执行以 status 为准
   tech-debt.md             # 结构性技术债与架构升级点（P0/P1/P2）
   history.md               # 追加式变更历史（做了什么/证据/为什么）；状态只看 status.md
@@ -170,7 +180,7 @@ src/test/java/dev/modreloader/     # 不需要游戏的 JUnit 测试
 tools/analyzer/            # 只读分析器（Python）
 experiments/self-attach-poc/  # 自附加 + 类重定义最小验证（Java）
 experiments/server-fixture/   # 夹具：命令+tick、payload（payload 适配验证）
-experiments/t4-fixture/       # 夹具：一个方块 + BlockItem（贵妃级注册表热加验证）
+experiments/t4-fixture/       # 夹具：一个方块 + BlockItem + 一份最小 datapack（贵妃级注册表/datapack 热加验证）
 ```
 
 ## 5. 记忆约定

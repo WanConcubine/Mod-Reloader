@@ -11,26 +11,28 @@
 | `dev/` 夹具 | **9 文件 / 2101 行 ≈ 30%**，独立 `src/dev/java` source set；**不在发布 jar 里**（jar 内 0 条 `dev/modreloader/dev/`） |
 | 反射 / Unsafe 站点 | 8 个文件（mixin、ModList、module、网络、资源包、JVM） |
 | Java 单测 | **3**（`./gradlew test`，不需要游戏） |
-| 语言文件 | `en_us` / `zh_cn` 各 **132 key**，键集与 `%s` 占位符由单测核对 |
+| 语言文件 | `en_us` / `zh_cn` 各 **134 key**，键集与 `%s` 占位符由单测核对 |
 | 包依赖 | `hotadd` **不再**依赖 `client` / `server`；剩 `command ↔ client`、`client → server`（集成服务器的命令重放）、`diagnose → ui`（文案） |
 
 ## P0：会让我们「悄悄说错话」的
 
 ### ✅ 1. 反射面兼容性守卫（已完成 2026-11-15）
 
-`capability/Capabilities` 在启动时**只读**探测五组锚点，打一行报告：
+`capability/Capabilities` 在启动时**只读**探测六组锚点，打一行报告：
 
 ```
-[ModReloader] capabilities: module_injection=ok modlist_rebuild=ok network_adaptation=ok mixin_hotadd=ok resource_packs=ok
+[ModReloader] capabilities: module_injection=ok modlist_rebuild=ok network_adaptation=ok mixin_hotadd=ok registry_adaptation=ok datapack_reload=ok resource_packs=ok
 ```
 
 - module：`ModuleClassLoader#resolvedRoots/packageLookup`、`ModuleLayer#modules/nameToModule/servicesCatalog`、`Configuration#modules/nameToModule`、`Module`/`ResolvedModule` 构造器
 - modlist：`ModList#modFiles/sortedList/mods/setLoadedMods`、`ModLoader#modList/buildMods`
 - network：`NetworkRegistry#setup/PAYLOAD_REGISTRATIONS`、`ChannelAttributes#getPayloadSetup/setPayloadSetup`
 - mixin：`MixinEnvironment#getActiveTransformer/compatibility` + MixinRuntime 的 `MixinProcessorUtils` / `MixinConfigUtils`
+- registry：`MappedRegistry#unfreeze`、`GameData#unfreezeData/freezeData/getRegistrationOrder`、`RegisterEvent` 构造器、`BlockCallbacks#BLOCKSTATE_TO_ID_MAP`
+- datapack：`MinecraftServer#reloadResources/reloadableRegistries`、`PackRepository#addPackFinder`、`ResourcePackLoader#createPackForMod/readWithOptionalMeta/MOD_DATA_ID`
 - packs：`ResourcePackLoader#modResourcePacks/createPackForMod/populatePackRepository`（服务端 `n/a`）
 
-锚点缺失时 `HotAddEngine` 在 module/modlist/mixin 阶段前 fail-fast（`FailureKind.CAPABILITY` + 中英文案）；资源包缺失只 warn + 跳过。**剩余**：① 预检/GUI 还没读这份报告（现在只有 add 时 gate + 日志）；② 名字对不等于行为对 —— 第一版把 `createPackForMod(IModFileInfo)` 写成 `ModFileInfo`，把能力误判为不可用，靠游戏内 harness 才发现；锚点清单本身仍需要游戏内回归。
+锚点缺失时 `HotAddEngine` 在 module/modlist/mixin 阶段前 fail-fast（`FailureKind.CAPABILITY` + 中英文案），带 `data/` 的 jar 还会在**任何变更之前**检查 datapack 锚点；资源包缺失只 warn + 跳过。**剩余**：① 预检/GUI 还没读这份报告（现在只有 add 时 gate + 日志）；② 名字对不等于行为对 —— 第一版把 `createPackForMod(IModFileInfo)` 写成 `ModFileInfo`，把能力误判为不可用，靠游戏内 harness 才发现；锚点清单本身仍需要游戏内回归。
 
 ### ✅ 2. 引擎层不再依赖两侧实现（已完成 2026-11-15）
 

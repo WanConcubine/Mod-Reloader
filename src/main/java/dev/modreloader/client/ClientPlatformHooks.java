@@ -1,6 +1,7 @@
 package dev.modreloader.client;
 
 import dev.modreloader.ModReloader;
+import dev.modreloader.hotadd.DatapackStage;
 import dev.modreloader.hotadd.PlatformHooks;
 import dev.modreloader.hotadd.Rollback;
 import dev.modreloader.server.ServerCommands;
@@ -14,6 +15,7 @@ import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.fml.loading.moddiscovery.ModFile;
 import net.neoforged.fml.loading.moddiscovery.ModFileInfo;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforgespi.language.IModFileInfo;
 
 import java.util.List;
 import java.util.Set;
@@ -83,5 +85,14 @@ public final class ClientPlatformHooks implements PlatformHooks {
         }
         ModReloader.LOGGER.info(
                 "[ModReloader] rebuilt {} creative tab(s) after registry content", rebuilt);
+    }
+
+    @Override
+    public DatapackStage.Result reloadDataPacks(IModFileInfo fileInfo, Set<String> modIds) {
+        Minecraft minecraft = Minecraft.getInstance();
+        // A client only has a server while a world is open. At the title screen
+        // this is null and DatapackStage defers the pack to the next world start.
+        return DatapackStage.apply(minecraft == null ? null : minecraft.getSingleplayerServer(),
+                fileInfo, modIds);
     }
 }

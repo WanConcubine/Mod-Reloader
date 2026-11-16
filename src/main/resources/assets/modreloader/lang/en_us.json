@@ -86,6 +86,8 @@
   "modreloader.failure.event.suggestion": "Check the stack trace; event listeners may remain, prefer restart.",
   "modreloader.failure.resource_pack.summary": "Resource pack injection/reload failed.",
   "modreloader.failure.resource_pack.suggestion": "The mod may be loaded without resources; restart to load the pack normally.",
+  "modreloader.failure.datapack.summary": "The mod's data pack (recipes, loot tables, tags) could not be applied.",
+  "modreloader.failure.datapack.suggestion": "The registry content is already committed and cannot be rolled back. Restart with the jar in mods/ so the game loads its data normally.",
   "modreloader.failure.rollback_partial.summary": "Load failed and rollback was not fully successful.",
   "modreloader.failure.rollback_partial.suggestion": "Restart; see rollback errors below.",
   "modreloader.failure.unknown.summary": "Load failed; the cause could not be classified.",

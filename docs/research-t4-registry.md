@@ -197,7 +197,7 @@ refreeze: after 15 ms; blocks=1060 states=26684 frozen=true stone=26685 grass=26
 - ✅ 服务端优先（没有资源包/创造栏/GL），客户端后补；
 - ❌ 删除 / 更新 / 替换注册表条目；
 - ❌ datapack 内容（biome / dimension / enchantment / damage type / recipe / loot / tag）；
-- ❌ 连接后热加后同步给已在线客户端；
+  （**2026-11-15 更新**：recipe / loot / tag 与 RELOADABLE 层已可热加载，见 [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md)；WORLDGEN 层仍不行）
 - ❌ mod 自己 `NewRegistryEvent` 建的新注册表（启动后 `pendingModdedRegistries = null`，直接抛）；
 - ❌ 可回滚 / 存档无副作用。
 
@@ -218,7 +218,7 @@ refreeze: after 15 ms; blocks=1060 states=26684 frozen=true stone=26685 grass=26
 2. **失败语义**：construct 阶段抛异常（此时注册表已 unfreeze）→ 确认进程被标记 dirty、
    不尝试回滚、提示重启；这是"单向提交"的诚实实现。
 3. **客户端**：同一夹具在客户端登录前热加 → 进入世界 → 模型/翻译/创造栏可见。
-4. **数据包**：给夹具加一个 `data/` 配方 + tag，评估"数据包重建"是否可行；不可行就写死边界。
+4. ✅ **数据包**（2026-11-15，已完成）：夹具已加 `data/`（配方 + 战利品表 + 方块标签），走「注入 pack + 原版 `/reload`」，热加后与重启后都生效。见 [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md)。
 
 ## 7. 未解问题
 
@@ -227,7 +227,7 @@ refreeze: after 15 ms; blocks=1060 states=26684 frozen=true stone=26685 grass=26
    （客户端不写存档）。这一点需要单独实验确认，否则不能依赖它的语义。
 2. **`IdMappingEvent` 重放**：freeze 会触发它；监听者（JEI、配方查看器等）在运行中收到会怎样，未测。
 3. **mod 自带注册表**（`NewRegistryEvent`）：启动后直接抛，是否有绕法（`pendingModdedRegistries` 反射）未评估。
-4. **数据包重建**：`PackRepository` + `ReloadableServerResources` 能否在运行中安全重建，未评估。
+4. ~~**数据包重建**~~（2026-11-15 已评估并解决）：`PackRepository` + `reloadResources` 可行、add-only；见 [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md)。
 5. **性能**：89 个注册表全部 unfreeze/freeze 约 15 ms（无新内容）；带新内容 + bake 的实际耗时未测。
 6. **`ModifyRegistriesEvent` / `RegisterDataMapTypesEvent` / `DataPackRegistryEvent`**：都是启动期一次性事件，
    T4 模组若依赖它们，需要各自的重放策略。

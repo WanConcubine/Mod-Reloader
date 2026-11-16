@@ -3,6 +3,7 @@ package dev.modreloader.dev;
 import com.mojang.brigadier.CommandDispatcher;
 import dev.modreloader.ModReloader;
 import dev.modreloader.command.ReloaderCommands;
+import dev.modreloader.hotadd.HotAddEngine;
 import dev.modreloader.hotadd.UnsafeAccess;
 import dev.modreloader.ui.ModReloaderScreen;
 import net.minecraft.client.Minecraft;
@@ -12,7 +13,21 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.worldselection.CreateWorldScreen;
 import net.minecraft.client.resources.language.I18n;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.CraftingInput;
+import net.minecraft.world.item.crafting.RecipeType;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;
@@ -20,6 +35,9 @@ import net.neoforged.neoforge.common.NeoForge;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Dev-only end-to-end check for the in-world {@code /modreloader add} command.
@@ -48,6 +66,7 @@ public final class AddCommandCheck {
     private static int worldTicks;
     private static boolean started;
     private static boolean pressedCreate;
+    private static boolean titleAdded;
     private static boolean failed;
 
     /** Mod the command is expected to add (or to reject when {@link #expectFailure}). */
@@ -62,6 +81,24 @@ public final class AddCommandCheck {
      */
     private static final String WATCH_JAR =
             System.getProperty("modreloader.verifyAddCommandWatchJar", "").trim();
+
+    /**
+     * Optional datapack phase ({@code -PverifyDatapack=true}): proves the mod's
+     * {@code data/} is live in the running world, not merely committed to the
+     * registry — recipes, loot tables and tags are read back from the server.
+     */
+    private static final boolean VERIFY_DATAPACK = Boolean.getBoolean("modreloader.verifyDatapack");
+
+    /**
+     * Title-screen variant ({@code -PverifyDatapackAtTitle=true}): hot-add before
+     * a world exists, exactly like the main-menu prompt / inbox watcher does.
+     * The data pack must then be applied by the deferred world-start hook, not by
+     * the in-world path.
+     */
+    private static final boolean TITLE_ADD = Boolean.getBoolean("modreloader.verifyDatapackAtTitle");
+
+    /** Recipes in the mod namespace measured before the add; -1 when not measured. */
+    private static long recipesBefore = -1;
 
     private AddCommandCheck() {
     }
@@ -87,7 +124,7 @@ public final class AddCommandCheck {
         }
         Minecraft mc = Minecraft.getInstance();
         switch (stage) {
-            case OPEN_CREATE -> openCreateScreen(mc);
+            case OPEN_CREATE -> openCreateScreen(mc, jar);
             case WAIT_CREATE_SCREEN -> waitForCreateScreen(mc);
             case WAIT_WORLD -> waitForWorld(mc);
             case RUN_COMMAND -> runCommand(mc, jar);
@@ -99,10 +136,34 @@ public final class AddCommandCheck {
         }
     }
 
-    private static void openCreateScreen(Minecraft mc) {
+    private static void openCreateScreen(Minecraft mc, Path jar) {
         if (mc.getOverlay() != null) {
             if (ticks > 20 * 30) {
                 fail("resource reload overlay did not clear");
+            }
+            return;
+        }
+        if (TITLE_ADD && !titleAdded) {
+            titleAdded = true;
+            // Same path as the main-menu prompt: no server exists yet, so the
+            // data pack has to be deferred to the world start.
+            ModReloader.LOGGER.info("[AddCmdCheck] title-screen add: {}", jar);
+            HotAddEngine.Result result = HotAddEngine.add(jar);
+            ModReloader.LOGGER.info("[AddCmdCheck] title-screen add result: {}", result.message());
+            recipesBefore = 0;
+            if (!result.ok()) {
+                fail("title-screen add failed: " + result.message());
+            }
+            // Wait at least one tick so the resource reload overlay installed by
+            // the add is visible to the check below.
+            return;
+        }
+        if (TITLE_ADD && mc.getOverlay() != null) {
+            // The add starts a client resource reload; creating a world while its
+            // overlay is up deadlocks Minecraft.doWorldLoad's wait loop. A human
+            // cannot click through the overlay either, so waiting is faithful.
+            if (ticks > 20 * 120) {
+                fail("resource reload overlay did not clear after the title-screen add");
             }
             return;
         }
@@ -157,6 +218,14 @@ public final class AddCommandCheck {
     }
 
     private static void runCommand(Minecraft mc, Path jar) {
+        if (TITLE_ADD) {
+            // The mod was added at the title screen; re-adding would be rejected
+            // as ALREADY_LOADED. Go straight to the verification.
+            ModReloader.LOGGER.info("[AddCmdCheck] title-screen mode: /modreloader add is skipped");
+            stage = Stage.VERIFY;
+            ticks = 0;
+            return;
+        }
         CommandDispatcher<CommandSourceStack> dispatcher = ReloaderCommands.dispatcher();
         if (dispatcher == null) {
             fail("client command dispatcher was never captured");
@@ -164,6 +233,12 @@ public final class AddCommandCheck {
         }
         ModReloader.LOGGER.info("[AddCmdCheck] dispatcher has /modreloader={}",
                 dispatcher.getRoot().getChild("modreloader") != null);
+        if (VERIFY_DATAPACK) {
+            MinecraftServer server = mc.getSingleplayerServer();
+            recipesBefore = server == null ? -1 : recipesInNamespace(server, EXPECT_MOD_ID);
+            ModReloader.LOGGER.info("[AddCmdCheck] datapack baseline before add: "
+                    + "recipes in {} = {} (a fresh world has none)", EXPECT_MOD_ID, recipesBefore);
+        }
         String path = jar.toAbsolutePath().normalize().toString();
         String command = "modreloader add " + (path.contains(" ") ? "\"" + path + "\"" : path);
         try {
@@ -203,8 +278,124 @@ public final class AddCommandCheck {
                     + ", container=" + container + ")");
             return;
         }
+        if (VERIFY_DATAPACK && !verifyDatapack(mc)) {
+            return;
+        }
         ModReloader.LOGGER.info("[AddCmdCheck] RESULT: PASS");
         advanceAfterVerify();
+    }
+
+    /**
+     * Reads the mod's data back from the running server: recipe manager, loot
+     * table registry, block tags, plus two behavioural checks (a crafting grid
+     * actually assembles an Ex Nihilo item; the block's loot table drops it).
+     */
+    private static boolean verifyDatapack(Minecraft mc) {
+        MinecraftServer server = mc.getSingleplayerServer();
+        if (server == null) {
+            fail("datapack check: the integrated server is gone");
+            return false;
+        }
+        long recipes = recipesInNamespace(server, EXPECT_MOD_ID);
+        boolean crucibleRecipe = server.getRecipeManager().byKey(id("wooden_crucible")).isPresent();
+        ModReloader.LOGGER.info("[AddCmdCheck] datapack recipes: {} -> {} in namespace {}; "
+                        + "{}:wooden_crucible={}",
+                recipesBefore, recipes, EXPECT_MOD_ID, EXPECT_MOD_ID, crucibleRecipe);
+        if (recipes <= Math.max(0, recipesBefore)) {
+            fail("the data pack added no recipes for " + EXPECT_MOD_ID
+                    + " (before=" + recipesBefore + ", after=" + recipes + ")");
+            return false;
+        }
+        if (!crucibleRecipe) {
+            fail(EXPECT_MOD_ID + ":wooden_crucible recipe is not in the recipe manager");
+            return false;
+        }
+
+        long lootTables = server.reloadableRegistries().getKeys(Registries.LOOT_TABLE).stream()
+                .filter(key -> EXPECT_MOD_ID.equals(key.getNamespace()))
+                .count();
+        boolean crucibleLoot = server.reloadableRegistries().getKeys(Registries.LOOT_TABLE)
+                .contains(id("blocks/wooden_crucible"));
+        ModReloader.LOGGER.info("[AddCmdCheck] datapack loot tables: {} in namespace {}; "
+                        + "{}:blocks/wooden_crucible={}",
+                lootTables, EXPECT_MOD_ID, EXPECT_MOD_ID, crucibleLoot);
+        if (!crucibleLoot) {
+            fail(EXPECT_MOD_ID + ":blocks/wooden_crucible loot table is not loaded");
+            return false;
+        }
+
+        TagKey<Block> tagKey = TagKey.create(Registries.BLOCK, id("wooden_crucibles"));
+        var tag = server.reloadableRegistries().get()
+                .registryOrThrow(Registries.BLOCK)
+                .getTag(tagKey);
+        boolean tagLoaded = tag.map(set -> set.size() > 0).orElse(false);
+        ModReloader.LOGGER.info("[AddCmdCheck] datapack block tag #{}: present={}, entries={}",
+                tagKey.location(), tag.isPresent(), tag.map(set -> set.size()).orElse(0));
+        if (!tagLoaded) {
+            fail("block tag #" + tagKey.location() + " is not loaded");
+            return false;
+        }
+
+        boolean crafted = craftsWoodenCrucible(server);
+        if (!crafted) {
+            fail("a real 3x3 grid of oak logs + oak slab does not assemble "
+                    + EXPECT_MOD_ID + ":wooden_crucible");
+            return false;
+        }
+
+        List<ItemStack> drops = woodenCrucibleDrops(server, mc.player.blockPosition());
+        boolean dropsItem = drops.stream().anyMatch(stack ->
+                id("wooden_crucible").equals(BuiltInRegistries.ITEM.getKey(stack.getItem())));
+        ModReloader.LOGGER.info("[AddCmdCheck] datapack loot drop: {} -> {}", EXPECT_MOD_ID + ":wooden_crucible",
+                drops.stream().map(stack -> BuiltInRegistries.ITEM.getKey(stack.getItem())
+                        + " x" + stack.getCount()).toList());
+        if (!dropsItem) {
+            fail("the loot table of " + EXPECT_MOD_ID + ":wooden_crucible dropped nothing"
+                    + " (drops=" + drops.size() + "); the table was not applied");
+            return false;
+        }
+
+        ModReloader.LOGGER.info("[AddCmdCheck] datapack RESULT: PASS "
+                + "(recipes/loot tables/tags/crafting/drops)");
+        return true;
+    }
+
+    private static boolean craftsWoodenCrucible(MinecraftServer server) {
+        List<ItemStack> grid = new ArrayList<>(Collections.nCopies(9, ItemStack.EMPTY));
+        for (int index : new int[]{0, 2, 3, 5, 6, 8}) {
+            grid.set(index, new ItemStack(Items.OAK_LOG));
+        }
+        grid.set(7, new ItemStack(Items.OAK_SLAB));
+        CraftingInput input = CraftingInput.of(3, 3, grid);
+        var match = server.getRecipeManager()
+                .getRecipeFor(RecipeType.CRAFTING, input, server.overworld());
+        ModReloader.LOGGER.info("[AddCmdCheck] datapack craft: 6x oak_log + oak_slab -> {}",
+                match.map(holder -> holder.id() + " = "
+                                + holder.value().getResultItem(server.registryAccess()).getItem())
+                        .orElse("no recipe matched"));
+        return match.isPresent() && id("wooden_crucible").equals(match.get().id());
+    }
+
+    private static List<ItemStack> woodenCrucibleDrops(MinecraftServer server, BlockPos near) {
+        ServerLevel level = server.overworld();
+        Block block = BuiltInRegistries.BLOCK.get(id("wooden_crucible"));
+        if (block == Blocks.AIR) {
+            return List.of();
+        }
+        BlockState state = block.defaultBlockState();
+        // Reading the drop does not touch the world: Block.getDrops resolves the
+        // block's loot table through server.reloadableRegistries().
+        return Block.getDrops(state, level, near, null, null, new ItemStack(Items.IRON_PICKAXE));
+    }
+
+    private static long recipesInNamespace(MinecraftServer server, String namespace) {
+        return server.getRecipeManager().getRecipeIds()
+                .filter(key -> namespace.equals(key.getNamespace()))
+                .count();
+    }
+
+    private static ResourceLocation id(String path) {
+        return ResourceLocation.fromNamespaceAndPath(EXPECT_MOD_ID, path);
     }
 
     private static void advanceAfterVerify() {

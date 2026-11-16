@@ -2,8 +2,11 @@ package dev.modreloader.t4fixture;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.CreativeModeTabs;
@@ -112,6 +115,12 @@ public final class T4FixtureMod {
                     TEST_POS, BuiltInRegistries.BLOCK.getKey(TEST_BLOCK.get()),
                     BuiltInRegistries.BLOCK.getKey(state.getBlock()), pass, pass ? "PASS" : "FAIL");
         }
+        // Datapack half: the jar ships data/t4fixture/{recipe,loot_table,tags}.
+        // Write mode: they must be live right after the hot-add. Read mode: after
+        // a normal restart with the jar in mods/ they must be loaded again.
+        boolean datapack = datapackCheck(server);
+        LOGGER.info("[T4Fixture] datapack ({}) RESULT: {}",
+                read ? "after restart" : "after hot-add", datapack ? "PASS" : "FAIL");
         Thread stopper = new Thread(() -> {
             try {
                 Thread.sleep(1500);
@@ -122,5 +131,26 @@ public final class T4FixtureMod {
         }, "T4FixtureStopper");
         stopper.setDaemon(true);
         stopper.start();
+    }
+
+    /**
+     * Reads the fixture's own datapack content back from the server: a recipe,
+     * a block loot table and a block tag, all shipped in {@code data/}.
+     */
+    private static boolean datapackCheck(MinecraftServer server) {
+        ResourceLocation recipeId = ResourceLocation.fromNamespaceAndPath(MOD_ID, "test_block");
+        ResourceLocation lootId = ResourceLocation.fromNamespaceAndPath(MOD_ID, "blocks/test_block");
+        TagKey<Block> tagKey = TagKey.create(Registries.BLOCK,
+                ResourceLocation.fromNamespaceAndPath(MOD_ID, "test_blocks"));
+        boolean recipe = server.getRecipeManager().byKey(recipeId).isPresent();
+        boolean loot = server.reloadableRegistries().getKeys(Registries.LOOT_TABLE).contains(lootId);
+        int tagEntries = server.reloadableRegistries().get()
+                .registryOrThrow(Registries.BLOCK)
+                .getTag(tagKey)
+                .map(holders -> holders.size())
+                .orElse(0);
+        LOGGER.info("[T4Fixture] datapack: recipe {}={} loot {}={} tag #{}={} ({} entries)",
+                recipeId, recipe, lootId, loot, tagKey.location(), tagEntries > 0, tagEntries);
+        return recipe && loot && tagEntries > 0;
     }
 }

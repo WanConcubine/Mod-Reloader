@@ -51,6 +51,7 @@ public final class Capabilities {
         NETWORK_ADAPTATION("network payload adaptation", false),
         MIXIN_HOTADD("mixin hot-add", false),
         REGISTRY_ADAPTATION("registry content hot-add (guifei)", false),
+        DATAPACK_RELOAD("data pack reload (guifei)", false),
         RESOURCE_PACKS("resource pack injection", false);
 
         private final String label;
@@ -96,6 +97,7 @@ public final class Capabilities {
         RESULTS.put(Capability.NETWORK_ADAPTATION, checkNetworkAdaptation());
         RESULTS.put(Capability.MIXIN_HOTADD, checkMixinHotAdd());
         RESULTS.put(Capability.REGISTRY_ADAPTATION, checkRegistryAdaptation());
+        RESULTS.put(Capability.DATAPACK_RELOAD, checkDatapackReload());
         RESULTS.put(Capability.RESOURCE_PACKS, checkResourcePacks());
 
         List<String> summary = new ArrayList<>();
@@ -251,6 +253,35 @@ public final class Capabilities {
             missing.add("registry anchors: " + t.getClass().getSimpleName());
         }
         return result(Capability.REGISTRY_ADAPTATION, missing);
+    }
+
+    /**
+     * Anchors the datapack stage needs: the vanilla reload entry point, the pack
+     * repository's mutable source set, and the mod pack supplier/reader. A drift
+     * here would only show up <em>after</em> the registry commit, which is
+     * already unrecoverable, so it is worth knowing up front.
+     */
+    private static Result checkDatapackReload() {
+        List<String> missing = new ArrayList<>();
+        try {
+            method(net.minecraft.server.MinecraftServer.class, "reloadResources",
+                    new Class<?>[]{java.util.Collection.class}, missing);
+            method(net.minecraft.server.MinecraftServer.class, "reloadableRegistries",
+                    new Class<?>[0], missing);
+            method(net.minecraft.server.packs.repository.PackRepository.class, "addPackFinder",
+                    new Class<?>[]{net.minecraft.server.packs.repository.RepositorySource.class}, missing);
+            method(ResourcePackLoader.class, "createPackForMod",
+                    new Class<?>[]{IModFileInfo.class}, missing);
+            method(ResourcePackLoader.class, "readWithOptionalMeta",
+                    new Class<?>[]{net.minecraft.server.packs.PackLocationInfo.class,
+                            net.minecraft.server.packs.repository.Pack.ResourcesSupplier.class,
+                            net.minecraft.server.packs.PackType.class,
+                            net.minecraft.server.packs.PackSelectionConfig.class}, missing);
+            statics(ResourcePackLoader.class, List.of("MOD_DATA_ID"), missing);
+        } catch (Throwable t) {
+            missing.add("datapack anchors: " + t.getClass().getSimpleName());
+        }
+        return result(Capability.DATAPACK_RELOAD, missing);
     }
 
     private static Result checkResourcePacks() {

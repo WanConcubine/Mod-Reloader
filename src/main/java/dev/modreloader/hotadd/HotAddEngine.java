@@ -32,20 +32,20 @@ import java.util.Set;
  * <p>Pipeline: read the jar → inject its module into the game layer → register
  * its mixin configs (redefining already-loaded targets with JBR) → rebuild
  * {@link ModList} → construct the mod and replay client events → inject its
- * resource pack.
+ * resource pack → apply its server data pack (recipes/loot/tags).
  *
- * <p>Still out of scope: datapack registries, guifei/huanghou content that needs a
- * full restart, and soft restart.
+ * <p>Still out of scope: datapack registries (dimension/biome/…), guifei/huanghou
+ * content that needs a full restart, and soft restart.
  */
 public final class HotAddEngine {
     public enum Stage {
-        NONE, VALIDATE, MODULE, MIXIN, MODLIST, CONSTRUCT, REGISTRY, EVENT, PACK
+        NONE, VALIDATE, MODULE, MIXIN, MODLIST, CONSTRUCT, REGISTRY, EVENT, PACK, DATAPACK
     }
 
     public enum FailureKind {
         NONE, MISSING_FILE, NOT_A_MOD, INVALID_METADATA, ALREADY_LOADED, MISSING_DEPENDENCY, JBR_REQUIRED,
         MIXIN_RUNTIME, NETWORK_PAYLOAD, UNSUPPORTED_TIER, CAPABILITY, MIXIN_CONFIG, MIXIN_TARGET, REDEFINE, MODULE, MODLIST, REGISTRY,
-        CONSTRUCT, EVENT, RESOURCE_PACK, ROLLBACK_PARTIAL, UNKNOWN
+        CONSTRUCT, EVENT, RESOURCE_PACK, DATAPACK, ROLLBACK_PARTIAL, UNKNOWN
     }
 
     public record Result(boolean ok, String message, Stage stage, FailureKind kind,
@@ -159,6 +159,17 @@ public final class HotAddEngine {
             if (!modListCapability.available()) {
                 return fail(rollback, Stage.VALIDATE, FailureKind.CAPABILITY,
                         modListCapability.describe());
+            }
+            // A data pack has its own framework anchors. Check them before any
+            // mutation: failing at Stage.DATAPACK happens after the registry
+            // commit, which cannot be rolled back.
+            if (DatapackStage.hasData(newFileInfo)) {
+                Capabilities.Result datapackCapability =
+                        Capabilities.get(Capabilities.Capability.DATAPACK_RELOAD);
+                if (!datapackCapability.available()) {
+                    return fail(rollback, Stage.VALIDATE, FailureKind.CAPABILITY,
+                            datapackCapability.describe());
+                }
             }
 
             // 1. module: the new mod's classes must be resolvable before Mixin
@@ -295,6 +306,16 @@ public final class HotAddEngine {
                 return fail(rollback, Stage.PACK, FailureKind.UNKNOWN, "injected failure after resource pack");
             }
 
+            // 6. datapacks: the mod's data/ (recipes, loot tables, tags) is loaded
+            //    by the server's pack repository at world load, so a hot-added mod
+            //    was never in it. Inject the jar as a data pack and run the vanilla
+            //    /reload path. Ordering matters: the registry commit above must be
+            //    done, otherwise recipe ingredients and loot item ids resolve to air.
+            stage = Stage.DATAPACK;
+            DatapackStage.Result datapack = hooks.reloadDataPacks(newFileInfo, ids);
+            ModReloader.LOGGER.info("[ModReloader] datapack {}: {}",
+                    datapack.applied() ? "applied" : "skipped", datapack.detail());
+
             for (String id : loaded) {
                 ModReloader.LOGGER.info(
                         "[ModReloader] verify {}: isLoaded={}, container={}, keyMappings {} -> {}",
@@ -315,6 +336,9 @@ public final class HotAddEngine {
             if (constructed[0]) {
                 message += " (post-construct; event listeners may remain)";
             }
+            if (stage == Stage.DATAPACK) {
+                message += " (registry content is already committed; the runtime is dirty)";
+            }
             return fail(rollback, stage, kindFor(stage), message);
         }
     }
@@ -328,6 +352,7 @@ public final class HotAddEngine {
             case REGISTRY -> FailureKind.REGISTRY;
             case EVENT -> FailureKind.EVENT;
             case PACK -> FailureKind.RESOURCE_PACK;
+            case DATAPACK -> FailureKind.DATAPACK;
             case VALIDATE -> FailureKind.INVALID_METADATA;
             case NONE -> FailureKind.UNKNOWN;
         };

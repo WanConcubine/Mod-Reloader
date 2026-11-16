@@ -107,6 +107,10 @@ Load 可用；点击后走同一个引擎，`WatchCheck RESULT: PASS`。截图�
 热加后不会进入当前数据包列表——方块能放，但合成/掉落/挖掘等级可能不对；放置/破坏/合成也没有实测。
 完整生效仍需把 jar 放进 `mods/` 重启。存档一旦使用这些内容，就绑定该 mod。
 
+> **2026-11-15 后续**：datapack 部分已由 [t4-datapack-hotadd.md](t4-datapack-hotadd.md) 补齐——同一次热加
+> 现在还会注入 data pack 并走 `reloadResources`，实测 recipes 0→164、loot 0→75、真实合成与战利品掉落 PASS。
+> 本节的「需重启」结论只描述当时的状态。
+
 ## 6. 复现
 
 ```bash
@@ -126,17 +130,19 @@ rm run/mods/t4fixture-1.0.0.jar
 
 - **单人多端验证**：客户端资源包、创造栏重建已在单人/集成服务器验证；多人登录同步未验证。
 - **add-only**：没有删除/更新；删掉 mod 会让存档里的条目变成 missing entries（NeoForge 提示并丢弃）。
-- **不支持 datapack 内容**：biome / dimension / enchantment / damage type / recipe / loot / tag 仍需重生。
+- **不支持 datapack 内容** → **已补齐**：recipe / loot / tag / mod 自注册的 server reload listener 现在随热加载重载
+  （见 [t4-datapack-hotadd.md](t4-datapack-hotadd.md)）；**世界生成注册表**（biome / dimension / structure）
+  仍要重启或新世界，附魔/伤害类型/纹饰等 RELOADABLE 层会跟随 `/reload`。
 - **不支持 mod 自建注册表**：`NewRegistryEvent` 在启动后关闭（`pendingModdedRegistries = null`）。
 - **post-register 事件未重放**：`BlockEntityTypeAddBlocksEvent` / spawn placements / attribute modifications
   还没有接；方块 + 物品之外的实体类内容暂时不要指望。
 - **UI 已放行，但只有警告、没有确认框**：Load 一次点击即提交，且不可回滚。
-- **real mod 的 datapack 内容仍是空白**：众星捧月演练证明注册层能过，但配方/战利品/标签/机器数据不在当前数据包里（见 §5）。
+- **real mod 的 datapack 内容仍是空白** → **已补齐**（同上）：众星捧月热加后配方/战利品/标签/机器数据都会加载（§5 的后续注）。
 - **多人登录同步未验证**：连接建立后再热加，已在线客户端拿不到新的 registry snapshot（登录配置阶段是唯一同步点）；两端都必须在连接前热加。
 - **提交后失败不可回滚**：运行时被标记 dirty，只能重启。
 
 ## 8. 下一步
 
-1. **datapack 热加载（当前主线）**：见 [research-t4-datapack-reload.md](../research-t4-datapack-reload.md)。
+1. **datapack 热加载**：已完成，见 [t4-datapack-hotadd.md](t4-datapack-hotadd.md)。
 2. 多人：两端在连接前热加 → 登录快照包含新条目；连接后热加则明确拒绝/提示。需要一个跨进程 harness。
 3. 失败语义：construct 抛异常时确认 abort 能恢复 canonical id，并把 dirty 状态暴露给用户。

@@ -5,6 +5,7 @@ import net.minecraft.network.Connection;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.loading.moddiscovery.ModFile;
 import net.neoforged.fml.loading.moddiscovery.ModFileInfo;
+import net.neoforged.neoforgespi.language.IModFileInfo;
 
 import java.util.List;
 import java.util.Set;
@@ -47,6 +48,18 @@ public interface PlatformHooks {
      * a dedicated server has nothing to do.
      */
     void afterRegistryContent();
+
+    /**
+     * Applies the hot-added mod's server data pack (recipes, loot tables, tags)
+     * with {@code /reload} semantics. Client: the integrated server, when in a
+     * world. Server: the dedicated server. Returns {@code applied=false} when
+     * there is no server yet (title screen — the client defers the pack to the
+     * next world start) or the jar carries no {@code data/}.
+     *
+     * @throws IllegalStateException when the pack cannot be built or the reload
+     *         fails (the registry commit has already happened by then)
+     */
+    DatapackStage.Result reloadDataPacks(IModFileInfo fileInfo, Set<String> modIds);
 
     static void install(PlatformHooks hooks) {
         if (hooks == null) {

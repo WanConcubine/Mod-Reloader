@@ -1,9 +1,11 @@
 # 贵妃级下一步：datapack 热加载（调研 + PoC 计划）
 
-> 状态：**未开始**。这是新会话的入口文档；先读 [status.md](status.md) 的「下一步」。
+> 状态：**已完成（方案 A，add-only）**，2026-11-15。实现与证据见
+> [features/t4-datapack-hotadd.md](features/t4-datapack-hotadd.md)，决策见 [ADR-0009](decisions/0009-datapack-hotadd.md)。
+> 本文保留调研过程与当时的计划；结论以 feature 文档与 status 为准。
 > 目标：让热加模组的 `data/`（配方、战利品、标签、自定义机器数据）**不重启**就能生效，
 > 把众星捧月从「能注册」推进到「能玩」。
-> 关联：[t4-registry-hotadd.md](features/t4-registry-hotadd.md) §5/§7、[research-t4-registry.md](research-t4-registry.md)、ADR-0008。
+> 关联：[t4-registry-hotadd.md](features/t4-registry-hotadd.md) §5/§7、[research-t4-registry.md](research-t4-registry.md)、ADR-0008/0009。
 
 ## 0. 为什么是它
 
@@ -101,6 +103,14 @@ payload、创造栏、资源包都生效。但它有 **299 个配方、77 个战
 - 多人：连接后再热加仍然无法同步注册表快照；数据包同步是另一个问题；
 - 如果 A 只能"部分生效"（例如 recipes 生效但 tags 不生效），要如实写边界，不要宣传"支持 datapack"。
 
-## 7. 现状
+## 7. 现状（2026-11-15 收尾）
 
-未开始。下一步就是读第 5 节的源码、实现 A 的最小版本、用 §4 的 harness 验证。
+**方案 A 已实现并验证**，成功标准 1–4 都有证据（详见 [features/t4-datapack-hotadd.md](features/t4-datapack-hotadd.md)）：
+
+- 源码结论落地：`PackRepository` 的 sources 是可变集合（Neo 改过），`addPackFinder` + `reload()`
+  就能让手工 pack 被重新发现；`MinecraftServer.reloadResources(Collection<String>)` 是 public，
+  且 `PlayerList.reloadResources()` 会把 recipe/tag 广播给已连接玩家。
+- recipes 0→164 / loot 0→75 / tags 2+1；164 与静态核对的条件过滤结果一致（134 个依赖未装模组）。
+- 端到端：真实 3×3 合成网格产出 `exnihilosatellitium:wooden_crucible`；方块战利品表掉落自身。
+- 专用服 fixture：热加后数据生效，jar 放进 `mods/` 重启后存档可读、数据仍加载。
+- 遗留：连接后热加的注册表快照同步、datapack 删除/更新、WORLDGEN 层注册表（维度/生物群系）。

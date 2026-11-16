@@ -223,7 +223,7 @@ sodium                     0.8.13+mc… fabric   HUANGHOU 0.85  needs full resta
 |---|---|---|---|
 | **嫔**（PIN） | 代码，无 mixin / 无注册表 | 毫秒级 | **A0 已验证（EasyLAN）** |
 | **妃**（FEI） | 代码 + Mixin，无注册表内容 | 0.5–2 秒 | **A1.2 主路径 + 失败回滚验证（lanserverproperties，JBR）；构造后 listener 不可注销** |
-| **贵妃**（GUIFEI） | 注册表内容（方块/物品/维度） | 5–30 秒 | **实验性 add-only 热加已验证（服务端闭环 + 单人客户端资源/创造栏）；datapack/多人同步未做** |
+| **贵妃**（GUIFEI） | 注册表内容（方块/物品/维度） | 5–30 秒 | **实验性 add-only 热加已验证（服务端闭环 + 单人客户端资源/创造栏 + datapack 配方/战利品/标签/机器数据）；多人登录同步、维度/生物群系等世界生成数据仍需重启** |
 | **皇后**（HUANGHOU） | native / 性能核心 / 库模组 | 只能完整重启 | 拉黑或要求重启 |
 
 ## 文档
@@ -238,8 +238,10 @@ sodium                     0.8.13+mc… fabric   HUANGHOU 0.85  needs full resta
 | [A0 热加验证](docs/features/a0-hot-add.md) | NeoForge 1.21.1 热加 EasyLAN：实现、证据、限制 |
 | [A1 热加验证](docs/features/a1-mixin-hotadd.md) | 妃级/Mixin 热加：JBR vs sidecar、A1.0 probe、A1.1 spike、A1.2 全流水线、失败回滚 |
 | [GUI / 文件夹监听](docs/features/gui-mod-watcher.md) | 检测新增 jar、预检 tier/依赖、toast/弹窗、失败原因分析（初版实测） |
+| [贵妃级注册表热加](docs/features/t4-registry-hotadd.md) | 方块/物品 add-only 热加：unfreeze/RegisterEvent 重放/BlockState id、证据与限制 |
+| [贵妃级 datapack 热加载](docs/features/t4-datapack-hotadd.md) | 注入 pack + 原版 `/reload`：配方/战利品/标签/机器数据、真实合成与掉落、边界 |
 | [LAN Doctor 规格](docs/features/lan-doctor.md) | B 路线 fallback：状态 / offline / republish / 地址 |
-| [决策记录](docs/decisions/README.md) | ADR-0001..0004：目标、分层、顺序、论文 |
+| [决策记录](docs/decisions/README.md) | ADR-0001..0009：目标、分层、顺序、论文、双端、注册表与 datapack 适配 |
 | [调研报告](docs/research-hot-mod-reload.md) | 启动流水线、JVM/Mixin/注册表约束、Hotwire 与 NHMJ 解剖 |
 | [项目定位与路线图](docs/roadmap.md) | 长期路线与调研背景；短期以 status/ADR 为准 |
 | [分析器 v0](tools/analyzer/README.md) | 用法、Tier 定义、信号提取、已知限制 |
@@ -248,13 +250,15 @@ sodium                     0.8.13+mc… fabric   HUANGHOU 0.85  needs full resta
 ## 仓库结构
 
 ```
-src/main/java/dev/modreloader/   # NeoForge 1.21.1 热加载器（A0 / A1.2）
-  hotadd/                        # 自附加 / module / mixin / ModList / 事件 / 资源包
+src/main/java/dev/modreloader/   # NeoForge 1.21.1 热加载器（A0 / A1.2 / 贵妃级）
+  hotadd/                        # 自附加 / module / mixin / ModList / 事件 / 资源包 / 注册表 / datapack
 build.gradle, settings.gradle    # ModDevGradle 2.0.148 / NeoForge 21.1.265
 tools/
   analyzer/                      # 只读分析器（Python 3.9+，无第三方依赖）
 experiments/
   self-attach-poc/               # 自附加 + 类重定义最小验证（JDK 17+）
+  server-fixture/                # 专用服夹具：命令+tick、payload
+  t4-fixture/                    # 贵妃级夹具：方块 + BlockItem + 最小 datapack
 ```
 
 ## 已验证的事实

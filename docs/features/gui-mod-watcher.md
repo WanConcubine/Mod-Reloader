@@ -325,7 +325,7 @@ allow皇后级 = false
 - `LoadController` 单飞；失败 `LoadFailureScreen`（原因/建议/回滚/复制/打开日志/重试）。
 - `config/modreloader/watcher.json`：独立 JSON，含 ignored/failed；永不自动加载。
 - `/modreloader scan`、`/modreloader gui` 已注册。
-- **i18n**：`assets/modreloader/lang/en_us.json` + `zh_cn.json`（现各 132 key，键集与占位符由单测核对）；GUI/按钮/toast/命令/预检/失败摘要/复制详情的标签全部走翻译 key。
+- **i18n**：`assets/modreloader/lang/en_us.json` + `zh_cn.json`（现各 134 key，键集与占位符由单测核对）；GUI/按钮/toast/命令/预检/失败摘要/复制详情的标签全部走翻译 key。
 - dev 检查：`-PverifyWatch=true -PwatchJar=<jar>`；`-PwatchExpectFailure=true`。
 
 ### 实测
@@ -388,7 +388,7 @@ LSP + 强制 add 失败（验证失败屏 + 回滚集成）：
 
 - 中文：`run/options.txt` `lang:zh_cn` → `watch-prompt.png`；按钮/标题/toast 均为中文，无 key 泄漏。
 - 英文：切到 `lang:en_us` 后同样通过；截图 `watch-prompt-en.png`；测试后已恢复 `zh_cn`。
-- 键覆盖：`ModReloaderToasts`、`ModReloaderScreen`、`LoadFailureScreen`、`ReloaderCommands`、`ModReloaderI18n`、`FailureAnalyzer` 的可见文本均使用 `modreloader.*` key；语言文件各 132 key（键集与占位符由 `LangKeysTest` 核对）。
+- 键覆盖：`ModReloaderToasts`、`ModReloaderScreen`、`LoadFailureScreen`、`ReloaderCommands`、`ModReloaderI18n`、`FailureAnalyzer` 的可见文本均使用 `modreloader.*` key；语言文件各 134 key（键集与占位符由 `LangKeysTest` 核对）。
 - `FailureAnalyzer` 的 detail/剪贴板标签（jar/预检/依赖/阶段/分类/回滚/日志）也已 key 化；异常原始消息和枚举名保留英文，便于排查。
 - 技术值（异常消息、stage/kind 枚举、路径）保留原始英文；标签已本地化。
 
