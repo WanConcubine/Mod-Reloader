@@ -137,6 +137,9 @@ python3 tools/analyzer/run.py scan ~/Projects/Ex-Nihilo-Satellitium/build/libs/e
 # 注册审计：只读扫 jar 的启动期事件并分级，再造一个必然被拒的致命 jar 验证拒绝点在注入之前（见 client-registration-audit.md）
 ./gradlew runClient -PverifyRegAudit=/abs/a.jar[,/abs/b.jar]
 
+# /modreloader why 只读诊断（专用服控制台路径）："<jar>|<期望 token>,…"，每条断言 token 出现在报告任意一行
+./gradlew runServer -PserverWhy="/abs/jade.jar|access transformer,/tmp/t4fixture/t4fixture-1.0.0.jar|experimental add-only"
+
 # 贵妃级调研：只读注册表探针（加 -PverifyRegistryRefreeze=true 会做一次受控 unfreeze/freeze，仅一次性世界）
 ./gradlew runClient -PverifyAddCommand=/tmp/lanmods/EasyLAN-neoforge-1.21.1-v1.6a.jar -PverifyRegistryProbe=true
 
@@ -154,7 +157,7 @@ python3 tools/analyzer/run.py scan ~/Projects/Ex-Nihilo-Satellitium/build/libs/e
   -PwatchJar=/tmp/lanmods/EasyLAN-neoforge-1.21.1-v1.6a.jar
 ```
 
-- 游戏内入口：`/modreloader add <jar>`。**控制台可以用短名**：`/modreloader add t4fixture-1.0.0.jar`（先在当前目录找，再找 `mods/` 与 `modreloader/inbox/`；`probe` 同样），TAB 会补全两个目录里的 jar；`/modreloader scan` 每一行末尾直接给出可粘贴的 `→ /modreloader add <名字>`。自动触发路径与世界内执行均由 harness 验证（`-PverifyAddCommand` 客户端、`-PserverAddCommand` 专用服控制台）。
+- 游戏内入口：`/modreloader add <jar>`；`/modreloader why <jar>` 是只读诊断（tier/AT/依赖/注册审计/结论，见 [server-hotadd.md](docs/features/server-hotadd.md) §5）。**控制台可以用短名**：`/modreloader add t4fixture-1.0.0.jar`（先在当前目录找，再找 `mods/` 与 `modreloader/inbox/`；`probe` 同样），TAB 会补全两个目录里的 jar；`/modreloader scan` 每一行末尾直接给出可粘贴的 `→ /modreloader add <名字>`。自动触发路径与世界内执行均由 harness 验证（`-PverifyAddCommand` 客户端、`-PserverAddCommand` 专用服控制台）。
 - **服务端**：`./gradlew runServer -PautoAdd=<jar>`；夹具见 [experiments/server-fixture](experiments/server-fixture/README.md)：`./build.sh` → `servertest-1.0.0.jar`（命令+tick，应成功）、`./build-payload.sh` → `payloadfix-1.0.0.jar`（payload，应成功，配 `-PverifyPayload` 使用）。
 - 测试目标：`EasyLAN`（嫔级、无 mixin）、`lanserverproperties`（妃级、A1.2）。日志与限制见 [docs/features/a0-hot-add.md](docs/features/a0-hot-add.md) / [a1-mixin-hotadd.md](docs/features/a1-mixin-hotadd.md)。
 

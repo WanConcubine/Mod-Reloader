@@ -108,12 +108,20 @@ public final class ModInspector {
                 }
             }
 
-            boolean clientSideOnly = fileInfo.getConfigElement("clientSideOnly")
+            boolean sideFlag = fileInfo.getConfigElement("clientSideOnly")
                     .map(value -> String.valueOf(value))
                     .map(value -> "true".equalsIgnoreCase(value))
                     .orElse(false);
 
             ScanResult scan = scanJar(jar);
+            // The metadata flag is authoritative for "this mod is client-only". Bytecode
+            // references are a *warning* only: client+server mods reference client
+            // classes in code that the server never loads (Jade does), while a mod that
+            // loads them on the startup path fails on a dedicated server even with
+            // side="BOTH" (EasyLAN registers a ScreenEvent listener in its constructor).
+            // Static scanning cannot tell those apart; the add path has a runtime
+            // fallback (rollback), and the report says so instead of refusing.
+            boolean clientSideOnly = sideFlag;
             ModInspection.Tier tier = scan.nativeCode() ? ModInspection.Tier.HUANGHOU
                     : scan.registry() ? ModInspection.Tier.GUIFEI
                     : mixins ? ModInspection.Tier.FEI
@@ -134,8 +142,13 @@ public final class ModInspector {
             if (tier == ModInspection.Tier.FEI) {
                 notes.add(JbrSupport.describe());
             }
-            if (clientSideOnly) {
+            if (sideFlag) {
                 notes.add("clientSideOnly=true");
+            }
+            if (!scan.clientClasses().isEmpty()) {
+                List<String> sample = scan.clientClasses().stream().limit(4).toList();
+                notes.add("references client classes: " + sample
+                        + (scan.clientClasses().size() > sample.size() ? " …" : ""));
             }
 
             return new ModInspection(jar, jar.getFileName().toString(), List.copyOf(mods), tier,
@@ -160,6 +173,7 @@ public final class ModInspector {
         boolean registry = false;
         boolean nativeCode = false;
         boolean accessTransformers = false;
+        java.util.TreeSet<String> clientClasses = new java.util.TreeSet<>();
         try (ZipFile zip = new ZipFile(jar.toFile())) {
             var entries = zip.entries();
             while (entries.hasMoreElements()) {
@@ -182,6 +196,7 @@ public final class ModInspector {
                     RegistryVisitor visitor = new RegistryVisitor();
                     reader.accept(visitor, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
                     registry |= visitor.registry;
+                    clientClasses.addAll(visitor.clientClasses);
                 } catch (Throwable ignored) {
                     // A single malformed class should not break the preflight.
                 }
@@ -189,17 +204,37 @@ public final class ModInspector {
         } catch (Throwable t) {
             ModReloader.LOGGER.warn("[ModReloader] cannot scan jar {}", jar, t);
         }
-        return new ScanResult(registry, nativeCode, accessTransformers);
+        return new ScanResult(registry, nativeCode, accessTransformers, List.copyOf(clientClasses));
     }
 
-    private record ScanResult(boolean registry, boolean nativeCode, boolean accessTransformers) {
+    /**
+     * @param clientClasses sample of client-only class names the jar references
+     *                      ({@code net/minecraft/client/**}, blaze3d); NeoForge refuses
+     *                      such classes on a dedicated server, so a jar that uses them
+     *                      on the startup path cannot be hot-added there. Only a sample
+     *                      is kept — it exists to explain the refusal.
+     */
+    private record ScanResult(boolean registry, boolean nativeCode, boolean accessTransformers,
+                              List<String> clientClasses) {
     }
 
     private static final class RegistryVisitor extends ClassVisitor {
         private boolean registry;
+        /** Sample of client-only classes referenced anywhere in the jar. */
+        private final java.util.TreeSet<String> clientClasses = new java.util.TreeSet<>();
 
         RegistryVisitor() {
             super(Opcodes.ASM9);
+        }
+
+        private void noteClientClass(String internalName) {
+            if (internalName == null || clientClasses.size() >= 32) {
+                return;
+            }
+            if (internalName.startsWith("net/minecraft/client/")
+                    || internalName.startsWith("com/mojang/blaze3d/")) {
+                clientClasses.add(internalName.replace('/', '.'));
+            }
         }
 
         @Override
@@ -210,12 +245,19 @@ public final class ModInspector {
                 public void visitMethodInsn(int opcode, String owner, String methodName,
                                             String methodDescriptor, boolean isInterface) {
                     registry |= REGISTRY_OWNERS.contains(owner);
+                    noteClientClass(owner);
                 }
 
                 @Override
                 public void visitFieldInsn(int opcode, String owner, String fieldName,
                                            String fieldDescriptor) {
                     registry |= REGISTRY_OWNERS.contains(owner);
+                    noteClientClass(owner);
+                }
+
+                @Override
+                public void visitTypeInsn(int opcode, String type) {
+                    noteClientClass(type);
                 }
             };
         }

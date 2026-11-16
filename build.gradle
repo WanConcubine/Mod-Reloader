@@ -339,6 +339,13 @@ neoForge {
                 systemProperty 'modreloader.mpNoticeServer',
                         providers.gradleProperty('mpNoticeServer').get()
             }
+            if (providers.gradleProperty('serverWhy').orNull) {
+                // Dedicated-server check for /modreloader why: "<jar>|<expected verdict
+                // token>,<jar>|<token>" - asserts HotAddWhy's verdict per pair and runs
+                // the console command once.
+                systemProperty 'modreloader.serverWhy',
+                        providers.gradleProperty('serverWhy').get()
+            }
             if (providers.gradleProperty('serverAddCommand').orNull) {
                 // Console-path check: short-name /modreloader add + TAB completion
                 // through the server's own command manager.

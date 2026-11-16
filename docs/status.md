@@ -66,6 +66,7 @@
 | **注册表 id 重建的线程**（修已知问题 28） | commit/abort 的「清 `BLOCKSTATE_TO_ID_MAP` + `freezeData`」投到服务器线程（日志 `registry freeze: hopping from the thread 'Render thread' to the server thread`），`RegisterEvent` 重放仍留调用线程；**连跑 3 次** `-PverifyAddCommand` + `-PverifyGameplay`：3/3 `AddCmdCheck`/`GameplayCheck RESULT: PASS`、capability 五项 present、`stoneId 1 -> 1 (stable)`、0 处 `No value with id`；专用服 guifei commit 在 `[Server thread]` 直跑（`RESULT: PLACED` + datapack PASS）、嫔级 add 回归 PASS | 2026-11-16 19:27–19:31：`-PverifyAddCommand=<dogfood> -PverifyAddCommandModId=exnihilosatellitium -PverifyGameplay=true` / `runServer -PautoAdd=<t4fixture> -Pt4fixtureSelftest=true` / `-PverifyAddCommand=<EasyLAN>`；[t4-registry-hotadd.md](features/t4-registry-hotadd.md) §11 |
 | **WORLDGEN 边界（维度）** | 标题屏热加 `wgfixture`（数据夹具：1 个超平坦维度）→ **新建世界** → `dimension wgfixture:wgflat registered=true level=true`、`worldgen RESULT: PASS`（修前同一路径 `registered=false level=false`）；机制：`server == null` 时把包预注册进 `ResourceLoader.modResourcePacks`，world load 时随 `mod_data` 一起加载；**已存在的世界仍需重启**，专用服启动期仍不行 | 2026-11-16 20:1x：`-PverifyAddCommand=/tmp/wgfixture/wgfixture-1.0.0.jar -PverifyAddCommandModId=wgfixture -PverifyDatapackAtTitle=true -PverifyWorldgen=wgfixture:wgflat`；[t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) §10 |
 | **第二个妃级模组（同一会话）** | 先 in-world add 众星捧月（贵妃级），再 add `lanserverproperties`（妃级：4 mixin + 布局变更）：两边 `isLoaded=true`、第一个不受影响，`SECOND ADD RESULT: PASS` | 2026-11-16 20:2x：`-PverifyAddCommand=<dogfood> … -PverifyAddCommand2=<lsp> -PverifyAddCommand2ModId=lanserverproperties`；[a1-mixin-hotadd.md](features/a1-mixin-hotadd.md) §10 |
+| **`/modreloader why` 只读诊断** | `inspect/HotAddWhy` 按引擎 VALIDATE 的顺序汇总 tier/内容形状/AT 组成/依赖/注册审计/结论；控制台命令返回 1（诊断成功，不因「拒绝」返回 0）。实测三形态：Jade → `refused (access transformers …)` 57/39；t4fixture → `experimental add-only`；EasyLAN → `hot-add` + **warning: references client classes**（静态扫描不据此拒绝，兜底仍是 dist 门禁 + 回滚） | 2026-11-16 20:5x：`runServer -PserverWhy="<jade>\|access transformer,<t4>\|experimental add-only,<easylan>\|references client classes"` → `[ServerWhy] RESULT: PASS`；[server-hotadd.md](features/server-hotadd.md) §5 |
 | **工程底座** | `capabilities: module_injection … registry_sync … resource_packs` 全 ok（server `resource_packs=n/a`）；**无 `libs/` 可 `clean build`**；**21 个无游戏单测** | `./gradlew test`；[tech-debt.md](tech-debt.md) |
 | **JDK / JBR 21** | 编译用 Temurin 21 toolchain；**`runClient` 与 `runServer` 都**用 JBR 21.0.11 + `-XX:+AllowEnhancedClassRedefinition`（`enhancedRedefinition=true`） | 启动日志 `[ModReloader] JVM … enhancedRedefinition=` |
 
@@ -204,7 +205,7 @@
 | **P2-2** | ~~剩余 behavior 事件~~ **已完成 2026-11-16** | 11 个 behavior + 剩下的 silent 逐个给了结论：`RegisterItemDecorationsEvent`/`RegisterGuiLayersEvent` 变 covered；其余写进 [client-registration-audit.md](features/client-registration-audit.md) §7.1（框架启动后关闭、没有 subject、改已注册对象风险等） | 每个要么变 covered，要么在 §7.1 写清为什么不做（已满足） |
 | **P2-3** | 贵妃级下一层（**删除/更新结论已完成 2026-11-16**） | datapack 删除：**实测不可能**（deselect 后 id 从 selected 消失，但 required `mod_data` 聚合包把子包重新加回来，`selectedPacks` 仍有它、recipes 164 / loot 75 仍在）；更新：不做（聚合包 children 启动期固定 + `SecureJar` 已绑定，等价 managed relaunch）→ [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) §9 + 回归 `-PverifyDatapackRemove`。剩：WORLDGEN 与 P1-2 合并 | 结论已进 feature 文档；`-PverifyDatapackRemove` PASS |
 | **P2-4** | A1 产品化（**部分完成 2026-11-16**） | ✅ **第二个妃级模组**（同一会话，`-PverifyAddCommand2`，PASS）；存档回读：内容路径已有 t4-fixture 重启读档 PASS，**客户端内「保存→退标题→重开」的 harness 两次卡死已移除**（已知问题 30，建议改走专用服）；仍缺：**构造后 listener 回滚**（NeoForge 无注销接口，需 bus 快照/恢复）、**服务端+客户端同时妃级** | 每一项 harness PASS + 文档；剩两项未做 |
-| **P3** | GUI/watcher Phase 3/4、分析器校准（20–30 jar + AT/JiJ 维度）、`/modreload why`、B fallback、AT 文案、嵌套 mod 容器 | 见 [tech-debt.md](tech-debt.md) 与对应 feature 文档 | 各自文档的判据 |
+| **P3** | GUI/watcher Phase 3/4、~~分析器校准~~（首轮已完成，见 [analyzer-calibration.md](features/analyzer-calibration.md)）、~~`/modreloader why`~~（已完成 2026-11-16，`-PserverWhy`）、B fallback、嵌套 mod 容器 | 见 [tech-debt.md](tech-debt.md) 与对应 feature 文档 | 各自文档的判据 |
 
 ### 验收清单（给自己/所有者）
 
@@ -230,6 +231,16 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近几条。
 
+- **2026-11-16（`/modreloader why`：把「为什么」收成一条只读命令）**：新增 `inspect/HotAddWhy`（按引擎 VALIDATE 的顺序：
+  tier/内容形状 → AT 组成 → 注册审计 → 缺失依赖 → HUANGHOU/GUIFEI/FEI/PIN 结论），`/modreloader why <jar>` 共用短名解析、
+  控制台与客户端都能用；返回 1 表示**诊断跑了**（不因结论是拒绝而返回 0）。
+  顺带修了一个真实的误判：`ModInspector` 原来只信 `clientSideOnly` 元数据，**看不到字节码里的客户端类引用**——
+  EasyLAN 声明 `side=BOTH` 却在 `@Mod` 构造器注册 `ScreenEvent`，专用服上必崩（已知问题 13）；现在扫描
+  `net/minecraft/client/**` 与 `com.mojang.blaze3d/**` 引用并写进 notes，但**只 warn 不拒绝**（Jade 这类双端模组的
+  客户端代码从不在服务端加载，静态无法区分；兜底仍是 dist 门禁 + 回滚）。
+  证据（2026-11-16 20:5x，专用服 `-PserverWhy`）：Jade → `refused (access transformers …)` 57 规则/39 目标；
+  t4fixture → `experimental add-only`；EasyLAN → `hot-add` + `warning: references client classes`；
+  控制台命令 `modreloader why <jade>` 返回 1；`[ServerWhy] RESULT: PASS`。文档：[server-hotadd.md](features/server-hotadd.md) §5、AGENTS §2。
 - **2026-11-16（分析器首轮真机校准 + AT 维度：11 个标注 jar 10 个对，修掉一个危险方向的 bug）**：
   新增 `tools/analyzer/calibrate.py` + `calibration/ground-truth.tsv`（只存 jar 文件名，不提交 jar），把 tier 预测和
   status 表尺/兼容性矩阵里的真机结论对上：**11 个有标注 jar → 10 个 tier 一致、1 个已知过估**（ZeroCore2：分析器 GUIFEI、

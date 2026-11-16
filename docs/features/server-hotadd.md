@@ -74,3 +74,47 @@ NeoForge 在注册阶段结束后把 `NetworkRegistry.setup` 置 true，之后�
 - **注册表内容（贵妃级）**：本页不覆盖，见 [t4-registry-hotadd.md](t4-registry-hotadd.md)（服务端闭环 + §9 的多人 id 同步）。
 - **重放的全局副作用**：命令监听器会执行两次（Brigadier 幂等，但副作用不可控）——这是已知问题 14/15。
 - **side 门禁只警告不拦**（ADR-0007 第 4 条），预检的 side 判定仍待补。
+
+## 5. `/modreloader why <jar>`：只读诊断（2026-11-16）
+
+热加被拒时，「为什么」原先散在四处：`ModInspector` 的 tier/内容形状/依赖、`AccessTransformerRules` 的 AT 组成、
+注册审计（启动期 mod-bus 事件）、以及 side / JBR / MixinRuntime 这些运行期条件。命令行只有一个
+`/modreloader add`（拒绝后失败屏里是一句话），控制台更是连界面都没有。
+
+`why` 把这些按**引擎 VALIDATE 的顺序**收成一份只读报告，最后一行是结论：
+
+```
+[ServerWhy] why Jade-1.21.1-NeoForge-15.10.6.jar (dedicated server)
+[ServerWhy]   ids: jade 15.10.6+neoforge
+[ServerWhy]   tier: guifei, mixins, registry content
+[ServerWhy]   content: registry=true, mixins=true, native=false, client-only=false, already-loaded=false
+[ServerWhy]   access transformer: 57 rule(s) over 39 target class(es) (39 runtime); e.g. [...]
+[ServerWhy]   dependencies: neoforge (required, present)
+[ServerWhy]   registration audit: 4 mod-bus event(s); covered [...]; other-side [...]; unresolved [...]
+[ServerWhy]   note: mixins: [jade.mixins.json]
+[ServerWhy]   warning: references client classes: [...] - if they are on the startup path this add fails on a dedicated server (the runtime rolls back cleanly)
+[ServerWhy] verdict: refused (access transformers apply at class load; restart with the jar in mods/) - 57 rule(s) over 39 target class(es) ...
+```
+
+三种形态实测（专用服控制台路径，`-PserverWhy`）：
+
+| jar | 结论 |
+|---|---|
+| Jade 15.10.6 | `refused (access transformers …)` + 57 规则 / 39 目标 |
+| t4fixture 1.0.0 | `experimental add-only (registry content; … cannot be undone)` |
+| EasyLAN 1.6a | `hot-add (no mixins, no registry content)` + **warning: references client classes** |
+
+关于最后一条：EasyLAN 在专用服上实际会在构造时崩（`@Mod` 构造器注册 `ScreenEvent` 监听器，见 status 已知问题 13），
+但**静态扫描无法区分"客户端类只在 client-only 代码里"（Jade 就是这样）与"启动路径上就用"**。所以 `why` 只给 warning、
+不据此拒绝；真正的兜底是 `HotAddEngine` 的 dist 门禁 + 回滚。`ModInspector` 现在会把扫描到的客户端类写进 notes
+（`references client classes: …`），UI/报告都能看到，但 `clientSideOnly` 仍以元数据为准。
+
+复现：
+
+```bash
+./gradlew runServer -PserverWhy="/abs/jade.jar|access transformer,/tmp/t4fixture/t4fixture-1.0.0.jar|experimental add-only,/tmp/lanmods/EasyLAN-neoforge-1.21.1-v1.6a.jar|references client classes"
+# [ServerWhy] RESULT: PASS（每条断言的 token 可出现在报告任意一行；另外会跑一次控制台命令并断言返回 1）
+```
+
+边界：`why` 只读（不注入、不改状态）；报告是英文技术行（与 `probe` 一致），未走 i18n；判定顺序与引擎一致，
+但**结论依据的是静态信息**，不等于运行期一定会成功/失败。

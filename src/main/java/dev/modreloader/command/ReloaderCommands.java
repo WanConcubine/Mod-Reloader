@@ -132,6 +132,54 @@ public final class ReloaderCommands {
                                             () -> Component.literal(line), false));
                                     return 1;
                                 })))
+                .then(Commands.literal("why")
+                        .then(Commands.argument("jar", StringArgumentType.greedyString())
+                                .suggests(JAR_SUGGESTIONS)
+                                .executes(ctx -> {
+                                    String raw = StringArgumentType.getString(ctx, "jar");
+                                    JarPathResolver.Resolution resolution =
+                                            JarPathResolver.resolve(raw, jarSearchDirs());
+                                    if (!resolution.found()) {
+                                        ctx.getSource().sendFailure(Component.translatable(
+                                                "modreloader.command.add.not_found", raw,
+                                                resolution.searched().stream()
+                                                        .map(Path::toString)
+                                                        .toList().toString()));
+                                        return 0;
+                                    }
+                                    // Read-only diagnosis: the command succeeded even when the
+                                    // verdict is "refused", so the console does not see a failure.
+                                    for (String line : dev.modreloader.inspect.HotAddWhy
+                                            .of(resolution.file()).lines()) {
+                                        ctx.getSource().sendSuccess(
+                                                () -> Component.literal(line), false);
+                                    }
+                                    return 1;
+                                })))
+                .then(Commands.literal("why")
+                        .then(Commands.argument("jar", StringArgumentType.greedyString())
+                                .suggests(JAR_SUGGESTIONS)
+                                .executes(ctx -> {
+                                    String raw = StringArgumentType.getString(ctx, "jar");
+                                    JarPathResolver.Resolution resolution =
+                                            JarPathResolver.resolve(raw, jarSearchDirs());
+                                    if (!resolution.found()) {
+                                        ctx.getSource().sendFailure(Component.translatable(
+                                                "modreloader.command.add.not_found", raw,
+                                                resolution.searched().stream()
+                                                        .map(Path::toString)
+                                                        .toList().toString()));
+                                        return 0;
+                                    }
+                                    // Read-only diagnosis: the command succeeded even when the
+                                    // verdict is "refused", so the console does not see a failure.
+                                    for (String line : dev.modreloader.inspect.HotAddWhy
+                                            .of(resolution.file()).lines()) {
+                                        ctx.getSource().sendSuccess(
+                                                () -> Component.literal(line), false);
+                                    }
+                                    return 1;
+                                })))
                 .then(Commands.literal("add")
                         .then(Commands.argument("jar", StringArgumentType.greedyString())
                                 .suggests(JAR_SUGGESTIONS)

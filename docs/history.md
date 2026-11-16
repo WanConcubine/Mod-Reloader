@@ -334,3 +334,21 @@
   在默认表格里显示新的 `AT` 列；分析器单测 **14 passed**（原 9 + AT 规则 2 + AT 解析 2 + 嵌套 DeferredRegister 1）。
   文档：[analyzer-calibration.md](features/analyzer-calibration.md)、tools/analyzer/README.md、AGENTS §2、status 表尺/未验证/最近变更。
   仍缺：Fabric 语料没校准（intermediary 名）、3 个语料未标注、置信度数值没校准。
+
+- **（`/modreloader why`：只读诊断命令 / P3 一部分）**：新增 `inspect/HotAddWhy`：把「为什么能/不能热加」按**引擎 VALIDATE 的顺序**
+  收成报告——tier/内容形状（registry/mixins/native/client-only/already-loaded）→ AT 组成（`AccessTransformerRules.describe()`）→
+  依赖（required/present/MISSING）→ 注册审计行 → notes → 最后一行 `verdict:`（与 `HotAddEngine` 的 gate 顺序一致：
+  already loaded / 专用服上的客户端类 / AT（含 datagen-only 的保守性说明）/ 致命审计事件 / 缺依赖 / HUANGHOU / GUIFEI / FEI / PIN）。
+  `ReloaderCommands` 加了 `why <jar>` 节点（复用 `JarPathResolver` 短名与 TAB 补全，控制台与客户端都能用），返回值 1 表示
+  **诊断跑过**而不是「能热加」。
+  顺带修掉一个真实误判：`ModInspector` 原来只看 `clientSideOnly` 元数据，**看不见字节码里的客户端类引用**；EasyLAN 声明
+  `side=BOTH` 却在 `@Mod` 构造器里注册 `ScreenEvent` → 专用服必崩（已知问题 13）。现在 `RegistryVisitor` 同时收集
+  `net/minecraft/client/**` 与 `com.mojang/blaze3d/**` 引用，写进 notes（`references client classes: …`）。第一版把它当
+  `clientSideOnly=true` 直接拒绝——**错**：Jade 这类双端模组的客户端代码在服务端根本不加载，静态扫描分不出来；
+  改成 warning + 运行期兜底（dist 门禁 + 回滚），`clientSideOnly` 仍以元数据为准。
+  证据（2026-11-16 20:5x，专用服）：`runServer -PserverWhy="<jade>|access transformer,<t4fixture>|experimental add-only,
+  <EasyLAN>|references client classes"` → 三条 `matches=true`、控制台 `modreloader why <jade>` 返回 1、
+  `[ServerWhy] RESULT: PASS`；Jade 的 AT 组成是 57 规则/39 目标（与 `-PverifyAtSpike` 一致）。
+  期间踩的坑：`-PserverWhy` 一开始加到 `runs.client` 块里（`runServer` 看不到），以及上一轮被 kill 的专用服留下了
+  `run/world/session.lock`（`DirectoryLock$LockException`）——已按 pid 清掉并复跑。
+  文档：[server-hotadd.md](features/server-hotadd.md) §5、status 表尺/P3、AGENTS §2。
