@@ -231,6 +231,13 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近几条。
 
+- **2026-11-16（解掉 `command ↔ client` 包循环 / tech-debt P1-4）**：`ReloaderCommands` 不再 import `ClientCommands`；
+  共享树 `tree()` 改为 public，新增 `remember(dispatcher)`（dev harness 仍要拿到客户端 dispatcher），
+  客户端在自己的入口 `client/ClientCommands#register` 里做 `register(withGui(tree()))`，由 `ClientBootstrap` 订阅。
+  依赖方向变成 **client → command** 单向：`command` 包里不再有任何客户端类型，专用服加载这条链时不会碰到它们。
+  验证（2026-11-16 21:0x）：`./gradlew build` 通过；`runClient -PverifyAddCommand=<clientfixture> -PverifyGuiLayers=true
+  -PverifyItemDecorators=true` → `dispatcher has /modreloader=true`（说明 `remember` 生效）、层 25→26、装饰 0→1、
+  `AddCmdCheck RESULT: PASS`。见 [tech-debt.md](tech-debt.md) §4。
 - **2026-11-16（`/modreloader why`：把「为什么」收成一条只读命令）**：新增 `inspect/HotAddWhy`（按引擎 VALIDATE 的顺序：
   tier/内容形状 → AT 组成 → 注册审计 → 缺失依赖 → HUANGHOU/GUIFEI/FEI/PIN 结论），`/modreloader why <jar>` 共用短名解析、
   控制台与客户端都能用；返回 1 表示**诊断跑了**（不因结论是拒绝而返回 0）。

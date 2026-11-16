@@ -5,7 +5,6 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import dev.modreloader.ModReloader;
-import dev.modreloader.client.ClientCommands;
 import dev.modreloader.hotadd.HotAddEngine;
 import dev.modreloader.hotadd.MixinProbe;
 import dev.modreloader.ui.ModReloaderI18n;
@@ -13,7 +12,6 @@ import dev.modreloader.watch.ModsFolderWatcher;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
-import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.fml.loading.FMLPaths;
 
@@ -28,8 +26,10 @@ import java.util.stream.Stream;
 /**
  * The {@code /modreloader} command tree, shared by both sides.
  *
- * <p>The client adds a {@code gui} node on top ({@link ClientCommands}); a
- * dedicated server only gets the console-safe nodes.
+ * <p>The client decorates this tree with its {@code gui} node in
+ * {@code client/ClientCommands} ({@code ClientBootstrap} subscribes there): the
+ * dependency direction is client → command, so this package stays free of client
+ * types and a dedicated server never references them.
  */
 public final class ReloaderCommands {
     /** Dev-only: captured so {@code AddCommandCheck} can execute without a chat round-trip. */
@@ -42,9 +42,9 @@ public final class ReloaderCommands {
         return lastDispatcher;
     }
 
-    public static void registerClient(RegisterClientCommandsEvent event) {
-        lastDispatcher = event.getDispatcher();
-        event.getDispatcher().register(ClientCommands.withGui(tree()));
+    /** Remembers the client dispatcher for the dev harness (the tree is registered by the client). */
+    public static void remember(CommandDispatcher<CommandSourceStack> dispatcher) {
+        lastDispatcher = dispatcher;
     }
 
     public static void registerServer(RegisterCommandsEvent event) {
@@ -82,7 +82,7 @@ public final class ReloaderCommands {
                 FMLPaths.GAMEDIR.get().resolve("modreloader/inbox"));
     }
 
-    private static LiteralArgumentBuilder<CommandSourceStack> tree() {
+    public static LiteralArgumentBuilder<CommandSourceStack> tree() {
         return Commands.literal("modreloader")
                 .then(Commands.literal("ping")
                         .executes(ctx -> {

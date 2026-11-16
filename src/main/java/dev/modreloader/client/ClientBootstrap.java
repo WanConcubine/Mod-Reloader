@@ -42,7 +42,7 @@ public final class ClientBootstrap {
         // a client as well; otherwise a hot-added mod's commands never exist in
         // single-player (they only ever worked on a dedicated server).
         ServerCommands.install();
-        NeoForge.EVENT_BUS.addListener(ReloaderCommands::registerClient);
+        NeoForge.EVENT_BUS.addListener(ClientCommands::register);
         MenuEntry.install();
         NeoForge.EVENT_BUS.addListener(ClientTickEvent.Post.class, event -> tick());
         installDevEntry();

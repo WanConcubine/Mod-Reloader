@@ -352,3 +352,14 @@
   期间踩的坑：`-PserverWhy` 一开始加到 `runs.client` 块里（`runServer` 看不到），以及上一轮被 kill 的专用服留下了
   `run/world/session.lock`（`DirectoryLock$LockException`）——已按 pid 清掉并复跑。
   文档：[server-hotadd.md](features/server-hotadd.md) §5、status 表尺/P3、AGENTS §2。
+
+- **（解掉 `command ↔ client` 包循环 / tech-debt P1-4）**：`ReloaderCommands` 原来为了 `gui` 节点 import 了
+  `client/ClientCommands`，形成 `command → client` 依赖（专用服不加载客户端类所以一直没炸，但方向是错的：
+  `hotadd` 已经做到不依赖两侧，命令这一层还留着回头路）。改法：`ReloaderCommands.tree()` 变 public、
+  新增 `remember(CommandDispatcher)`（dev harness `AddCommandCheck` 仍要用客户端 dispatcher），
+  客户端在 `client/ClientCommands#register` 里 `register(withGui(tree()))`，`ClientBootstrap` 订阅它。
+  依赖变成 `client → command` 单向，`command` 包里不再出现任何客户端类型。
+  验证（2026-11-16 21:0x）：`./gradlew build` 通过（29 单测）；`runClient -PverifyAddCommand=<clientfixture>
+  -PverifyGuiLayers=true -PverifyItemDecorators=true` → `[AddCmdCheck] dispatcher has /modreloader=true`
+  （证明 `remember` 在客户端注册路径上被调用）、`GUI layers: 25 -> 26`、`item decorations: minecraft:diamond 0 -> 1`、
+  `AddCmdCheck RESULT: PASS`。文档：[tech-debt.md](tech-debt.md) §4（P1-4 完成、动手顺序第 1 项划掉）、status 最近变更。

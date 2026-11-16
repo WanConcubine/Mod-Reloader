@@ -12,7 +12,7 @@
 | 反射 / Unsafe 站点 | 14 个文件（mixin、ModList、module、网络、资源包、注册表同步、JVM 等） |
 | Java 单测 | **20**（`./gradlew test`，不需要游戏） |
 | 语言文件 | `en_us` / `zh_cn` 各 **150 key**，键集与 `%s` 占位符由单测核对 |
-| 包依赖 | `hotadd` **不再**依赖 `client` / `server`；剩 `command ↔ client`、`client → server`（集成服务器的命令重放）、`diagnose → ui`（文案） |
+| 包依赖 | `hotadd` **不再**依赖 `client` / `server`；`command ↔ client` 循环**已消除**（2026-11-16：client → command 单向）；剩 `client → server`（集成服务器的命令重放）、`diagnose → ui`（文案） |
 
 ## P0：会让我们「悄悄说错话」的
 
@@ -60,9 +60,12 @@
 
 ## P1：结构上不干净，但现在还能忍
 
-4. **`command ↔ client` 循环**：`ReloaderCommands` 为了 `gui` 节点 import 了 `ClientCommands`。
-   → 让客户端注册时装饰命令树（`ClientBootstrap` 里 `register(ClientCommands.withGui(tree()))`），
-   `command` 只保留共享树。
+4. ✅ **`command ↔ client` 循环**（已完成 2026-11-16）：`ReloaderCommands` 不再 import `ClientCommands`；
+   `tree()` 变成 public、新增 `remember(dispatcher)`（dev harness 用），客户端在自己的入口
+   （`client/ClientCommands#register`，由 `ClientBootstrap` 订阅）里做 `register(withGui(tree()))`。
+   依赖方向现在是 **client → command** 单向。
+   验证：`./gradlew build`；`runClient -PverifyAddCommand=<clientfixture> -PverifyGuiLayers -PverifyItemDecorators`
+   → `dispatcher has /modreloader=true`、`AddCmdCheck RESULT: PASS`（2026-11-16 21:0x）。
 5. **一次性事件重放没有统一出口**：命令（`RegisterCommandsEvent`）已有，payload（`RegisterPayloadHandlersEvent`）
    已用同样套路，贵妃级的 `RegisterEvent` 大概率还要用。三处各自处理"重放会让所有 mod 监听器再跑一遍"这个坑。
    → 一个 `OneShotReplay` 帮助类，集中记录这个副作用与降级策略。
@@ -104,7 +107,7 @@
 
 ## 建议的动手顺序
 
-1. P1-4（`command ↔ client` 循环，客户端装饰命令树）
+1. ✅ P1-4（`command ↔ client` 循环，客户端装饰命令树；已完成 2026-11-16）
 2. P1-5（`OneShotReplay`，同时把贵妃级的 `RegisterEvent` 重放位置留好）
 3. P1-6（harness 抽 `TestWorld` / `TestConnection`）
 4. P2-10（CI：分析器单测 + `./gradlew build`；`libs/` 反射化已于 2026-11-16 完成）
