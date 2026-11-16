@@ -20,7 +20,7 @@
 | 6 | 客户端注册：BE 渲染器 / 物品染色 / 流体扩展 / reload listener | `beRenderers 6/6 (missing=[])`、瓷桶染色已注册、`fluidExtensions=3`、`clientReloadListeners=6` |
 | 7 | 物品图标模型 | `181/181 resolved, missing=[]` |
 | 8 | 自动机器的 tick + 渲染（读配置值） | 机器 BE 存活、配置 `1/1 loaded` |
-| 9 | 创造物品栏渲染 40 tick（`-PverifyCreative`） | 不崩，`defaults=4`，PASS |
+| 9 | 创造物品栏渲染 40 tick + **模组自己的页签**（`-PverifyCreative`） | 不崩，`defaults=4`；页签 `exnihilosatellitium:main`（无中生有：众星捧月）在 **第 2/2 页**，**182 项**全部来自该 mod；选中后菜单 46 个非空 ItemStack，再渲染 40 tick 不崩，PASS |
 
 ```bash
 ./gradlew runClient \
@@ -62,6 +62,32 @@ creative tabs: all=15 defaults=4 sorted=11
 creative inventory rendered 40 ticks without crashing
 creative RESULT: PASS
 ```
+
+### 2.1 模组自己的页签：补上自动断言（2026-11-16）
+
+上面的 `-PverifyCreative` 原来只断言两件事：`defaults == 4`（越界回归）和「**某个** tab 里能看到该 namespace 的物品」。
+它**没有测模组自己的页签**——页签有没有注册、在不在界面的分页里、点开是不是空的，全是空白。2026-11-16 补上（`GameplayCheck`）：
+
+1. 在 `BuiltInRegistries.CREATIVE_MODE_TAB` 里找 namespace 为该 mod 的页签（可以有多个，取物品最多的那个）；
+2. 断言页签的 `getDisplayItems()` 非空、且含该 namespace 的物品（页签内容在热加后被真实重建，不是空壳）；
+3. 断言它出现在创造界面的某一页里（`CreativeTabsScreenPage#getVisibleTabs`，否则玩家连按钮都看不到）；
+4. 用界面自己的 `selectTab(tab)` 选中它，断言 `selectedTab` 真的切过去、菜单被填充，再渲染 40 tick（选中后的真实渲染路径）。
+
+实测（2026-11-16 15:45，`-PverifyGameplay -PverifyCreative`）：
+
+```text
+creative screen: all=15 defaults=4 sorted=11
+creative tabs list 15 tab(s): [建筑方块, 染色方块, …, 无中生有：众星捧月]; items from 'exnihilosatellitium' visible: 364
+creative own tab candidate: exnihilosatellitium:main (无中生有：众星捧月) items=182 modItems=182
+creative own tab is on page 2/2 of the screen
+creative: selected own tab exnihilosatellitium:main ('无中生有：众星捧月', 182 items, 182 from 'exnihilosatellitium')
+creative own tab rendered: 182 tab items, 46 in the menu
+creative inventory rendered 40 ticks without crashing (with the mod's own tab selected)
+creative RESULT: PASS
+```
+
+观察：页签在第 **2/2** 页（NeoForge 每页最多 10 个非默认页签），玩家要翻页才能点到它；这是 NeoForge 的分页行为，不是缺口。
+未覆盖：没有模拟鼠标点击页签按钮（用的是界面自己的 `selectTab`），也没有翻页操作；创建页签的 `icon` 只被渲染间接覆盖。
 
 ### 2.2 机器 GUI 打不开（已修）
 

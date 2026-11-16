@@ -146,3 +146,12 @@
   **审计第一次给出的真实缺口**：众星捧月的 `CapabilityEvents.registerCapabilities`（`@EventBusSubscriber @SubscribeEvent`，javap 验证）给桶（item/fluid）、坩埚（fluid）、机器（item/energy）与流体容器物品注册 provider，而 `RegisterCapabilitiesEvent` 从未重放 → 热加会话里这些 capability **没有登记**。status 的「桶/坩埚/堆肥手动项未验」此前不知道原因，现在写成已知问题 26 + 下一步第一项（重放，验证方式：放桶后断言 `Capabilities.ItemHandler.BLOCK`/`FluidHandler.BLOCK` 非 null）。
   专用服路径也跑了一遍（`runServer -PautoAdd=<appleskin>`，2026-11-16 15:25）：`registration audit [appleskin]: 4 mod-bus event(s); covered [fml.event.lifecycle.FMLClientSetupEvent, network.event.RegisterPayloadHandlersEvent]; other-side [client.event.RegisterClientTooltipComponentFactoriesEvent, client.event.RegisterGuiLayersEvent]`——客户端事件在服务端记为 `other-side`，`Class.forName` 没有因为事件类引用客户端类型而失败。（顺带观察：AppleSkin 这个纯客户端模组在专用服上竟然 `isLoaded=true` 热加成功，因为构造期不加载客户端类；这是既有的 dist 门禁缺口，不在本次范围。）
   边界写进 [features/client-registration-audit.md](features/client-registration-audit.md) §7：启发式（只看类引用，反射/字符串拿不到）、只看外层 jar（不扫 `META-INF/jarjar`）、`unresolved` 不致命、服务端跳过客户端事件。tech-debt P1-5 注明它只补了「可见性」这一半，统一的重放出口仍欠。
+
+- **（众星捧月创造栏：模组自己的页签第一次被自动验证）**：用户指出「众星捧月创造栏还没测」。核对后确实如此：`-PverifyCreative` 只断言了 `defaults==4`（页签越界崩溃的回归）和「**某个** tab 里能看到 `exnihilosatellitium` 的物品」，页签本身有没有注册、在不在界面的分页里、点开是不是空的，都没有断言；dogfood 文档里也只写了「创造物品栏渲染 40 tick」。
+  补在 [dev/GameplayCheck](../../src/dev/java/dev/modreloader/dev/GameplayCheck.java) 的 creative 阶段：① 从 `BuiltInRegistries.CREATIVE_MODE_TAB` 里找 namespace 为该 mod 的页签（按 mod 物品数取最多的）；② 断言 `getDisplayItems()` 非空且含该 namespace 物品（页签内容在热加后确实被重建）；③ 断言它在 `CreativeTabsScreenPage#getVisibleTabs()` 的某一页里（否则没有按钮可点）；④ 用界面自己的私有 `selectTab(tab)`（`UnsafeAccess.trusted()` + `MethodHandle`）选中，断言静态 `selectedTab` 切过去、`ItemPickerMenu` 被填充，再渲染 40 tick（选中后的真实渲染路径）。mod 如果没有自己的页签（如 t4fixture），只记一行跳过、不失败。
+  实测（2026-11-16 15:45，`runClient -PverifyAddCommand=<众星捧月> -PverifyAddCommandModId=exnihilosatellitium -PverifyGameplay=true -PverifyCreative=true`）：
+  `creative screen: all=15 defaults=4 sorted=11`、`items from 'exnihilosatellitium' visible: 364`、
+  `creative own tab candidate: exnihilosatellitium:main (无中生有：众星捧月) items=182 modItems=182`、
+  `creative own tab is on page 2/2 of the screen`、`selected own tab …`、`own tab rendered: 182 tab items, 46 in the menu`、
+  `creative inventory rendered 40 ticks without crashing (with the mod's own tab selected)`、`creative RESULT: PASS`；同一次 `GameplayCheck RESULT: PASS`。
+  边界：没有模拟鼠标点页签按钮（用的是界面自己的 `selectTab`），也没有翻页操作；页签在第 2/2 页是 NeoForge 的分页行为。文档：[dogfood-gameplay.md](features/dogfood-gameplay.md) §2.1、status 表尺。

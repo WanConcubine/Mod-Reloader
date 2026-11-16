@@ -1,10 +1,12 @@
 package dev.modreloader.dev;
 
 import dev.modreloader.ModReloader;
+import dev.modreloader.hotadd.UnsafeAccess;
 import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.level.GameType;
+import net.neoforged.neoforge.client.gui.CreativeTabsScreenPage;
 import net.neoforged.neoforge.common.CreativeModeTabRegistry;
 import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
@@ -35,6 +37,8 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -84,6 +88,11 @@ public final class GameplayCheck {
     private static final boolean VERIFY_CREATIVE = Boolean.getBoolean("modreloader.verifyCreative");
     private static boolean creativeScreenOpened;
     private static boolean itemModelsChecked;
+    /** The hot-added mod's own creative tab, once the screen has been opened. */
+    private static boolean creativeTabsChecked;
+    private static boolean ownTabChecked;
+    private static CreativeModeTab ownTab;
+    private static int ownTabItems;
 
     /** -PverifyGameplayKeepOpen: leave the world running for manual play. */
     private static final boolean KEEP_OPEN = Boolean.getBoolean("modreloader.verifyGameplayKeepOpen");
@@ -661,14 +670,49 @@ public final class GameplayCheck {
         // textures were fine) but no tab listed them.
         String hotNamespace = System.getProperty("modreloader.verifyGameplayModId",
                 "exnihilosatellitium").trim();
+        if (!creativeTabsChecked) {
+            creativeTabsChecked = true;
+            if (!checkNamespaceInTabs(hotNamespace)) {
+                return;
+            }
+        }
+        if (!ownTabChecked) {
+            ownTabChecked = true;
+            if (!beginOwnTab(mc, hotNamespace)) {
+                return;
+            }
+            ticks = 0;
+            return;
+        }
+        if (ticks < 40) {
+            return;
+        }
+        if (!finishOwnTab(mc)) {
+            return;
+        }
+        ModReloader.LOGGER.info(
+                "[GameplayCheck] creative inventory rendered 40 ticks without crashing"
+                        + " (with the mod's own tab selected)");
+        mc.setScreen(null);
+        ModReloader.LOGGER.info("[GameplayCheck] creative RESULT: PASS");
+        stage = Stage.DONE;
+        ticks = 0;
+    }
+
+    /**
+     * Every item of the hot namespace that is reachable from any tab. This is the
+     * regression for "the tabs were never rebuilt after the hot-add": items exist
+     * and /give works, but no tab lists them.
+     */
+    private static boolean checkNamespaceInTabs(String hotNamespace) {
         int inTabs = 0;
         List<String> tabNames = new ArrayList<>();
         List<String> emptyTabs = new ArrayList<>();
         for (CreativeModeTab tab : CreativeModeTabs.allTabs()) {
             tabNames.add(tab.getDisplayName().getString());
             int before = inTabs;
-            for (var stack : tab.getDisplayItems()) {
-                var key = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
+            for (ItemStack stack : tab.getDisplayItems()) {
+                ResourceLocation key = BuiltInRegistries.ITEM.getKey(stack.getItem());
                 if (key != null && key.getNamespace().equals(hotNamespace)) {
                     inTabs++;
                 }
@@ -684,14 +728,136 @@ public final class GameplayCheck {
             fail("no item from '" + hotNamespace + "' is listed in any creative tab after the screen "
                     + "opened; the tabs were not rebuilt after the hot-add (tabs without a match: "
                     + emptyTabs + ")");
-            return;
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Finds and selects the hot-added mod's own creative tab.
+     *
+     * @return false when the check failed (the stage is already failed)
+     */
+    private static boolean beginOwnTab(net.minecraft.client.Minecraft mc, String hotNamespace) {
+        List<CreativeModeTab> modTabs = new ArrayList<>();
+        for (CreativeModeTab tab : CreativeModeTabs.allTabs()) {
+            ResourceLocation key = BuiltInRegistries.CREATIVE_MODE_TAB.getKey(tab);
+            if (key != null && key.getNamespace().equals(hotNamespace)) {
+                modTabs.add(tab);
+            }
+        }
+        if (modTabs.isEmpty()) {
+            ModReloader.LOGGER.info(
+                    "[GameplayCheck] creative: '{}' registers no tab of its own; "
+                            + "own-tab check skipped", hotNamespace);
+            return true;
+        }
+        CreativeModeTab best = null;
+        int bestItems = -1;
+        for (CreativeModeTab tab : modTabs) {
+            int count = countModItems(tab, hotNamespace);
+            ModReloader.LOGGER.info(
+                    "[GameplayCheck] creative own tab candidate: {} ({}) items={} modItems={}",
+                    BuiltInRegistries.CREATIVE_MODE_TAB.getKey(tab),
+                    tab.getDisplayName().getString(), tab.getDisplayItems().size(), count);
+            if (count > bestItems) {
+                bestItems = count;
+                best = tab;
+            }
+        }
+        if (best == null || bestItems <= 0) {
+            fail("the mod's own creative tab is registered but lists no item from '"
+                    + hotNamespace + "'; the tab contents were not rebuilt after the hot-add");
+            return false;
+        }
+        // The tab must be in one of the screen's pages, otherwise no tab button is
+        // drawn and a player can never reach it.
+        CreativeModeTab chosen = best;
+        try {
+            List<CreativeTabsScreenPage> pages = UnsafeAccess.get(
+                    mc.screen, CreativeModeInventoryScreen.class, "pages");
+            int pageIndex = -1;
+            if (pages != null) {
+                for (int i = 0; i < pages.size(); i++) {
+                    if (pages.get(i).getVisibleTabs().contains(chosen)) {
+                        pageIndex = i;
+                        break;
+                    }
+                }
+            }
+            boolean visible = pageIndex >= 0;
+            if (visible) {
+                ModReloader.LOGGER.info(
+                        "[GameplayCheck] creative own tab is on page {}/{} of the screen",
+                        pageIndex + 1, pages.size());
+            }
+            if (!visible) {
+                fail("the mod's own creative tab " + BuiltInRegistries.CREATIVE_MODE_TAB.getKey(best)
+                        + " is not in any page of the creative screen (pages=" + pages + "); "
+                        + "no tab button is drawn for it");
+                return false;
+            }
+        } catch (Throwable t) {
+            fail("cannot read the creative screen pages: " + t);
+            return false;
+        }
+        try {
+            MethodHandle select = UnsafeAccess.trusted().findVirtual(
+                    CreativeModeInventoryScreen.class, "selectTab",
+                    MethodType.methodType(void.class, CreativeModeTab.class));
+            select.invoke(mc.screen, best);
+        } catch (Throwable t) {
+            fail("selecting the mod's own creative tab threw " + t);
+            return false;
+        }
+        ownTab = best;
+        ownTabItems = best.getDisplayItems().size();
+        ModReloader.LOGGER.info(
+                "[GameplayCheck] creative: selected own tab {} ('{}', {} items, {} from '{}')",
+                BuiltInRegistries.CREATIVE_MODE_TAB.getKey(best),
+                best.getDisplayName().getString(), ownTabItems, bestItems, hotNamespace);
+        return true;
+    }
+
+    /** After selecting the tab: the screen must actually be on it and still render. */
+    private static boolean finishOwnTab(net.minecraft.client.Minecraft mc) {
+        if (ownTab == null) {
+            return true;
+        }
+        CreativeModeTab selected = UnsafeAccess.getStatic(
+                CreativeModeInventoryScreen.class, "selectedTab");
+        if (selected != ownTab) {
+            fail("the creative screen did not switch to the mod's own tab (selected="
+                    + (selected == null ? "null" : BuiltInRegistries.CREATIVE_MODE_TAB.getKey(selected))
+                    + ", wanted=" + BuiltInRegistries.CREATIVE_MODE_TAB.getKey(ownTab) + ")");
+            return false;
+        }
+        int visible = mc.screen instanceof CreativeModeInventoryScreen screen
+                ? screen.getMenu().getItems().stream()
+                        .filter(stack -> !stack.isEmpty())
+                        .toList()
+                        .size()
+                : -1;
+        if (visible <= 0) {
+            fail("the mod's own creative tab shows no items in its menu (menu items="
+                    + visible + ")");
+            return false;
         }
         ModReloader.LOGGER.info(
-                "[GameplayCheck] creative inventory rendered 40 ticks without crashing");
-        mc.setScreen(null);
-        ModReloader.LOGGER.info("[GameplayCheck] creative RESULT: PASS");
-        stage = Stage.DONE;
-        ticks = 0;
+                "[GameplayCheck] creative own tab rendered: {} tab items, {} in the menu",
+                ownTabItems, visible);
+        return true;
+    }
+
+    private static int countModItems(CreativeModeTab tab, String hotNamespace) {
+        int count = 0;
+        for (ItemStack stack : tab.getDisplayItems()) {
+            ResourceLocation key = BuiltInRegistries.ITEM.getKey(stack.getItem());
+            if (key != null && key.getNamespace().equals(hotNamespace)) {
+                count++;
+            }
+        }
+        return count;
     }
 
     // --------------------------------------------------------------- helpers
