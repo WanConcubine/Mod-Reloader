@@ -108,6 +108,7 @@
 | **History** | [history.md](history.md)：追加式过程记录（做了什么、证据、为什么）。状态只看 [status.md](status.md)。 |
 | **Registry adaptation（注册表适配）** | 贵妃级的路线：unfreeze + 重放 `RegisterEvent` + 重建依赖缓存，让注册表内容「就地」生效；只支持 add-only，且单向提交、不可回滚。见 [research-t4-registry.md](research-t4-registry.md)。 |
 | **Bake callback** | NeoForge 在 `freeze()` 时执行的回调；重算 BlockState id 映射、方块缓存/loot table、属性校验等。贵妃级适配的「依赖缓存重建」就靠它。 |
+| **Capability replay（能力重放）** | 热加后把 `RegisterCapabilitiesEvent` 只投给新容器，让桶/机器/坩埚的 item/fluid/energy provider 存在；位置在 registry commit 之后、common setup 之前，临时复位 `CapabilityHooks.initFinished` 以允许 `setProxyable`。见 [dogfood-gameplay.md](features/dogfood-gameplay.md) §1.1。 |
 | **创造栏分页（creative tab page）** | NeoForge 把非默认创造页签每 10 个分一页；第 1 页是 10 个 vanilla 页签 + hotbar/search/inventory，mod 自己的页签通常在**第 2 页**（物品栏窗口顶部外侧的 `<` `>` 按钮翻页）。热加后「看不到页签」先确认是不是没翻页；四条路径的回归见 [dogfood-gameplay.md](features/dogfood-gameplay.md) §2.1。 |
 | **Registration audit（注册审计）** | 热加前扫 jar 的类引用，找出它会注册的启动期 mod-bus 事件并按 `covered / recurring / datagen / crash / behavior / silent / base / other-side` 分级。`crash` 四类在 `VALIDATE` 变更前拒绝（`FailureKind.CLIENT_REGISTRATION`），其余只报告。见 [features/client-registration-audit.md](features/client-registration-audit.md)。 |
 | **One-shot replay（一次性事件重放）** | 把启动期只发生一次的事件（命令、payload、`RegisterEvent`）在热加后重新投递；按容器重放，避免全局重放导致已加载 mod 的监听器再跑一遍。 |

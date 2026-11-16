@@ -47,3 +47,9 @@ Mekanism、ExtremeReactors2——包括我们的 dogfood。它们注册 capabili
 2. **只报告、一律不拒绝**：AT/粒子这类失败会留到用户点开配方书/粒子生成时才爆，且那时已经无法干净回滚。
 3. **反射把事件全重放一遍**：注册面各不相同、往真身重放会重复注册、有些事件启动后已关闭（见 feature 文档 §2）。
 4. **静态白名单**（在代码里列死事件名，不扫 jar）：无法回答「这个模组用了哪些事件」，也就无法在变更前拦住。
+
+## 2026-11-16 补充
+
+`RegisterCapabilitiesEvent` 已重放（`hotadd/CapabilityReplay`，只投新容器），现归 `covered`。
+本 ADR 的分级策略不变（崩溃类拒绝、行为类只 warn），只是 capabilities 不再是行为类缺口；
+其余行为类事件的判断依据仍然成立。

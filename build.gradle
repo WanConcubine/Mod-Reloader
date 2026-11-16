@@ -168,6 +168,11 @@ neoForge {
                 // the data pack has to be applied by the deferred world-start hook.
                 systemProperty 'modreloader.verifyDatapackAtTitle', 'true'
             }
+            if (providers.gradleProperty('skipCapabilityReplay').orNull) {
+                // A/B proof for the capability assertions: without the replay the
+                // dogfood's barrel/crucible/machine providers must be missing.
+                systemProperty 'modreloader.skipCapabilityReplay', 'true'
+            }
             if (verifyGameplay) {
                 // With verifyAddCommand: after the add, drive real gameplay on
                 // the server (hammer/sieve/craft + the mod's own tables command).
@@ -210,6 +215,16 @@ neoForge {
             if (providers.gradleProperty('mpRegistryAddress').orNull) {
                 systemProperty 'modreloader.mpRegistryAddress',
                         providers.gradleProperty('mpRegistryAddress').get()
+            }
+            if (providers.gradleProperty('verifyCapabilities').orNull) {
+                // Capability replay check: title-screen add -> create world -> place
+                // barrel/crucible/machine -> look the capabilities up.
+                systemProperty 'modreloader.verifyCapabilities',
+                        providers.gradleProperty('verifyCapabilities').get()
+            }
+            if (providers.gradleProperty('verifyCapabilitiesModId').orNull) {
+                systemProperty 'modreloader.verifyCapabilitiesModId',
+                        providers.gradleProperty('verifyCapabilitiesModId').get()
             }
             if (providers.gradleProperty('verifyCreativeAtTitle').orNull) {
                 // Title-screen hot-add, then create a world and check the mod's own

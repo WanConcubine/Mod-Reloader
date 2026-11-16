@@ -8,9 +8,10 @@
 只读分析器 v0 可用；热加引擎在 NeoForge 1.21.1 dev 环境验证到四档里的前三档——**嫔级**（无 mixin/注册表）、
 **妃级**（mixin + 布局变更，需 JBR + MixinRuntime）、**贵妃级 add-only**（方块/物品注册 + 资源包/创造栏 + datapack `/reload` 语义，
 含真实 dogfood 众星捧月 1.5.0）；皇后级只提示重启。
-2026-11-16 四个新进展：**JiJ 内嵌库抽取**（jecharacters 从失败转 PASS）、**多人连接后的注册表 id 同步**
+2026-11-16 五个新进展：**JiJ 内嵌库抽取**（jecharacters 从失败转 PASS）、**多人连接后的注册表 id 同步**
 （运行时自有 play 通道，跨进程两端 29475 行 id 一致；前提是两端热加同一批 jar）、**MixinRuntime 反射化（构建不再需要 `libs/`）**、
-**注册审计**（16 个真实 jar 的启动期事件清单；已知崩溃四类变更前拒绝，不再靠手写枚举碰运气）。
+**注册审计**（16 个真实 jar 的启动期事件清单；已知崩溃四类变更前拒绝，不再靠手写枚举碰运气）、
+**capability 重放**（`RegisterCapabilitiesEvent` 只投新容器；众星捧月桶/坩埚/机器的 item/fluid/energy provider 热加后可用）。
 **硬边界**：access transformer（6/9 真实模组）、世界生成注册表、一次性启动事件的**重放**（审计只能报告/拒绝）、删除/更新、软重启未开始。
 失败回滚只覆盖 post-ModList / post-pack。按 [§6 契约](../AGENTS.md) 尚不算「完成」的项见文末「未验证」。
 
@@ -52,9 +53,10 @@
 | **AppleSkin 悬停食物崩溃（已修）** | **崩溃报告 `IllegalArgumentException: Unknown TooltipComponent` @ `ClientTooltipComponent.create`；根因：`RegisterClientTooltipComponentFactoriesEvent` 从未重放。修后 `tooltip component factories replayed: 1 new, 1 total`、`isLoaded=true`；**悬停渲染那一步还没复测**（需要鼠标）** | 2026-11-16 14:56（崩溃）/ 14:57（修复）：`run/crash-reports/crash-2026-11-16_14.56.09-client.txt` + `-PverifyCompat=<appleskin>` |
 | **JiJ 内嵌库抽取** | jecharacters `ok=true`、`modules [jecharacters, PinIn, JustEnoughCharacters.coremod.neoforge]`、资源包重载；ZeroCore2 + jecharacters 同进程回归 PASS | `-PverifyCompat=<jecharacters>`；[matrix](features/hotadd-compatibility-matrix.md) §5 |
 | **热加兼容性矩阵（首轮）** | 9 个真实模组：**2 PASS**（ZeroCore2 含 mixin、jecharacters）/ 6 个 AT 变更前拒绝 / 1 个缺依赖 | `-PverifyCompat=<jar>[,<jar>]`；[matrix](features/hotadd-compatibility-matrix.md) |
-| **注册审计（启动期事件）**（[ADR-0012](decisions/0012-registration-audit-severity.md)） | 16 个真实 jar、**129 处事件引用**：61 covered / 24 recurring / 6 datagen / 19 silent / **15 behavior** / **3 crash** / 1 base；3 处 crash 全在 AE2/Mekanism（本就被 AT 拒）→ 没有任何当前 PASS 的模组变成被拒；合成 jar 证明 crash 事件在 module 注入前被 `CLIENT_REGISTRATION` 拒绝；专用服上纯客户端事件记为 `other-side` | `-PverifyRegAudit=<jars>`；[client-registration-audit.md](features/client-registration-audit.md) §5 |
+| **注册审计（启动期事件）**（[ADR-0012](decisions/0012-registration-audit-severity.md)） | 16 个真实 jar、**129 处事件引用**：66 covered / 24 recurring / 6 datagen / 19 silent / **10 behavior** / **3 crash** / 1 base；3 处 crash 全在 AE2/Mekanism（本就被 AT 拒）→ 没有任何当前 PASS 的模组变成被拒；合成 jar 证明 crash 事件在 module 注入前被 `CLIENT_REGISTRATION` 拒绝；专用服上纯客户端事件记为 `other-side` | `-PverifyRegAudit=<jars>`；[client-registration-audit.md](features/client-registration-audit.md) §5 |
+| **capability 重放（`RegisterCapabilitiesEvent`）** | 众星捧月热加后五项全部 present：桶 item/fluid、坩埚 fluid、机器 item/energy；A/B：`-PskipCapabilityReplay=true` 时五项全 MISSING（FAIL），重放后 PASS；provider 计数 `item 16/48、fluid 24/27、energy 4/4`（本模组/总数） | `-PverifyCapabilities=<jar>`；[dogfood-gameplay.md](features/dogfood-gameplay.md) §1.1 |
 | **AT「晚注入」量测（只读）** | 6 个带 AT 的 jar 共 295 条规则 / 151 个目标类；标题屏 19%、进世界 8% 还没加载 → **结论：不做** | `-PverifyAtSpike=<jars>`；[matrix](features/hotadd-compatibility-matrix.md) §8 |
-| **工程底座** | `capabilities: module_injection … registry_sync … resource_packs` 全 ok（server `resource_packs=n/a`）；**无 `libs/` 可 `clean build`**；**20 个无游戏单测** | `./gradlew test`；[tech-debt.md](tech-debt.md) |
+| **工程底座** | `capabilities: module_injection … registry_sync … resource_packs` 全 ok（server `resource_packs=n/a`）；**无 `libs/` 可 `clean build`**；**21 个无游戏单测** | `./gradlew test`；[tech-debt.md](tech-debt.md) |
 | **JDK / JBR 21** | 编译用 Temurin 21 toolchain；**`runClient` 与 `runServer` 都**用 JBR 21.0.11 + `-XX:+AllowEnhancedClassRedefinition`（`enhancedRedefinition=true`） | 启动日志 `[ModReloader] JVM … enhancedRedefinition=` |
 
 ## 验证状态
@@ -67,11 +69,12 @@
   客户端资源包/创造栏、客户端启动期注册重放（menu screens / BE+Entity 渲染器 / 染色 / 客户端扩展 / reload listener / item→model / config）见 [dogfood-gameplay.md](features/dogfood-gameplay.md) §2。
 - **贵妃级数据层**：datapack 注入 + `/reload` 语义 [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md)；多人连接后的 id 同步 [同文 §9](features/t4-registry-hotadd.md)，决策见 [ADR-0010](decisions/0010-post-connect-registry-sync.md)（Proposed）。
 - **双端化 + 工程底座**：dedicated server 加载/热加/命令重放/payload E1-E3 [server-hotadd.md](features/server-hotadd.md)；
-  引擎与两端解耦（`PlatformHooks`）、[Capabilities](../src/main/java/dev/modreloader/capability/Capabilities.java) 七组锚点守卫、`dev/` 移出发布 jar、20 个无游戏单测 [tech-debt.md](tech-debt.md)。
+  引擎与两端解耦（`PlatformHooks`）、[Capabilities](../src/main/java/dev/modreloader/capability/Capabilities.java) 八组锚点守卫、`dev/` 移出发布 jar、21 个无游戏单测 [tech-debt.md](tech-debt.md)。
 - **真实 dogfood（众星捧月 1.5.0 / 1.4.2）**：注册层 + datapack + 玩法验收 + 五个客户端 bug（创造页签崩溃、机器 GUI、物品图标、内部内容不渲染、config 未加载）全部 PASS；
   创造栏另有四条路径回归（含主菜单热加与热缓存），页签都在第 2/2 页，见 [dogfood-gameplay.md](features/dogfood-gameplay.md) §2.1。
 - **兼容性矩阵首轮 + 两个缺口的处理**：AT 变更前拒绝（含 UI 预检）、缺依赖前置拒绝、JiJ 内嵌库抽取、AT 晚注入量测与否定结论，见 [hotadd-compatibility-matrix.md](features/hotadd-compatibility-matrix.md)。
-- **注册审计**：纯规则 8 个单测；`-PverifyRegAudit` 扫 16 个真实 jar（129 处引用）+ 合成致命 jar 断言 `VALIDATE` 拒绝、零副作用；真实 `-PverifyCompat=<AppleSkin>` 仍 PASS。见 [client-registration-audit.md](features/client-registration-audit.md)。
+- **注册审计**：纯规则 9 个单测；`-PverifyRegAudit` 扫 16 个真实 jar（129 处引用）+ 合成致命 jar 断言 `VALIDATE` 拒绝、零副作用；真实 `-PverifyCompat=<AppleSkin>` 仍 PASS。见 [client-registration-audit.md](features/client-registration-audit.md)。
+- **capability 重放**：`hotadd/CapabilityReplay` 在 registry commit 之后、common setup 之前只对新容器重放 `RegisterCapabilitiesEvent`；众星捧月五项 provider 在主菜单热加与进世界 add 两条路径都 present，`-PskipCapabilityReplay=true` 反证全 MISSING。见 [dogfood-gameplay.md](features/dogfood-gameplay.md) §1。
 
 ### 未验证
 
@@ -127,23 +130,29 @@
     同时修掉两个「读取/变换原始字节」的副作用：`ClassBytes` 的 retransform 会应用已准备的 mixin，
     MixinRuntime 的 `transform(Class)` 会自己 redefine——现在引擎用类文件资源取原始字节 + 自调
     `IMixinTransformer#transformClassBytes` + 自己 `redefineClasses`（见 history 2026-11-16）。
-26. **热加 mod 的 `RegisterCapabilitiesEvent` 从未重放（审计首次指出）**：众星捧月 `CapabilityEvents.registerCapabilities`
-    给桶（item/fluid）、坩埚（fluid）、机器（item/energy）和流体容器物品注册 provider；热加后不登记，所以「桶倒不进去 / 机器不动」
-    在热加会话里是必然的。语料 **5/16** 个模组引用该事件。审计标成 `behavior`（warn，不拒绝）；重放是下一步第一项。
+26. ✅ **热加 mod 的 `RegisterCapabilitiesEvent` 从未重放（已修 2026-11-16）**：审计首次指出的缺口——众星捧月给桶（item/fluid）、
+    坩埚（fluid）、机器（item/energy）注册 provider，热加后不登记，所以「桶倒不进去 / 机器不动」。现在 `hotadd/CapabilityReplay`
+    在 registry commit 之后、common setup 之前用 `container.acceptEvent(new RegisterCapabilitiesEvent())` **只投新容器**，
+    并临时把 `CapabilityHooks.initFinished` 置 false 让 `setProxyable` 可用（finally 恢复）；never fail the add（provider 是 additive）。
+    证据：主菜单热加 → 建世界 → 放桶/坩埚/机器，五项 capability 全 present；`-PskipCapabilityReplay=true` 时五项全 MISSING（反证）。
+    审计把该事件从 `behavior` 移入 `covered`（66 covered / 10 behavior）。剩余：`GuiLayers` / `ItemDecorations` / 模型层仍未重放。
 27. **「主菜单热加后创造栏没出现」报告无法复现（2026-11-16，未定位、未改代码）**：所有者在其机器上用众星捧月 **1.4.2**
     看到「主菜单热加 → 进世界 → 创造栏翻页也找不到页签」。本机四条路径（进世界 add / 标题屏 add 冷 / 标题屏 add 热缓存 / 正常安装）全 PASS，
     页签都在第 2/2 页、`>` 可达、182 项；1.4.2 与 1.5.0 发布 jar 内容一致（只差 MANIFEST/mods.toml 的版本号，`ModCreativeTabs.class` 哈希相同），
     版本解释不了差异。失败那次的日志没拿到，所有者放弃复现；四条 harness 留作回归。若再现：看那台 `logs/latest.log` 有没有
     `creative tabs sorted at the title screen`（没有 = 旧构建）以及 `hot-add` 是否 `ok=true`。详见 [dogfood-gameplay.md](features/dogfood-gameplay.md) §2.1.1。
+28. **in-world 热加与区块发送的竞态（一次性复现，2026-11-16 18:50，未定位）**：进世界后热加众星捧月时，客户端收到一个 chunk 包报
+    `IllegalArgumentException: No value with id -1`（`LinearPalette.read`），随后服务端以「网络协议错误」断开玩家。同一次 add 刚做过
+    `registry commit`（清 BlockState id 映射 → re-freeze）。怀疑是 render 线程上的 id 重建与服务器线程的 chunk 序列化并发；之后同路径重跑两次都正常。
+    **建议修法**：把 `RegistryStage.commit` 的「清 id + freeze」投到服务器线程（或暂停 chunk 发送）串行化；需要稳定复现后再改。
 
 ## 下一步
 
 > 结构性技术债与架构升级点见 [tech-debt.md](tech-debt.md)。多人同步之后的顺序：
 
-0. ~~**注册审计**~~ 已完成（2026-11-16），语料与结论见 [client-registration-audit.md](features/client-registration-audit.md)。
-   **从这里开始**：**重放 `RegisterCapabilitiesEvent`**（语料 5/16 个模组，众星捧月桶/坩埚/机器直接受益；见已知问题 26）。
-   位置：`RegistryStage.commit` 之后、`FmlEvents.finish` 之前（启动时它就在 common setup 之前）；`setProxyable` 在 init 之后会抛（catch + warn），
-   provider 列表是 add-only，只投给新容器。验证：进世界放一个桶，断言 `Capabilities.ItemHandler.BLOCK` / `FluidHandler.BLOCK` 非 null，再跑 `-PverifyGameplay` 回归。
+0. ~~**注册审计**~~ 与 ~~**重放 `RegisterCapabilitiesEvent`**~~ 都已完成（2026-11-16；capability 的 A/B 见已知问题 26）。
+   **下一个按收益排**：`RegisterGuiLayersEvent`（语料 3/16，HUD，静默缺失）→ `RegisterItemDecorationsEvent` /
+   `EntityRenderersEvent.RegisterLayerDefinitions`（模型层已 bake，需要重建 `EntityModelSet`，成本高）。
 1. **贵妃级的下一层：datapack 删除/更新语义、WORLDGEN 层**。多人「连接后热加」已于 2026-11-16 完成
    （[t4-registry-hotadd.md](features/t4-registry-hotadd.md) §9、[ADR-0010](decisions/0010-post-connect-registry-sync.md)）；
    剩下的「客户端不装 jar」属于资源/类的分发问题，是产品级决策，不在注册表适配范围内。
@@ -164,6 +173,13 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近几条。
 
+- **2026-11-16（capability 重放：桶/坩埚/机器终于有 item/fluid/energy provider 了）**：注册审计指出的第一个真实缺口。
+  新增 `hotadd/CapabilityReplay`：在 registry commit 之后、common setup 之前，用 `container.acceptEvent(new RegisterCapabilitiesEvent())`
+  **只投新容器**，并临时复位 `CapabilityHooks.initFinished` 让 `setProxyable` 可用；失败只 warn，不让 add 失败。
+  `dev/CapabilityCheck`（`-PverifyCapabilities`）做 A/B：主菜单热加 → 建世界 → 放桶/坩埚/机器 →
+  五项全 present；`-PskipCapabilityReplay=true` 时五项全 MISSING。进世界 add 的 `GameplayCheck` 也加了同样断言并 PASS。
+  审计把 `RegisterCapabilitiesEvent` 从 `behavior` 移入 `covered`（重跑 16 jar：66 covered / 10 behavior / 129 引用）。
+  见 [dogfood-gameplay.md](features/dogfood-gameplay.md) §1、已知问题 26。
 - **2026-11-16（众星捧月创造栏：补「模组自己的页签」+ 四条路径回归）**：原来的 `-PverifyCreative` 只测「开界面不崩 + defaults=4 +
   某个 tab 里有该 namespace 的物品」，没测模组自己的页签。现在 `GameplayCheck` 断言页签注册、内容非空、在界面的分页里、
   `selectTab` 后菜单被填充并渲染 40 tick；`dev/CreativeTitleCheck`（`-PverifyCreativeAtTitle`，含 `Warm` 热缓存 / `Installed` 正常安装对照）

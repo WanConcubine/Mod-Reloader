@@ -20,7 +20,8 @@
 | 6 | 客户端注册：BE 渲染器 / 物品染色 / 流体扩展 / reload listener | `beRenderers 6/6 (missing=[])`、瓷桶染色已注册、`fluidExtensions=3`、`clientReloadListeners=6` |
 | 7 | 物品图标模型 | `181/181 resolved, missing=[]` |
 | 8 | 自动机器的 tick + 渲染（读配置值） | 机器 BE 存活、配置 `1/1 loaded` |
-| 9 | 创造物品栏渲染 40 tick + **模组自己的页签**（`-PverifyCreative`） | 不崩，`defaults=4`；页签 `exnihilosatellitium:main`（无中生有：众星捧月）在 **第 2/2 页**，**182 项**全部来自该 mod；选中后菜单 45–46 个非空 ItemStack，再渲染 40 tick 不崩，PASS |
+| 9 | **capability provider**（桶 item/fluid、坩埚 fluid、机器 item/energy） | 热加后五项全 `present`；`-PskipCapabilityReplay=true` 时五项全 `MISSING`（反证） |
+| 10 | 创造物品栏渲染 40 tick + **模组自己的页签**（`-PverifyCreative`） | 不崩，`defaults=4`；页签 `exnihilosatellitium:main`（无中生有：众星捧月）在 **第 2/2 页**，**182 项**全部来自该 mod；选中后菜单 45–46 个非空 ItemStack，再渲染 40 tick 不崩，PASS |
 
 ```bash
 ./gradlew runClient \
@@ -30,6 +31,20 @@
 ```
 
 加 `-PverifyGameplayKeepOpen=true` 会在检查完把客户端留在世界里（创造物品栏已修好），方便手动玩。
+
+### 1.1 capability 重放（`-PverifyCapabilities`，2026-11-16）
+
+`RegisterCapabilitiesEvent` 同样只在启动时 fire 一次。热加后众星捧月的桶/坩埚/机器 provider 全部缺失（「桶倒不进去 / 机器不动」）。
+`hotadd/CapabilityReplay` 在 registry commit 之后、common setup 之前只对新容器重放；`dev/CapabilityCheck` 主菜单热加 → 建世界 →
+放桶/坩埚/机器 → 用 `Capabilities.ItemHandler/FluidHandler/EnergyStorage.BLOCK` 查询：
+
+```text
+capability providers replayed for exnihilosatellitium: item 16/48, fluid 24/27, energy 4/4 block(s) for this mod/total; dispatch reached 1 listener(s)
+[CapabilityCheck] providers: [barrel.item=present, barrel.fluid=present, crucible.fluid=present, machine.item=present, machine.energy=present]
+[CapabilityCheck] RESULT: PASS
+```
+
+反证（`-PskipCapabilityReplay=true`）五项全 `MISSING` → `RESULT: FAIL`；进世界 `/modreloader add` 的 `GameplayCheck` 也加了同样断言并 PASS。
 
 ## 2. 验收抓到的真问题：创造物品栏越界崩溃（已修）
 

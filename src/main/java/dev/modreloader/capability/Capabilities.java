@@ -54,7 +54,8 @@ public final class Capabilities {
         REGISTRY_ADAPTATION("registry content hot-add (guifei)", false),
         REGISTRY_SYNC("registry snapshot sync to connected clients", false),
         DATAPACK_RELOAD("data pack reload (guifei)", false),
-        RESOURCE_PACKS("resource pack injection", false);
+        RESOURCE_PACKS("resource pack injection", false),
+        CAPABILITY_REPLAY("capability event replay", false);
 
         private final String label;
         private final boolean essential;
@@ -102,6 +103,7 @@ public final class Capabilities {
         RESULTS.put(Capability.REGISTRY_SYNC, checkRegistrySync());
         RESULTS.put(Capability.DATAPACK_RELOAD, checkDatapackReload());
         RESULTS.put(Capability.RESOURCE_PACKS, checkResourcePacks());
+        RESULTS.put(Capability.CAPABILITY_REPLAY, checkCapabilityReplay());
 
         List<String> summary = new ArrayList<>();
         for (Capability capability : Capability.values()) {
@@ -215,6 +217,28 @@ public final class Capabilities {
             missing.add("mixin classes: " + t.getClass().getSimpleName());
         }
         return result(Capability.MIXIN_HOTADD, missing);
+    }
+
+    /**
+     * Replaying {@code RegisterCapabilitiesEvent} needs its package-private
+     * constructor and the {@code initFinished} guard (flipped back to false for the
+     * replay so {@code setProxyable} works). Both are internal NeoForge names.
+     */
+    private static Result checkCapabilityReplay() {
+        List<String> missing = new ArrayList<>();
+        try {
+            Class<?> event = Class.forName(
+                    "net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent",
+                    false, Capabilities.class.getClassLoader());
+            event.getDeclaredConstructor();
+            Class<?> hooks = Class.forName(
+                    "net.neoforged.neoforge.capabilities.CapabilityHooks",
+                    false, Capabilities.class.getClassLoader());
+            hooks.getDeclaredField("initFinished");
+        } catch (Throwable t) {
+            missing.add("capability event: " + t.getClass().getSimpleName());
+        }
+        return result(Capability.CAPABILITY_REPLAY, missing);
     }
 
     private static Result checkRegistryAdaptation() {

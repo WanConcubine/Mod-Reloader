@@ -18,7 +18,7 @@
 
 ### ✅ 1. 反射面兼容性守卫（已完成 2026-11-15）
 
-`capability/Capabilities` 在启动时**只读**探测六组锚点，打一行报告：
+`capability/Capabilities` 在启动时**只读**探测八组锚点，打一行报告：
 
 ```
 [ModReloader] capabilities: module_injection=ok modlist_rebuild=ok network_adaptation=ok mixin_hotadd=ok registry_adaptation=ok datapack_reload=ok resource_packs=ok
@@ -54,7 +54,8 @@
    → 一个 `OneShotReplay` 帮助类，集中记录这个副作用与降级策略。
    **2026-11-16 补了可见性那一半**：`inspect/RegistrationAudit` 在 `VALIDATE` 列出 jar 引用的每个启动期事件及其分级，
    已知崩溃类变更前拒绝（[client-registration-audit.md](features/client-registration-audit.md)）。
-   这不能替代统一出口——它只告诉我们「还差哪个」，不负责重放。
+   同一天 `hotadd/CapabilityReplay` 补了第一个按收益排序的重放（`RegisterCapabilitiesEvent`，只投新容器）。
+   这仍不能替代统一出口——它只告诉我们「还差哪个」，每个重放仍是手写的。
 6. **harness 样板重复**：4 个检查各自复制"建世界 / 连服 / 等遮罩"逻辑（`AddCommandCheck`、`PayloadCheck`、
    `RemotePayloadCheck`、`MenuEntryCheck`），约 600 行里有大半是重复。现在它们都在 `src/dev`，抽取更安全。
    → 抽 `dev/TestWorld`（建世界 + 等 ready）与 `dev/TestConnection`（连服 + 等 join）。
@@ -67,7 +68,7 @@
    占位符一致；② 每个 `FailureKind` 都有 `.summary/.suggestion`（`FailureKeys` 把映射从
    `FailureAnalyzer` 抽出来，才能不加载游戏测试）；③ summary/suggestion 成对。`./gradlew test` 3 passed。
    2026-11-16 补了 3 个 JiJ 路径校验测试（`JarInJarTest`：绝对路径/`..`/非 jar 被拒、抽取文件名净化），
-   6 个命令短名测试（`JarPathResolverTest`），8 个注册审计分级测试（`RegistrationAuditTest`；纯规则，不需要 ASM/游戏），现在 **20 passed**。
+   6 个命令短名测试（`JarPathResolverTest`），8 个注册审计分级测试（`RegistrationAuditTest`；纯规则，不需要 ASM/游戏），现在 **21 passed**。
 9. ✅ **`libs/` 编译依赖**（已完成 2026-11-16，已知问题 12）：新增 `hotadd/MixinRuntimeApi`（trusted lookup 调时解析 mr 的 10 个方法 + `probe()` 给能力守卫）与 `hotadd/ClassBytes`（自己做「读已加载类字节」，不再借 mr 的 `InstUtils`），删掉 `compileOnly files('libs/...')`。
    证据：移走 `libs/` 后 `./gradlew clean build` 通过（6 tests）；有 mr 的妃级热加/回滚/重试 PASS，无 mr 时妃级仍被拦。`libs/` 目录已无引用，可删。
 10. **没有 CI**：分析器的 Python 测试和 `./gradlew test` 都能跑；Java 侧完整 `./gradlew build` 仍要等 P2-9。

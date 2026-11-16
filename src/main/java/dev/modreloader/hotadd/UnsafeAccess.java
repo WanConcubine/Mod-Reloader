@@ -94,6 +94,17 @@ public final class UnsafeAccess {
         }
     }
 
+    public static boolean getStaticBoolean(Class<?> declaring, String name) {
+        try {
+            Field field = declaring.getDeclaredField(name);
+            Object base = UNSAFE.staticFieldBase(field);
+            long offset = UNSAFE.staticFieldOffset(field);
+            return UNSAFE.getBoolean(base, offset);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("cannot read static boolean " + declaring.getName() + "#" + name, e);
+        }
+    }
+
     public static void setStaticBoolean(Class<?> declaring, String name, boolean value) {
         try {
             Field field = declaring.getDeclaredField(name);

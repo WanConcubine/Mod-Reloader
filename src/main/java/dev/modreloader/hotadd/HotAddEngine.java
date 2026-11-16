@@ -402,6 +402,21 @@ public final class HotAddEngine {
                             "[ModReloader] cannot ask the server for its registry mapping", t);
                 }
             }
+            // 4a. capabilities: RegisterCapabilitiesEvent fires once at start-up
+            //     (after the registry events, before common setup). A hot-added mod
+            //     missed it, so item handlers / fluid tanks / energy providers are
+            //     never registered and its blocks silently do nothing. Additive and
+            //     dispatched to the new container only; never fail the add for it.
+            Capabilities.Result capabilityReplay =
+                    Capabilities.get(Capabilities.Capability.CAPABILITY_REPLAY);
+            if (capabilityReplay.available()) {
+                for (ModContainer container : containers) {
+                    CapabilityReplay.replay(container);
+                }
+            } else {
+                ModReloader.LOGGER.warn("[ModReloader] capability replay skipped: {}",
+                        capabilityReplay.describe());
+            }
             stage = Stage.EVENT;
             for (ModContainer container : containers) {
                 FmlEvents.finish(container);

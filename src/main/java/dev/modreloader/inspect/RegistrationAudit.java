@@ -125,9 +125,10 @@ public final class RegistrationAudit {
             "net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent",
             "net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent",
             "net.neoforged.neoforge.client.event.RegisterClientTooltipComponentFactoriesEvent",
-            // NetworkAdaptation / RegistryStage
+            // NetworkAdaptation / RegistryStage / CapabilityReplay
             "net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent",
-            "net.neoforged.neoforge.registries.RegisterEvent");
+            "net.neoforged.neoforge.registries.RegisterEvent",
+            "net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent");
 
     /**
      * Fired again after start-up, so a hot-added mod's listener will run on the
@@ -165,7 +166,6 @@ public final class RegistrationAudit {
      * loudly; not refused (see the class comment).
      */
     private static final Set<String> BEHAVIOR = Set.of(
-            "net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent",
             "net.neoforged.neoforge.event.ModifyDefaultComponentsEvent",
             "net.neoforged.neoforge.registries.NewRegistryEvent",
             "net.neoforged.neoforge.registries.ModifyRegistriesEvent",

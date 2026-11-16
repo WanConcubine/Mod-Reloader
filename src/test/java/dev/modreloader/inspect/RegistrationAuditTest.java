@@ -55,17 +55,25 @@ class RegistrationAuditTest {
 
     @Test
     void behaviourGapsAreReportedButDoNotBlockTheAdd() {
-        // Ex Nihilo (the dogfood) registers capability providers. They are not
-        // replayed, so machines silently do nothing - but refusing the mod would
-        // make the runtime unusable for its main content mod.
+        // Default components are still not replayed: the mod keeps running, but a
+        // component it adds to an item is simply absent. Reported loudly, no refusal.
         RegistrationAudit.Report report = classify(true,
-                "net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent");
+                "net.neoforged.neoforge.event.ModifyDefaultComponentsEvent");
 
         assertEquals(RegistrationAudit.Severity.BEHAVIOR,
                 report.entries().get(0).severity());
         assertFalse(report.fatal());
-        assertTrue(report.line().contains("behavior [capabilities.RegisterCapabilitiesEvent]"),
+        assertTrue(report.line().contains("behavior [event.ModifyDefaultComponentsEvent]"),
                 report.line());
+    }
+
+    @Test
+    void capabilityProvidersAreCoveredSinceTheReplayExists() {
+        RegistrationAudit.Report report = classify(true,
+                "net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent");
+
+        assertEquals(RegistrationAudit.Severity.COVERED, report.entries().get(0).severity());
+        assertFalse(report.fatal());
     }
 
     @Test
@@ -109,6 +117,12 @@ class RegistrationAuditTest {
                         .entries().get(0).severity());
         // A server-side gap is still reported on the server.
         assertEquals(RegistrationAudit.Severity.BEHAVIOR,
+                RegistrationAudit.classify(
+                                Set.of("net.neoforged.neoforge.event.entity.RegisterSpawnPlacementsEvent"),
+                                false, List.of())
+                        .entries().get(0).severity());
+        // Capabilities are replayed, so they are covered on both sides.
+        assertEquals(RegistrationAudit.Severity.COVERED,
                 RegistrationAudit.classify(
                                 Set.of("net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent"),
                                 false, List.of())

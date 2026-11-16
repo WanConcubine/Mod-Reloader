@@ -34,6 +34,8 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.capabilities.BlockCapability;
+import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
@@ -121,6 +123,8 @@ public final class GameplayCheck {
     private static BlockPos hammerPos;
     private static BlockPos sievePos;
     private static BlockPos machinePos;
+    private static BlockPos barrelPos;
+    private static BlockPos cruciblePos;
     private static CompletableFuture<Setup> setupFuture;
     private static CompletableFuture<Verify> verifyFuture;
 
@@ -129,7 +133,8 @@ public final class GameplayCheck {
                          boolean ironHammerRecipeLoaded, String craftDetail) {
     }
 
-    private record Verify(List<String> sieveDrops, boolean pebbleInInventory, boolean machineAlive) {
+    private record Verify(List<String> sieveDrops, boolean pebbleInInventory, boolean machineAlive,
+                          List<String> capabilities) {
     }
 
     private GameplayCheck() {
@@ -174,6 +179,15 @@ public final class GameplayCheck {
 
     private static void setup(MinecraftServer server) {
         if (setupFuture == null) {
+            // The add command can finish before the client has joined the
+            // integrated server's player list; give the join a moment instead of
+            // failing the whole gameplay check.
+            if (server.getPlayerList().getPlayers().isEmpty()) {
+                if (ticks > 20 * 30) {
+                    fail("no server player joined within 30s");
+                }
+                return;
+            }
             if (!checkMenuScreens()) {
                 return;
             }
@@ -315,6 +329,13 @@ public final class GameplayCheck {
         // ConfigValues, so this is the check for "the mod's config was loaded".
         machinePos = base.offset(8, 0, 3);
         level.setBlockAndUpdate(machinePos, block(modId + ":electric_sieve").defaultBlockState());
+
+        // Capability providers (barrel: item + fluid, crucible: fluid, machine:
+        // item + energy) are registered by the mod's RegisterCapabilitiesEvent
+        // listener. A hot-added mod misses that event; without the replay all of
+        // these are absent even though the blocks and their block entities exist.
+        barrelPos = placeIfPresent(level, base.offset(-5, 0, 0), modId + ":barrel");
+        cruciblePos = placeIfPresent(level, base.offset(-5, 0, 3), modId + ":crucible");
 
         // 4) Crafting: the iron hammer recipe (iron ingot + c:rods/wooden = stick).
         List<ItemStack> grid = new ArrayList<>(Collections.nCopies(9, ItemStack.EMPTY));
@@ -574,7 +595,13 @@ public final class GameplayCheck {
                             .filter(stack -> !stack.isEmpty())
                             .anyMatch(stack -> itemId(stack).equals(id(modId + ":cobblestone_pebble")));
                     boolean machineAlive = machinePos != null && level.getBlockEntity(machinePos) != null;
-                    verifyFuture.complete(new Verify(drops, inInventory, machineAlive));
+                    List<String> capabilities = new ArrayList<>();
+                    addCapability(capabilities, "barrel.item", Capabilities.ItemHandler.BLOCK, level, barrelPos);
+                    addCapability(capabilities, "barrel.fluid", Capabilities.FluidHandler.BLOCK, level, barrelPos);
+                    addCapability(capabilities, "crucible.fluid", Capabilities.FluidHandler.BLOCK, level, cruciblePos);
+                    addCapability(capabilities, "machine.item", Capabilities.ItemHandler.BLOCK, level, machinePos);
+                    addCapability(capabilities, "machine.energy", Capabilities.EnergyStorage.BLOCK, level, machinePos);
+                    verifyFuture.complete(new Verify(drops, inInventory, machineAlive, capabilities));
                 } catch (Throwable t) {
                     verifyFuture.completeExceptionally(t);
                 }
@@ -590,6 +617,15 @@ public final class GameplayCheck {
         if (!result.machineAlive()) {
             fail("the automatic machine's block entity disappeared at " + machinePos
                     + " (config value read crashed the tick?)");
+            return;
+        }
+        ModReloader.LOGGER.info("[GameplayCheck] capability providers: {}", result.capabilities());
+        List<String> missingCapabilities = result.capabilities().stream()
+                .filter(entry -> entry.endsWith("=MISSING") || entry.contains("=threw"))
+                .toList();
+        if (!missingCapabilities.isEmpty()) {
+            fail("capability providers missing after the hot-add (RegisterCapabilitiesEvent replay "
+                    + "did not run or failed): " + missingCapabilities);
             return;
         }
         boolean pebbles = result.pebbleInInventory()
@@ -885,6 +921,38 @@ public final class GameplayCheck {
             throw new IllegalStateException("missing item " + id);
         }
         return item;
+    }
+
+    /**
+     * Places the block when the hot-added mod registers it; a mod without that
+     * block simply skips the matching capability assertion.
+     */
+    private static BlockPos placeIfPresent(ServerLevel level, BlockPos pos, String blockId) {
+        ResourceLocation key = ResourceLocation.tryParse(blockId);
+        Block block = key == null ? null : BuiltInRegistries.BLOCK.get(key);
+        if (block == null || block == Blocks.AIR) {
+            ModReloader.LOGGER.info("[GameplayCheck] capability block {} not registered; skipped",
+                    blockId);
+            return null;
+        }
+        level.setBlockAndUpdate(pos, block.defaultBlockState());
+        return pos;
+    }
+
+    /** Looks a capability up exactly as a player interaction would. */
+    private static <T, C> void addCapability(List<String> out, String name,
+                                              BlockCapability<T, C> capability,
+                                              ServerLevel level, BlockPos pos) {
+        if (pos == null) {
+            out.add(name + "=skipped");
+            return;
+        }
+        try {
+            T handler = capability.getCapability(level, pos, null, null, null);
+            out.add(name + "=" + (handler != null ? "present" : "MISSING"));
+        } catch (Throwable t) {
+            out.add(name + "=threw:" + t.getClass().getSimpleName());
+        }
     }
 
     private static Block block(String id) {

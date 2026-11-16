@@ -96,6 +96,10 @@ public final class DevEntry {
         if (!verifyRegAudit.isEmpty()) {
             RegAuditCheck.start(verifyRegAudit);
         }
+        String verifyCapabilities = System.getProperty("modreloader.verifyCapabilities", "").trim();
+        if (!verifyCapabilities.isEmpty()) {
+            CapabilityCheck.start(Path.of(verifyCapabilities));
+        }
         String verifyCreativeAtTitle = System.getProperty("modreloader.verifyCreativeAtTitle", "").trim();
         if (!verifyCreativeAtTitle.isEmpty()) {
             CreativeTitleCheck.start(Path.of(verifyCreativeAtTitle));

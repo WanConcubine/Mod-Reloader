@@ -70,7 +70,7 @@ NeoForge 的 mod bus 上有一批**只在启动时 fire 一次**的注册事件�
 | `recurring` | 启动后还会再 fire（`ModelEvent.*`、`TextureAtlasStitchedEvent`、`BuildCreativeModeTabContentsEvent`、`SoundEngineLoadEvent`、`RegisterConfigurationTasksEvent`、`RenderLevelStageEvent`） | 无 |
 | `datagen` | `GatherDataEvent` / `RegisterGameTestsEvent` | 无 |
 | `crash` | 用到就崩：`RegisterParticleProvidersEvent`、`RegisterRecipeBookCategoriesEvent`、`RegisterShadersEvent`、`RegisterSpriteSourceTypesEvent` | **变更前拒绝**（`FailureKind.CLIENT_REGISTRATION`） |
-| `behavior` | 能跑但功能变了：capabilities、默认组件、自注册 registry、属性/刷怪/POI、模型层（已 bake） | 大声 warn，**不拒绝** |
+| `behavior` | 能跑但功能变了：默认组件、自注册 registry、属性/刷怪/POI、模型层（已 bake） | 大声 warn，**不拒绝** |
 | `silent` | 没有已知症状（HUD 层、物品装饰、维度特效…） | warn |
 | `base` | 抽象事件基类（`EntityRenderersEvent`、`RegisterColorHandlersEvent`、`DataPackRegistryEvent`）；真正 fire 的是具体子类 | 仅记录 |
 | `other-side` | 专用服上的纯客户端事件（那里本来就不会 fire） | 仅记录 |
@@ -78,8 +78,8 @@ NeoForge 的 mod bus 上有一批**只在启动时 fire 一次**的注册事件�
 **与初版提案的差别（有意为之）**：提案把 `RegisterCapabilitiesEvent` 也列为「变更前拒绝」。实测语料里
 **5/16 个模组**（众星捧月、ZeroCore2、AE2、Mekanism、ExtremeReactors2）都注册 capabilities，
 其中众星捧月是我们的 dogfood——直接拒绝会让内容模组全线不可热加，而它们的方块/物品/配方仍然能用。
-所以 capabilities 走 `behavior`（warn），并把「重放 `RegisterCapabilitiesEvent`」列为下一优先级（§7）。
-拒绝只留给「一用就崩」的四类。决策记录见 [ADR-0012](../decisions/0012-registration-audit-severity.md)。
+当时先把它归到 `behavior`（warn）并列为下一优先级；**2026-11-16 已补上重放**（`hotadd/CapabilityReplay`），
+现在归 `covered`。拒绝仍然只留给「一用就崩」的四类。决策记录见 [ADR-0012](../decisions/0012-registration-audit-severity.md)。
 
 ### 3.3 接进引擎
 
@@ -116,11 +116,12 @@ registration audit <ids>: N mod-bus event(s); covered [...]; crash [...]; behavi
 **已覆盖（重放或构造）**：`FMLConstructModEvent`、`FMLCommonSetupEvent`、`FMLLoadCompleteEvent`、`FMLClientSetupEvent`、
 `RegisterKeyMappingsEvent`、`RegisterMenuScreensEvent`、`EntityRenderersEvent.RegisterRenderers`、
 `RegisterColorHandlersEvent.Block/.Item`、`RegisterClientExtensionsEvent`、`RegisterClientReloadListenersEvent`、
-`RegisterClientTooltipComponentFactoriesEvent`、`RegisterPayloadHandlersEvent`、`RegisterEvent`。
+`RegisterClientTooltipComponentFactoriesEvent`、`RegisterPayloadHandlersEvent`、`RegisterEvent`、
+`RegisterCapabilitiesEvent`（`CapabilityReplay`，2026-11-16）。
 
 **已知崩溃（拒绝）**：`RegisterParticleProvidersEvent`、`RegisterRecipeBookCategoriesEvent`、`RegisterShadersEvent`、`RegisterSpriteSourceTypesEvent`。
 
-**行为类（warn）**：`RegisterCapabilitiesEvent`、`ModifyDefaultComponentsEvent`、`NewRegistryEvent`、`DataPackRegistryEvent.*`、
+**行为类（warn）**：`ModifyDefaultComponentsEvent`、`NewRegistryEvent`、`DataPackRegistryEvent.*`、
 `ModifyRegistriesEvent`、`EntityAttributeCreationEvent`、`EntityAttributeModificationEvent`、`RegisterSpawnPlacementsEvent`、
 `BlockEntityTypeAddBlocksEvent`、`RegisterDataMapTypesEvent`、`RegisterCauldronFluidContentEvent`、`AddPackFindersEvent`、
 `ExtendPoiTypesEvent`、`EntityRenderersEvent.RegisterLayerDefinitions`。
@@ -130,7 +131,7 @@ registration audit <ids>: N mod-bus event(s); covered [...]; crash [...]; behavi
 `RegisterMaterialAtlasesEvent`、`RegisterNamedRenderTypesEvent`、`RegisterPresetEditorsEvent`、`RegisterRenderBuffersEvent`、
 `RegisterMapDecorationRenderersEvent`、`RegisterTicketControllersEvent`。
 
-## 5. 真实语料（2026-11-16 15:20，16 个 jar，只读）
+## 5. 真实语料（2026-11-16 19:05 补 capability 重放后复跑，16 个 jar，只读）
 
 `-PverifyRegAudit` 跑工具/场景语料 7 个（AppleSkin 3.0.9、Searchables 1.0.2、Controlling 19.0.5、EasyLAN 1.6a、
 lanserverproperties 1.13.2、mcwifipnp 1.9.0、众星捧月 1.5.0）+ 兼容性矩阵 9 个（ZeroCore2、Jade、jecharacters、JEI、AE2、guideme、
@@ -138,7 +139,7 @@ Mekanism、MekanismGenerators、ExtremeReactors2），共 **129 处事件引用*
 
 | 计数 | covered | recurring | datagen | silent | behavior | crash | base |
 |---|---|---|---|---|---|---|---|
-| 129 | 61 | 24 | 6 | 19 | 15 | **3** | 1 |
+| 129 | 66 | 24 | 6 | 19 | 10 | **3** | 1 |
 
 逐 jar（只列非空项）：
 
@@ -147,32 +148,33 @@ Mekanism、MekanismGenerators、ExtremeReactors2），共 **129 处事件引用*
 | AppleSkin 3.0.9 | 4 | 3 covered + silent `RegisterGuiLayersEvent` → **仍 PASS** |
 | Searchables 1.0.2 / EasyLAN / lanserverproperties / mcwifipnp | 0 | 没有启动期事件 |
 | Controlling 19.0.5 | 1 | covered（`FMLClientSetupEvent`） |
-| 众星捧月 1.5.0 | 10 | 8 covered + **behavior `RegisterCapabilitiesEvent`** + datagen |
-| ZeroCore2 2.4.9 | 7 | 1 covered + behavior capabilities + 4 recurring + datagen |
+| 众星捧月 1.5.0 | 10 | **9 covered（含 capabilities）** + datagen |
+| ZeroCore2 2.4.9 | 7 | 2 covered（含 capabilities）+ 4 recurring + datagen |
 | Jade 15.10.6 / JEI 19.27.0 | 4 / 4 | 全 covered |
 | jecharacters 4.5.15 | 3 | 1 covered + silent `ModConfigEvent.Loading/.Reloading`（config 已由 `ModConfigs` 直接加载，事件本身不 fire） |
-| AE2 19.2.18 | 24 | 1 **crash**（粒子）+ 3 behavior + 5 silent + 3 recurring + 2 datagen |
+| AE2 19.2.18 | 24 | 11 covered + 1 **crash**（粒子）+ 2 behavior + 5 silent + 3 recurring + 2 datagen |
 | guideme 21.1.22 | 10 | 5 covered + 4 recurring + datagen |
-| Mekanism 10.7.19 | 38 | **2 crash**（粒子、shader）+ 8 behavior + 8 silent + 8 recurring + 1 base |
+| Mekanism 10.7.19 | 38 | 12 covered + **2 crash**（粒子、shader）+ 7 behavior + 8 silent + 8 recurring + 1 base |
 | MekanismGenerators | 13 | 7 covered + behavior 模型层 + 2 silent + 3 recurring |
-| ExtremeReactors2 2.4.9 | 11 | 6 covered + behavior capabilities + 1 silent + 2 recurring + datagen |
+| ExtremeReactors2 2.4.9 | 11 | 7 covered（含 capabilities）+ 1 silent + 2 recurring + datagen |
 
 结论：
 
 - **审计没有改变任何当前 PASS 的结论**：3 处 `crash` 全在 AE2 / Mekanism，而这两个模组本来就因 access transformer 在 VALIDATE 被拒。
   AppleSkin、ZeroCore2、jecharacters、Jade、guideme、众星捧月仍然可热加。
-- **审计第一次把 dogfood 的一个真实缺口变成可报告**：众星捧月有
+- **审计第一次把 dogfood 的一个真实缺口变成可报告，并且已经补上**：众星捧月有
   `@EventBusSubscriber @SubscribeEvent registerCapabilities(RegisterCapabilitiesEvent)`（javap 验证），
   给桶（item + fluid）、坩埚（fluid）、机器（item + energy）和流体容器物品注册 provider。
-  我们从来没有重放这个事件 → **热加会话里这些 capability 就是没登记**（status 里「桶/坩埚/堆肥手动项未验」与此吻合，
-  但此前不知道是这个原因）。这正是「漏了但没人能报告」的典型。
-- 5/16 个模组引用 `RegisterCapabilitiesEvent`，说明补它的收益最大；`RegisterGuiLayersEvent`（3/16）次之。
+  我们从来没有重放这个事件 → 热加会话里这些 capability 没登记。2026-11-16 补了 `hotadd/CapabilityReplay`，
+  `-PverifyCapabilities` 断言五项 provider 全 present，`-PskipCapabilityReplay=true` 反证全 MISSING（见 [dogfood-gameplay.md](dogfood-gameplay.md) §1.1）；
+  本表随之把该事件从 `behavior` 移入 `covered`（61→66 covered，15→10 behavior）。
+- 下一批收益：`RegisterGuiLayersEvent`（3/16，HUD，静默）；`RegisterItemDecorationsEvent` / 模型层（成本更高）。
 - 没有 `unresolved`：16 个 jar 里所有 `net.neoforged.**Event` 都能加载（客户端）。
 
 ## 6. 验证
 
 ```bash
-# 纯规则（无游戏、无 ASM）：8 个用例
+# 纯规则（无游戏、无 ASM）：9 个用例
 ./gradlew test --tests 'dev.modreloader.inspect.RegistrationAuditTest'
 
 # 真实语料 + 合成致命 jar（2026-11-16 15:20 = PASS）
@@ -211,7 +213,7 @@ registration audit [appleskin]: 4 mod-bus event(s); covered [fml.event.lifecycle
 - **`unresolved` 不致命**：事件类加载失败（可选依赖/客户端类跑在服务端）只记录，不拒绝。
 - **UI 预检还没接审计**：`ModInspection` / GUI 不会提前提示「这个模组有未重放事件」，拒绝发生在 `/modreloader add` 时（失败屏里有事件清单）。
 - **服务端**：纯客户端事件在专用服上记为 `other-side`（那里本来就不 fire）；服务端事件（capabilities、属性、registry）照常审计。
-- **还没重放的仍然没重放**：审计只是把清单变成数据。下一步按收益排序：
-  1. `RegisterCapabilitiesEvent`（5/16 个模组；众星捧月桶/坩埚/机器直接受益）——重放给新容器即可，注意 `setProxyable` 在 init 之后会抛；
-  2. `RegisterGuiLayersEvent`（3/16，HUD，静默）；
-  3. `RegisterItemDecorationsEvent`、`EntityRenderersEvent.RegisterLayerDefinitions`（模型层已 bake，需要重建 `EntityModelSet`，成本高）。
+- **还没重放的仍然没重放**：审计只是把清单变成数据。**`RegisterCapabilitiesEvent` 已于 2026-11-16 重放**（`hotadd/CapabilityReplay`，
+  只投新容器；`-PverifyCapabilities` + A/B）。剩下的按收益排序：
+  1. `RegisterGuiLayersEvent`（3/16，HUD，静默）；
+  2. `RegisterItemDecorationsEvent`、`EntityRenderersEvent.RegisterLayerDefinitions`（模型层已 bake，需要重建 `EntityModelSet`，成本高）。
