@@ -168,6 +168,16 @@ neoForge {
                 // the data pack has to be applied by the deferred world-start hook.
                 systemProperty 'modreloader.verifyDatapackAtTitle', 'true'
             }
+            if (providers.gradleProperty('verifyItemDecorators').orNull) {
+                // With verifyAddCommand: the hot-added mod's
+                // RegisterItemDecorationsEvent listener must have run (lookup grew
+                // for the expected item).
+                systemProperty 'modreloader.verifyItemDecorators', 'true'
+            }
+            if (providers.gradleProperty('verifyItemDecoratorItem').orNull) {
+                systemProperty 'modreloader.verifyItemDecoratorItem',
+                        providers.gradleProperty('verifyItemDecoratorItem').get()
+            }
             if (providers.gradleProperty('verifyGuiLayers').orNull) {
                 // With verifyAddCommand: the hot-added mod's RegisterGuiLayersEvent
                 // listener must have run (HUD layers present, order preserved,

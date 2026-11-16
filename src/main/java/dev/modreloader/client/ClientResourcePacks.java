@@ -27,9 +27,26 @@ public final class ClientResourcePacks {
     private ClientResourcePacks() {
     }
 
+    /**
+     * @param newReloadListeners client reload listeners the add registered; they
+     *                           only run on a reload, so the reload must not be
+     *                           skipped when this is non-zero
+     */
     public static void inject(ModFile modFile, ModFileInfo fileInfo, Set<String> modIds,
-                              Rollback rollback) {
+                              Rollback rollback, int newReloadListeners) {
         try {
+            if (newReloadListeners == 0 && !hasClientResources(modFile)) {
+                // Nothing to load: the jar has no assets/ (and no nested jar that
+                // could carry some) and the add registered no reload listener, so
+                // an empty mod pack would be selected and the whole resource
+                // manager reloaded for nothing. That reload is not free: it races
+                // chunk re-tessellation on the render workers (measured once as a
+                // FluidSpriteCache NPE, status known issue 29) and costs seconds.
+                ModReloader.LOGGER.info(
+                        "[ModReloader] no client resources in {}; skipping the resource pack "
+                                + "injection and reload", modIds);
+                return;
+            }
             Minecraft mc = Minecraft.getInstance();
             Map<IModFile, Object> packs = UnsafeAccess.getStatic(ResourcePackLoader.class, "modResourcePacks");
             if (packs == null) {
@@ -94,6 +111,20 @@ public final class ClientResourcePacks {
             ModReloader.LOGGER.info("[ModReloader] resource packs after add: {}", ids);
         } catch (Throwable t) {
             ModReloader.LOGGER.warn("[ModReloader] resource pack injection failed", t);
+        }
+    }
+
+    /** True when the jar carries client resources (or a nested jar that might). */
+    private static boolean hasClientResources(ModFile modFile) {
+        try {
+            java.nio.file.Path root = modFile.getSecureJar().getRootPath();
+            return java.nio.file.Files.isDirectory(root.resolve("assets"))
+                    || java.nio.file.Files.isDirectory(root.resolve("META-INF/jarjar"));
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn("[ModReloader] cannot inspect the resources of {}",
+                    modFile.getFileName(), t);
+            // Unknown: reload, so nothing is silently skipped.
+            return true;
         }
     }
 }

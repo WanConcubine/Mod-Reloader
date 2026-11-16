@@ -47,6 +47,9 @@ import java.util.Set;
  * of live connections, and command replay for the integrated server.
  */
 public final class ClientPlatformHooks implements PlatformHooks {
+    /** Reload listeners added by the current add; reset on every {@link #acceptClientLifecycle}. */
+    private int lastReloadListeners;
+
     @Override
     public int keyMappingCount() {
         Minecraft minecraft = Minecraft.getInstance();
@@ -61,7 +64,9 @@ public final class ClientPlatformHooks implements PlatformHooks {
         queue.runTasks();
         container.acceptEvent(new RegisterKeyMappingsEvent(Minecraft.getInstance().options));
         replayMenuScreens(container);
-        ClientRegistrationReplay.replay(container);
+        // Kept for the resource-pack stage: a newly registered reload listener only
+        // runs if a reload happens, so the pack stage may not skip the reload then.
+        lastReloadListeners = ClientRegistrationReplay.replay(container);
     }
 
     /**
@@ -97,7 +102,7 @@ public final class ClientPlatformHooks implements PlatformHooks {
     @Override
     public void injectResourcePack(ModFile modFile, ModFileInfo fileInfo, Set<String> modIds,
                                    Rollback rollback) {
-        ClientResourcePacks.inject(modFile, fileInfo, modIds, rollback);
+        ClientResourcePacks.inject(modFile, fileInfo, modIds, rollback, lastReloadListeners);
     }
 
     @Override

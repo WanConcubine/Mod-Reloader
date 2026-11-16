@@ -21,6 +21,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.CraftingInput;
@@ -110,6 +111,20 @@ public final class AddCommandCheck {
 
     /** HUD layer ids measured before the add; {@code null} when not measured. */
     private static List<ResourceLocation> layersBefore;
+
+    /**
+     * Optional item-decoration phase ({@code -PverifyItemDecorators=true}): the
+     * hot-added mod registers {@code RegisterItemDecorationsEvent}. Asserts the
+     * baked {@code ItemDecoratorHandler.DECORATOR_LOOKUP} grew for the expected
+     * item; {@code -PverifyItemDecoratorItem=minecraft:diamond} names it.
+     */
+    private static final boolean VERIFY_ITEM_DECORATORS =
+            Boolean.getBoolean("modreloader.verifyItemDecorators");
+    private static final String ITEM_DECORATOR_ITEM =
+            System.getProperty("modreloader.verifyItemDecoratorItem", "minecraft:diamond").trim();
+
+    /** Decorators on {@link #ITEM_DECORATOR_ITEM} measured before the add; -1 when not measured. */
+    private static int decoratorsBefore = -1;
 
     private AddCommandCheck() {
     }
@@ -255,6 +270,18 @@ public final class AddCommandCheck {
             ModReloader.LOGGER.info("[AddCmdCheck] GUI layer baseline before add: {} layer(s) {}",
                     layersBefore.size(), layersBefore);
         }
+        if (VERIFY_ITEM_DECORATORS) {
+            Item target = decoratorTarget();
+            if (target == null) {
+                fail("item decoration check: unknown item " + ITEM_DECORATOR_ITEM);
+                return;
+            }
+            decoratorsBefore = ItemDecorators.countFor(target);
+            ModReloader.LOGGER.info(
+                    "[AddCmdCheck] item decoration baseline before add: {} decorator(s) on {}; "
+                            + "decorated items {}",
+                    decoratorsBefore, ITEM_DECORATOR_ITEM, ItemDecorators.decoratedItems());
+        }
         String path = jar.toAbsolutePath().normalize().toString();
         String command = "modreloader add " + (path.contains(" ") ? "\"" + path + "\"" : path);
         try {
@@ -273,7 +300,7 @@ public final class AddCommandCheck {
         // With the HUD-layer phase, hold in the world long enough that the new
         // layers are drawn on every frame before they are judged: a replay that
         // registers a layer whose render() throws must fail this harness.
-        if (ticks < (VERIFY_GUI_LAYERS ? 60 : 20)) {
+        if (ticks < (VERIFY_GUI_LAYERS || VERIFY_ITEM_DECORATORS ? 60 : 20)) {
             return;
         }
         // The command reports through chat + log; the state we assert is ModList.
@@ -298,6 +325,9 @@ public final class AddCommandCheck {
             return;
         }
         if (VERIFY_GUI_LAYERS && !verifyGuiLayers(mc)) {
+            return;
+        }
+        if (VERIFY_ITEM_DECORATORS && !verifyItemDecorators()) {
             return;
         }
         if (VERIFY_DATAPACK && !verifyDatapack(mc)) {
@@ -354,6 +384,57 @@ public final class AddCommandCheck {
                         + "(replayed, order preserved, {} ticks rendered with the new layers)",
                 ticks);
         return true;
+    }
+
+    /**
+     * Asserts that the hot-added mod's {@code RegisterItemDecorationsEvent}
+     * listener ran: NeoForge bakes that event into the static
+     * {@code ItemDecoratorHandler.DECORATOR_LOOKUP}, so "the lookup gained a
+     * decorator for the expected item" is the measured property.
+     *
+     * <p>Item icons are drawn in the world (hotbar/inventory are not necessarily
+     * open here), so this asserts registration, not pixels; the client having
+     * rendered 60 ticks without a crash is covered by the GUI-layer phase or the
+     * hold above.
+     */
+    private static boolean verifyItemDecorators() {
+        if (decoratorsBefore < 0) {
+            fail("item decoration check: the baseline was not measured before the add");
+            return false;
+        }
+        Item item = decoratorTarget();
+        if (item == null) {
+            fail("item decoration check: unknown item " + ITEM_DECORATOR_ITEM);
+            return false;
+        }
+        int after = ItemDecorators.countFor(item);
+        List<ResourceLocation> decorated = ItemDecorators.decoratedItems();
+        ModReloader.LOGGER.info("[AddCmdCheck] item decorations: {} {} -> {}; decorated items: {}",
+                ITEM_DECORATOR_ITEM, decoratorsBefore, after, decorated);
+        if (after <= decoratorsBefore) {
+            fail("RegisterItemDecorationsEvent was not replayed: " + ITEM_DECORATOR_ITEM
+                    + " still has " + after + " decorator(s)");
+            return false;
+        }
+        if (!decorated.contains(decoratorTargetId())) {
+            fail("the decorated item list does not contain " + ITEM_DECORATOR_ITEM
+                    + " (decorated: " + decorated + ")");
+            return false;
+        }
+        ModReloader.LOGGER.info("[AddCmdCheck] item decorations RESULT: PASS "
+                + "({} decorator(s) on {}, {} total)", after, ITEM_DECORATOR_ITEM,
+                ItemDecorators.total());
+        return true;
+    }
+
+    private static Item decoratorTarget() {
+        ResourceLocation id = decoratorTargetId();
+        return BuiltInRegistries.ITEM.get(id) == net.minecraft.world.item.Items.AIR
+                ? null : BuiltInRegistries.ITEM.get(id);
+    }
+
+    private static ResourceLocation decoratorTargetId() {
+        return ResourceLocation.parse(ITEM_DECORATOR_ITEM);
     }
 
     /**

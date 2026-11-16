@@ -34,7 +34,7 @@ import java.util.zip.ZipOutputStream;
  *       {@code RegisterParticleProvidersEvent} must be refused by
  *       {@link HotAddEngine} with {@link HotAddEngine.FailureKind#CLIENT_REGISTRATION}
  *       before anything is injected. A second jar references only an event we do
- *       not replay yet ({@code RegisterItemDecorationsEvent}, a "silent" gap) and
+ *       not replay yet ({@code RegisterDimensionSpecialEffectsEvent}, a "silent" gap) and
  *       must <em>not</em> be graded fatal; it is never added, only graded.
  *       ({@code RegisterGuiLayersEvent} was that exemplar until 2026-11-16, when
  *       the HUD-layer replay made it "covered".)</li>
@@ -47,7 +47,7 @@ public final class RegAuditCheck {
     private static final String CRASH_EVENT =
             "net/neoforged/neoforge/client/event/RegisterParticleProvidersEvent";
     private static final String SILENT_EVENT =
-            "net/neoforged/neoforge/client/event/RegisterItemDecorationsEvent";
+            "net/neoforged/neoforge/client/event/RegisterDimensionSpecialEffectsEvent";
 
     private static final List<Path> JARS = new ArrayList<>();
     private static int ticks;

@@ -228,3 +228,32 @@
   ExtremeReactors2 的运行期目标是 **0**，唯一目标是 `net.minecraft.data.recipes.RecipeProvider`）。
   结论：**「晚注入 AT」彻底关闭**（不是「先量着看」）。表与日志原文进 [matrix](features/hotadd-compatibility-matrix.md) §8.1，
   status 表尺/已知问题 23、下一步（下一条 P1-2）。
+
+- **（物品装饰重放 + 第一个客户端注册夹具 / P2-1 一半）**：`RegisterItemDecorationsEvent` 是审计 silent 桶里剩下的第一个。
+  NeoForge 在 `ItemDecoratorHandler.init()` 里把事件烘成静态 `ImmutableMap<Item, ItemDecoratorHandler>`，每个 handler 的
+  `itemDecorators` 又是 `ImmutableList`——所以 `client/ItemDecoratorReplay` 的做法是：读 live lookup → 每个 item 的装饰列表拷成
+  `ArrayList` → `container.acceptEvent(new RegisterItemDecorationsEvent(copies))`（只跑新模组的监听器，别的模组的装饰来自副本）→
+  用 trusted lookup 调私有 `ItemDecoratorHandler(List)` 重建 handler → 把整个 lookup 原子换回；从服务器线程触发时投到客户端线程。
+  更重要的缺口是**没有 subject**：dogfood 没有 HUD 层也没有物品装饰，这两条重放以前改坏了也没人知道。新增第一个客户端夹具
+  `experiments/client-fixture`（`build.sh` 照 t4-fixture 的 legacy classpath 方式编）：一个 `@Mod` 在构造器里挂
+  `RegisterGuiLayersEvent`（`clientfixture:hud_marker`，画 2×2 像素）+ `RegisterItemDecorationsEvent`（`minecraft:diamond` 上画 2×2 像素）。
+  harness：`AddCommandCheck` 新增 `-PverifyItemDecorators=true`（`dev/ItemDecorators` 只读 `DECORATOR_LOOKUP`）与
+  `-PverifyItemDecoratorItem=<item>`；`-PverifyGuiLayers=true` 复用。
+  证据（2026-11-16 20:0x）：`GUI layers replayed for clientfixture: 1 new (25 -> 26 total); new layers: [clientfixture:hud_marker]`、
+  `item decorations replayed for clientfixture: 1 new decorator(s) (0 -> 1 decorated item(s), 0 -> 1 decorator(s) total)`、
+  `GUI layers RESULT: PASS (replayed, order preserved, 60 ticks rendered …)`、`item decorations RESULT: PASS`、`AddCmdCheck RESULT: PASS`。
+  审计复跑（16 jar）：**69 covered / 24 recurring / 6 datagen / 16 silent / 10 behavior / 3 crash / 1 base**（129 引用不变），PASS；
+  合成 silent jar 的示例事件改为 `RegisterDimensionSpecialEffectsEvent`（物品装饰已 covered）。
+  **顺带两个发现并处理**：
+  1. `-PverifyAddCommand` 热加夹具时（19:53）客户端崩过一次：`Tesselating liquid in world` →
+     `FluidSpriteCache.getFluidSprites` 的 `Map.getOrDefault(null, …)` NPE，发生在资源重载之后、渲染 worker 线程上；
+     同一条命令第二次跑 PASS → 竞态。缓解：`ClientResourcePacks.inject` 在「无 `assets/`、无 `META-INF/jarjar`、且本次 add
+     没新增 client reload listener」时跳过整次资源包注入与重载（无资源的 mod 本来也没什么可加载，省一次几秒的全量重载，
+     同时去掉这个竞争面）。回归：众星捧月（有 assets）仍然 `resource packs selected … mod/exnihilosatellitium` +
+     `resource reload finished`、`GameplayCheck RESULT: PASS`、capability 五项 present；夹具则打印
+     `no client resources in [clientfixture]; skipping the resource pack injection and reload` 且两条重放断言仍 PASS。
+     已知问题 29 记录了这次崩溃与「真正的串行化未做」。
+  2. 审计剩余事件的逐个结论写进 [client-registration-audit.md](features/client-registration-audit.md) §7.1（P2-2 的一半）：
+     `RegisterLayerDefinitions`（要重建 `EntityModelSet`）、`ColorResolvers`、`ModifyDefaultComponentsEvent`、`NewRegistryEvent`
+     /`ModifyRegistriesEvent`（框架启动后关闭）、实体属性/刷怪/POI 系列（没有实体 subject）、`AddPackFindersEvent`（我们已有等价注入路径）等，
+     每个都给出「不做 / 等 subject」的理由，不留「以后再看看」。

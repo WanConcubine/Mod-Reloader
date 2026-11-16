@@ -1,0 +1,27 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "MIT"
+
+[[mods]]
+modId = "clientfixture"
+version = "1.0.0"
+displayName = "Client Registration Fixture"
+description = '''
+Registers one HUD layer (RegisterGuiLayersEvent) and one item decoration
+(RegisterItemDecorationsEvent). Used to verify the client registration replays
+of the hot-add runtime; it has no gameplay content.
+'''
+
+[[dependencies.clientfixture]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21.1,)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.clientfixture]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1,1.22)"
+ordering = "NONE"
+side = "CLIENT"

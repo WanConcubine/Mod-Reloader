@@ -90,6 +90,19 @@ class RegistrationAuditTest {
     }
 
     @Test
+    void itemDecorationsAreCoveredSinceTheReplayExists() {
+        // ItemDecoratorHandler bakes the event into a static immutable lookup; the
+        // replay copies the per-item lists, appends and swaps a rebuilt lookup in.
+        // Fixture: experiments/client-fixture (decorates minecraft:diamond).
+        RegistrationAudit.Report report = classify(true,
+                "net.neoforged.neoforge.client.event.RegisterItemDecorationsEvent");
+
+        assertEquals(RegistrationAudit.Severity.COVERED, report.entries().get(0).severity());
+        assertTrue(report.events(RegistrationAudit.Severity.SILENT).isEmpty());
+        assertFalse(report.fatal());
+    }
+
+    @Test
     void recurringAndDatagenEventsNeedNoReplay() {
         assertEquals(RegistrationAudit.Severity.RECURRING, classify(true,
                 "net.neoforged.neoforge.client.event.RenderLevelStageEvent")
@@ -109,26 +122,28 @@ class RegistrationAuditTest {
 
     @Test
     void unknownEventsAreSilentWarnings() {
-        // Item decorations are still the "no replay yet" bucket; GUI layers moved
-        // to covered on 2026-11-16 (see guiLayersAreCoveredSinceTheReplayExists).
+        // Dimension special effects are still the "no replay yet" bucket; GUI
+        // layers and item decorations moved to covered on 2026-11-16 (see
+        // guiLayersAreCoveredSinceTheReplayExists / itemDecorationsAreCovered...).
         RegistrationAudit.Report report = classify(true,
-                "net.neoforged.neoforge.client.event.RegisterItemDecorationsEvent");
+                "net.neoforged.neoforge.client.event.RegisterDimensionSpecialEffectsEvent");
 
         assertEquals(RegistrationAudit.Severity.SILENT,
                 report.entries().get(0).severity());
         assertFalse(report.fatal());
-        assertTrue(report.line().contains("silent [client.event.RegisterItemDecorationsEvent]"),
+        assertTrue(report.line().contains("silent [client.event.RegisterDimensionSpecialEffectsEvent]"),
                 report.line());
     }
 
     @Test
     void clientEventsAreNotGradedOnADedicatedServer() {
-        String itemDecorations = "net.neoforged.neoforge.client.event.RegisterItemDecorationsEvent";
+        String dimensionEffects =
+                "net.neoforged.neoforge.client.event.RegisterDimensionSpecialEffectsEvent";
         assertEquals(RegistrationAudit.Severity.NOT_THIS_SIDE,
-                RegistrationAudit.classify(Set.of(itemDecorations), false, List.of())
+                RegistrationAudit.classify(Set.of(dimensionEffects), false, List.of())
                         .entries().get(0).severity());
         assertEquals(RegistrationAudit.Severity.SILENT,
-                RegistrationAudit.classify(Set.of(itemDecorations), true, List.of())
+                RegistrationAudit.classify(Set.of(dimensionEffects), true, List.of())
                         .entries().get(0).severity());
         // A server-side gap is still reported on the server.
         assertEquals(RegistrationAudit.Severity.BEHAVIOR,

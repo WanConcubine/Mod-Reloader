@@ -56,6 +56,10 @@ import java.util.Set;
  *   <li><b>GUI layers</b> ({@code RegisterGuiLayersEvent}): the API orders a new
  *       layer relative to an existing id, so this one replays against a copy of
  *       the live HUD layer list and swaps the copy in — see {@link GuiLayerReplay}.</li>
+ *   <li><b>item decorations</b> ({@code RegisterItemDecorationsEvent}): NeoForge
+ *       bakes the result into a static immutable lookup, so the replay copies the
+ *       per-item decorator lists, appends, and swaps a rebuilt lookup in — see
+ *       {@link ItemDecoratorReplay}.</li>
  * </ul>
  *
  * <p>Model layers ({@code EntityRenderersEvent.RegisterLayerDefinitions}) are
@@ -67,14 +71,20 @@ public final class ClientRegistrationReplay {
     private ClientRegistrationReplay() {
     }
 
-    public static void replay(ModContainer container) {
+    /**
+     * @return how many client reload listeners were added; the resource-pack stage
+     *         uses this not to skip the reload a listener needs to run at least once
+     */
+    public static int replay(ModContainer container) {
         registerItemModels(container);
         replayRenderers(container);
         replayColorHandlers(container);
         replayClientExtensions(container);
-        replayClientReloadListeners(container);
+        int reloadListeners = replayClientReloadListeners(container);
         replayTooltipComponentFactories(container);
         GuiLayerReplay.replay(container);
+        ItemDecoratorReplay.replay(container);
+        return reloadListeners;
     }
 
     /**
@@ -140,11 +150,11 @@ public final class ClientRegistrationReplay {
      * A mod that intentionally registers two differently-configured instances of
      * one class would lose the second one — accepted, and no known mod does it.
      */
-    private static void replayClientReloadListeners(ModContainer container) {
+    private static int replayClientReloadListeners(ModContainer container) {
         try {
             Minecraft minecraft = Minecraft.getInstance();
             if (!(minecraft.getResourceManager() instanceof ReloadableResourceManager real)) {
-                return;
+                return 0;
             }
             ReloadableResourceManager probe = new ReloadableResourceManager(PackType.CLIENT_RESOURCES);
             container.acceptEvent(new RegisterClientReloadListenersEvent(probe));
@@ -166,8 +176,11 @@ public final class ClientRegistrationReplay {
             ModReloader.LOGGER.info(
                     "[ModReloader] client reload listeners replayed: {} new, {} total",
                     added, existing.size());
+            return added;
         } catch (Throwable t) {
             ModReloader.LOGGER.warn("[ModReloader] client reload listener replay failed", t);
+            // Unknown: assume one, so the resource-pack stage still reloads.
+            return 1;
         }
     }
 

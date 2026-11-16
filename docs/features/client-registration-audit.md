@@ -117,7 +117,8 @@ registration audit <ids>: N mod-bus event(s); covered [...]; crash [...]; behavi
 `RegisterKeyMappingsEvent`、`RegisterMenuScreensEvent`、`EntityRenderersEvent.RegisterRenderers`、
 `RegisterColorHandlersEvent.Block/.Item`、`RegisterClientExtensionsEvent`、`RegisterClientReloadListenersEvent`、
 `RegisterClientTooltipComponentFactoriesEvent`、`RegisterPayloadHandlersEvent`、`RegisterEvent`、
-`RegisterCapabilitiesEvent`（`CapabilityReplay`，2026-11-16）、`RegisterGuiLayersEvent`（`client/GuiLayerReplay`，2026-11-16）。
+`RegisterCapabilitiesEvent`（`CapabilityReplay`，2026-11-16）、`RegisterGuiLayersEvent`（`client/GuiLayerReplay`，2026-11-16）、
+`RegisterItemDecorationsEvent`（`client/ItemDecoratorReplay`，2026-11-16）。
 
 **已知崩溃（拒绝）**：`RegisterParticleProvidersEvent`、`RegisterRecipeBookCategoriesEvent`、`RegisterShadersEvent`、`RegisterSpriteSourceTypesEvent`。
 
@@ -126,7 +127,7 @@ registration audit <ids>: N mod-bus event(s); covered [...]; crash [...]; behavi
 `BlockEntityTypeAddBlocksEvent`、`RegisterDataMapTypesEvent`、`RegisterCauldronFluidContentEvent`、`AddPackFindersEvent`、
 `ExtendPoiTypesEvent`、`EntityRenderersEvent.RegisterLayerDefinitions`。
 
-**无已知症状（warn）**：`RegisterItemDecorationsEvent`、`RegisterDimensionSpecialEffectsEvent`、
+**无已知症状（warn）**：`RegisterDimensionSpecialEffectsEvent`、
 `RegisterDimensionTransitionScreenEvent`、`RegisterEntitySpectatorShadersEvent`、`RegisterJsonAnimationTypesEvent`、
 `RegisterMaterialAtlasesEvent`、`RegisterNamedRenderTypesEvent`、`RegisterPresetEditorsEvent`、`RegisterRenderBuffersEvent`、
 `RegisterMapDecorationRenderersEvent`、`RegisterTicketControllersEvent`。
@@ -139,10 +140,10 @@ Mekanism、MekanismGenerators、ExtremeReactors2），共 **129 处事件引用*
 
 | 计数 | covered | recurring | datagen | silent | behavior | crash | base |
 |---|---|---|---|---|---|---|---|
-| 129 | **68** | 24 | 6 | **17** | 10 | **3** | 1 |
+| 129 | **69** | 24 | 6 | **16** | 10 | **3** | 1 |
 
-（2026-11-16 19:48 复跑：`RegisterGuiLayersEvent` 从 `silent` 移入 `covered`，2 处引用 / AppleSkin 与 Mekanism 各 1 个 jar；
-总数仍是 129，没有任何当前 PASS 的模组变拒绝。）
+（2026-11-16 19:48 / 20:0x 两次复跑：`RegisterGuiLayersEvent` 从 `silent` 移入 `covered`（2 处引用：AppleSkin、Mekanism），
+随后 `RegisterItemDecorationsEvent` 也移入 `covered`（1 处引用：Mekanism）；总数仍是 129，没有任何当前 PASS 的模组变拒绝。）
 
 逐 jar（只列非空项）：
 
@@ -157,7 +158,7 @@ Mekanism、MekanismGenerators、ExtremeReactors2），共 **129 处事件引用*
 | jecharacters 4.5.15 | 3 | 1 covered + silent `ModConfigEvent.Loading/.Reloading`（config 已由 `ModConfigs` 直接加载，事件本身不 fire） |
 | AE2 19.2.18 | 24 | 11 covered + 1 **crash**（粒子）+ 2 behavior + 5 silent + 3 recurring + 2 datagen |
 | guideme 21.1.22 | 10 | 5 covered + 4 recurring + datagen |
-| Mekanism 10.7.19 | 38 | 13 covered（含 HUD 层）+ **2 crash**（粒子、shader）+ 7 behavior + 7 silent + 8 recurring + 1 base |
+| Mekanism 10.7.19 | 38 | 14 covered（含 HUD 层、物品装饰）+ **2 crash**（粒子、shader）+ 7 behavior + **6 silent** + 8 recurring + 1 base |
 | MekanismGenerators | 13 | 7 covered + behavior 模型层 + 2 silent + 3 recurring |
 | ExtremeReactors2 2.4.9 | 11 | 7 covered（含 capabilities）+ 1 silent + 2 recurring + datagen |
 
@@ -192,6 +193,15 @@ Mekanism、MekanismGenerators、ExtremeReactors2），共 **129 处事件引用*
 ./gradlew runClient -PverifyCompat=/tmp/user-mods/appleskin-neoforge-mc1.21-3.0.9.jar
 #   registration audit [appleskin]: 4 mod-bus event(s); covered [..., client.event.RegisterGuiLayersEvent, ...]
 #   RESULT ... ok=true stage=NONE kind=NONE isLoaded=true
+
+# 客户端注册重放的真实 subject：experiments/client-fixture（1 个 HUD 层 + 1 个物品装饰）
+./build.sh && cd ../.. && \
+./gradlew runClient -PverifyAddCommand=/tmp/clientfixture/clientfixture-1.0.0.jar \
+  -PverifyAddCommandModId=clientfixture -PverifyGuiLayers=true \
+  -PverifyItemDecorators=true -PverifyItemDecoratorItem=minecraft:diamond
+#   [ModReloader] GUI layers replayed for clientfixture: 1 new (25 -> 26 total); new layers: [clientfixture:hud_marker]
+#   [ModReloader] item decorations replayed for clientfixture: 1 new decorator(s) (0 -> 1 decorated item(s) ...)
+#   [AddCmdCheck] item decorations RESULT: PASS
 
 # HUD 层重放的实测断言（AppleSkin 注册 6 个 appleskin:* 层）
 ./gradlew runClient -PverifyAddCommand=/tmp/user-mods/appleskin-neoforge-mc1.21-3.0.9.jar \
@@ -229,7 +239,30 @@ registration audit [appleskin]: 4 mod-bus event(s); covered [fml.event.lifecycle
 - **`unresolved` 不致命**：事件类加载失败（可选依赖/客户端类跑在服务端）只记录，不拒绝。
 - **UI 预检还没接审计**：`ModInspection` / GUI 不会提前提示「这个模组有未重放事件」，拒绝发生在 `/modreloader add` 时（失败屏里有事件清单）。
 - **服务端**：纯客户端事件在专用服上记为 `other-side`（那里本来就不 fire）；服务端事件（capabilities、属性、registry）照常审计。
-- **还没重放的仍然没重放**：审计只是把清单变成数据。**`RegisterCapabilitiesEvent` 已于 2026-11-16 重放**（`hotadd/CapabilityReplay`，
-  只投新容器；`-PverifyCapabilities` + A/B）。剩下的按收益排序：
-  1. `RegisterGuiLayersEvent`（3/16，HUD，静默）；
-  2. `RegisterItemDecorationsEvent`、`EntityRenderersEvent.RegisterLayerDefinitions`（模型层已 bake，需要重建 `EntityModelSet`，成本高）。
+- **还没重放的仍然没重放**：审计只是把清单变成数据。2026-11-16 已补三个：`RegisterCapabilitiesEvent`（`hotadd/CapabilityReplay`，
+  只投新容器；`-PverifyCapabilities` + A/B）、`RegisterGuiLayersEvent`（`client/GuiLayerReplay`）、
+  `RegisterItemDecorationsEvent`（`client/ItemDecoratorReplay`）。三个都有真实 subject 的 harness
+  （众星捧月 / AppleSkin / `experiments/client-fixture`）。
+
+### 7.1 剩下的事件：为什么不做（或成本在哪）
+
+审计里剩下的 `behavior` / `silent` 事件逐个给出结论，避免"以后再看看"这种无限期欠账：
+
+| 事件 | 分级 | 结论 |
+|---|---|---|
+| `RegisterItemDecorationsEvent` | ~~silent~~ → **covered**（2026-11-16） | 物品装饰；`ItemDecoratorHandler.DECORATOR_LOOKUP` 是静态 `ImmutableMap`，照 GUI 层的「读 live → 副本追加 → 换回」做；fixture `experiments/client-fixture` + `-PverifyItemDecorators` 断言 |
+| `RegisterGuiLayersEvent` | ~~silent~~ → **covered**（2026-11-16） | HUD 层；`client/GuiLayerReplay`，AppleSkin 25→31 层实测 |
+| `EntityRenderersEvent.RegisterLayerDefinitions` | behavior | **不做（成本明确）**：模型层在启动时已 bake，重放需要重建 `EntityModelSet`/`ModelManager` 的实体模型集合，并且已 bake 的渲染器不会自己刷新；收益是"hot-add 一个新实体"——我们连实体类内容都没支持（post-register 事件未重放），现在做等于给半成品补零件 |
+| `RegisterColorHandlersEvent.ColorResolvers` | silent | **不做（成本/收益）**：群系着色 resolver 是 `ColorResolver` 列表，重放本身不难，但受影响的只有群系色调（草地/树叶/水），而狗头语料里没有只有 resolver 才正确的模组；等有真实 subject 再做，现有 `.Block/.Item` 两种已覆盖 |
+| `ModifyDefaultComponentsEvent` | behavior | **不做**：默认组件在启动时被烘进每个 `Item` 的组件表，重放要逐 item 重建 `DataComponentMap` 并替换 `Item.components`；属于"改已注册对象"而不是"往 map 里加"，风险高于收益（缺组件的症状是"物品行为少一点"） |
+| `NewRegistryEvent` / `ModifyRegistriesEvent` | behavior | **不做（框架禁止）**：NeoForge 启动后关闭自建注册表（`pendingModdedRegistries = null`），运行时创建 registry 无处可挂 |
+| `DataPackRegistryEvent.*` | behavior | **不做**：datapack registry 的内容由数据加载（`RegistryDataLoader`）在 reload 时构建；热加 mod 的这类内容本来就要等世界加载/`/reload`，不属于"注册面漏了" |
+| `EntityAttributeCreationEvent` / `EntityAttributeModificationEvent` | behavior | **不做（没有 subject）**：都是实体属性表（`DefaultAttributes.ATTRIBUTE_MAP` 静态不可变），重放要重建整表；我们的热加语料没有实体模组，失败症状是"新实体没有属性"——等实体支持时一起做 |
+| `RegisterSpawnPlacementsEvent` | behavior | 同上（`SpawnPlacements.DATA_BY_TYPE`），没有实体模组就没有验证对象 |
+| `BlockEntityTypeAddBlocksEvent` | behavior | **不做（暂无 subject）**：把方块加进已有 BE 类型的 valid blocks；众星捧月的 BE 在注册时就带上了自己的方块，所以没踩到；机制上是往静态 set 里加，等有真实模组需要再补（成本低） |
+| `RegisterDataMapTypesEvent` | behavior | **不做**：data map 类型是注册表基础设施，运行期加类型没有消费方（data map 在 reload 时解析） |
+| `RegisterCauldronFluidContentEvent` | behavior | **不做（暂无 subject）**：坩埚流体映射是静态 map，重放可行但只有"热加的 mod 给坩埚加流体"才需要；等真实 subject 再补（成本低） |
+| `AddPackFindersEvent` | behavior | **不需要**：我们用自己的注入路径（`ClientResourcePacks` / `DatapackStage`）直接把 jar 建成资源包/数据包，等价于该事件的目的；重放反而会重复注册 pack |
+| `RegisterDimensionSpecialEffectsEvent` / `RegisterDimensionTransitionScreenEvent` 等其余 silent | silent | **不做（没有 symptom）**：语料里没有引用；等审计数据出现真实引用再排期 |
+
+原则：**要么有真实 subject 的 harness，要么写清为什么不做**——不留"也许以后"的中间态。
