@@ -17,7 +17,7 @@
 | 3 | 筛子：放筛子 → 装铁网 → 放泥土（只接受已注册输入）→ 连点 240 tick | 掉 `cobblestone_pebble x6`、`andesite x5`、`granite x5`、`diorite x6`、`deepslate x3`、`grass_seeds x1` |
 | 4 | 真实 3×3 合成：铁锭×2 + 木棍×2 | 命中 `exnihilosatellitium:iron_hammer` |
 | 5 | 机器 GUI 的 screen factory（`MenuScreens`） | 2 个 menu type 全部有 screen（`missing=[]`） |
-| 6 | 客户端注册：BE 渲染器 / 物品染色 / 流体扩展 | `beRenderers 6/6 (missing=[])`、瓷桶染色已注册、`fluidExtensions=3` |
+| 6 | 客户端注册：BE 渲染器 / 物品染色 / 流体扩展 / reload listener | `beRenderers 6/6 (missing=[])`、瓷桶染色已注册、`fluidExtensions=3`、`clientReloadListeners=6` |
 | 7 | 物品图标模型 | `181/181 resolved, missing=[]` |
 | 8 | 自动机器的 tick + 渲染（读配置值） | 机器 BE 存活、配置 `1/1 loaded` |
 | 9 | 创造物品栏渲染 40 tick（`-PverifyCreative`） | 不崩，`defaults=4`，PASS |
@@ -108,10 +108,15 @@ creative RESULT: PASS
 - 重放 `RegisterColorHandlersEvent.Block` / `.Item`（幂等）；
 - 扩展事件：四个静态 map 先换成临时 map → 重放 → 把「原 map 里没有的」条目合并回去 → 还原原 map。
 
+**客户端 reload listener**（Ex Nihilo 用它在客户端再读一遍机器数据，给 JEI/连专用服时用）同样是启动期事件。
+它的坑是重复实例：事件每次都给新实例，按身份去重无效，所以按**监听器类名**去重——
+临时 manager 里跑一遍事件，只把真 manager 里还没有的类注册进去（同一类注册两次会在每次资源重载里跑两遍）。
+
 ```text
 [ModReloader] renderers replayed; block entity renderers rebuilt
 [ModReloader] color handlers replayed
 [ModReloader] client extensions replayed: 3 new
+[ModReloader] client reload listeners replayed: 6 new, 33 total
 [GameplayCheck] client registrations: beRenderers 6/6 (missing=[]),
                 porcelainBucketTintRegistered=true (tint=-1), fluidExtensions=3
 ```
@@ -192,10 +197,10 @@ java.lang.IllegalStateException: Cannot get config value before config is loaded
 - **多人**：两端「登录前热加」未验证；连接后热加仍不支持（注册表快照）。
 - **删除 / 更新**：仍是 add-only。
 - 桶/坩埚/堆肥只有手动清单，没有自动断言（需要流体/热量/时间的组合状态）。
-- **客户端注册还剩两项没重放**：`RegisterClientReloadListenersEvent`（客户端侧机器数据，主要给 JEI 用；
-  本环境没装 JEI，且真 manager 里会重复注册 listener、无法区分新旧，需要临时 manager + diff）、
-  `EntityRenderersEvent.RegisterLayerDefinitions`（模型层在启动时已 bake，热加渲染器若需要新 layer 会失败；
-  众星捧月的机器/桶/筛用的是现成模型，没踩到）。`RegisterColorHandlersEvent.ColorResolvers`（群系着色 resolver）同样没重放。
+- **客户端注册还剩两项没重放**：`EntityRenderersEvent.RegisterLayerDefinitions`（模型层在启动时已 bake，
+  热加渲染器若需要新 layer 会失败；众星捧月的机器/桶/筛用的是现成模型，没踩到）与
+  `RegisterColorHandlersEvent.ColorResolvers`（群系着色 resolver）。
+- **reload listener 按类名去重**：同一 mod 故意注册两个不同配置的同类别 listener 时只会保留一个（已知 mod 没有这么做的）。
 - **实体渲染器**：事件已重放、`EntityRenderDispatcher` 也重建了，但众星捧月没有实体，未实测。
 - **机器 GUI 交互**：screen 已注册且能开，机器 BE 的 tick/渲染也不再崩（配置已加载），但放取物品/按钮没有自动断言（手动清单里）。
 - **`SERVER` 类型 config**：热加 mod 若注册 `SERVER` config，目前跳过（需要世界 `serverconfig` 路径），要重启。

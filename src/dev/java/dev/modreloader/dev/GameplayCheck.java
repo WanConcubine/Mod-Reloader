@@ -463,12 +463,26 @@ public final class GameplayCheck {
             }
         }
 
+        Object realManager = mc.getResourceManager();
+        int clientReloadListeners = 0;
+        if (realManager instanceof net.minecraft.server.packs.resources.ReloadableResourceManager rrm) {
+            Object listeners = dev.modreloader.hotadd.UnsafeAccess.get(rrm,
+                    net.minecraft.server.packs.resources.ReloadableResourceManager.class, "listeners");
+            if (listeners instanceof java.util.List<?> list) {
+                for (Object listener : list) {
+                    if (listener.getClass().getName().contains(modId)) {
+                        clientReloadListeners++;
+                    }
+                }
+            }
+        }
+
         ModReloader.LOGGER.info(
                 "[GameplayCheck] client registrations: beRenderers {}/{} (missing={}), "
                         + "porcelainBucketTintRegistered={} (tint={}), fluidExtensions={}, "
-                        + "configs {}/{} loaded",
+                        + "configs {}/{} loaded, clientReloadListeners={}",
                 beTypes - missingRenderers.size(), beTypes, missingRenderers,
-                hasBucketTint, tint, fluids, loadedConfigs, configs);
+                hasBucketTint, tint, fluids, loadedConfigs, configs, clientReloadListeners);
         if (beTypes > 0 && !missingRenderers.isEmpty()) {
             fail("block entity renderers missing for " + missingRenderers);
             return false;
@@ -479,6 +493,10 @@ public final class GameplayCheck {
         }
         if (fluids == 0) {
             fail("no client extensions for " + modId + " fluid types");
+            return false;
+        }
+        if (clientReloadListeners == 0) {
+            fail("no client reload listeners registered for " + modId);
             return false;
         }
         if (configs > 0 && loadedConfigs != configs) {

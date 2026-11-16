@@ -3,6 +3,9 @@ package dev.modreloader.client;
 import dev.modreloader.ModReloader;
 import dev.modreloader.hotadd.UnsafeAccess;
 import net.minecraft.client.Minecraft;
+import net.minecraft.server.packs.PackType;
+import net.minecraft.server.packs.resources.PreparableReloadListener;
+import net.minecraft.server.packs.resources.ReloadableResourceManager;
 import net.minecraft.client.renderer.ItemModelShaper;
 import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -13,11 +16,15 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterColorHandlersEvent;
 import net.neoforged.neoforge.client.extensions.common.ClientExtensionsManager;
+import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 
 import java.lang.invoke.MethodType;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Replays the client-side registrations that NeoForge only performs once during
@@ -57,6 +64,50 @@ public final class ClientRegistrationReplay {
         replayRenderers(container);
         replayColorHandlers(container);
         replayClientExtensions(container);
+        replayClientReloadListeners(container);
+    }
+
+    /**
+     * Client-side reload listeners (Ex Nihilo registers its machine tables with
+     * {@code clientOnly = true} here so JEI and a dedicated-server client can see
+     * them). Fired once at startup; replay into a throwaway resource manager and
+     * copy over the listener classes the real manager does not have yet.
+     *
+     * <p>Deduplication is by listener class: a second registration of the same
+     * class would run the reload twice for every pack reload, and the event
+     * hands out fresh instances so identity comparison cannot tell them apart.
+     * A mod that intentionally registers two differently-configured instances of
+     * one class would lose the second one — accepted, and no known mod does it.
+     */
+    private static void replayClientReloadListeners(ModContainer container) {
+        try {
+            Minecraft minecraft = Minecraft.getInstance();
+            if (!(minecraft.getResourceManager() instanceof ReloadableResourceManager real)) {
+                return;
+            }
+            ReloadableResourceManager probe = new ReloadableResourceManager(PackType.CLIENT_RESOURCES);
+            container.acceptEvent(new RegisterClientReloadListenersEvent(probe));
+            List<PreparableReloadListener> fresh = UnsafeAccess.get(
+                    probe, ReloadableResourceManager.class, "listeners");
+            List<PreparableReloadListener> existing = UnsafeAccess.get(
+                    real, ReloadableResourceManager.class, "listeners");
+            Set<String> known = new HashSet<>();
+            for (PreparableReloadListener listener : existing) {
+                known.add(listener.getClass().getName());
+            }
+            int added = 0;
+            for (PreparableReloadListener listener : fresh) {
+                if (known.add(listener.getClass().getName())) {
+                    real.registerReloadListener(listener);
+                    added++;
+                }
+            }
+            ModReloader.LOGGER.info(
+                    "[ModReloader] client reload listeners replayed: {} new, {} total",
+                    added, existing.size());
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn("[ModReloader] client reload listener replay failed", t);
+        }
     }
 
     /**
