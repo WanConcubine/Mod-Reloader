@@ -40,7 +40,8 @@
 
 | 能力 | 关键结果 | 命令 / 来源 |
 |---|---|---|
-| 分析器 | **9 个单测**；合成 jar 妃级 0.65；`run/mods` 9 个 → **嫔 2 / 妃 1 / 贵妃 4 / 皇后 2** | `cd tools/analyzer && python3 -m unittest discover -s tests -v` |
+| 分析器 | **14 个单测**；合成 jar 妃级 0.65；`run/mods` 9 个 → **嫔 2 / 妃 1 / 贵妃 4 / 皇后 2**；**真机校准 11 个有标注 jar：10 个 tier 一致、1 个已知过估**（ZeroCore2 GUIFEI vs 实际 fei，安全方向） | `cd tools/analyzer && python3 -m unittest discover -s tests -v`；`python3 tools/analyzer/calibrate.py --ground-truth tools/analyzer/calibration/ground-truth.tsv <jars>`；[analyzer-calibration.md](features/analyzer-calibration.md) |
+| **分析器：AT 维度**（2026-11-16） | 新增 `META-INF/accesstransformer.cfg` 解析（`at_rules` / `at_targets`）+ 默认表格 `AT` 列；**6 个 AT jar 的规则数与运行期 `-PverifyAtSpike` 的独立测量逐个相同**（Jade 57 / JEI 21 / AE2 75 / Mekanism 94 / guideme 47 / ER2 1）；顺带纠正：MekanismGenerators **没有 AT**，它是缺依赖被拒 | 同上一行的 `calibrate.py`；[analyzer-calibration.md](features/analyzer-calibration.md) §4.1 |
 | **A0（嫔级）热加** | EasyLAN：`isLoaded/container=true`、资源包 `mod/easylan` 选中并重载、keyMappings 34→34 | `-PautoAdd=<EasyLAN>`；[a0-hot-add.md](features/a0-hot-add.md) |
 | **A1.2（妃级）全流水线** | 4 mixin；`UUIDUtil`/`AbstractWidget` redefine + `ShareToLanScreen`/`PlayerList` 首载织入；接口合并；LAN 屏 port=25565 | `-PautoAdd=<lsp> -PverifyLan=true`；[a1-mixin-hotadd.md](features/a1-mixin-hotadd.md) |
 | **A1.2 失败回滚** | post-ModList / post-pack 均恢复 ModList/module/config/类/资源包，post-ModList 重试成功；构造后 listener 不可注销 | `-PverifyRollback=true -PfailAfterModList=true` / `-PfailAfterPack=true` |
@@ -98,7 +99,9 @@
 - **机器 GUI 交互**：screen 工厂已注册、界面能开，但放取物品/按钮没有自动断言；桶/坩埚内部内容渲染已修（`beRenderers 6/6`），但没有逐项视觉断言。
 - **众星捧月手动玩法项**：桶 / 坩埚 / 堆肥 / 网耐久 / 机器界面只有清单，没有自动断言（见 [dogfood-gameplay.md](features/dogfood-gameplay.md) §3）。
 - **datapack 失败语义**：`Stage.DATAPACK` 失败返回 `FailureKind.DATAPACK` 并标注「注册表已提交、dirty」，但没有夹具触发过（需要 mod 的 reload listener 抛异常；坏 recipe/loot 只是逐条跳过）。
-- **Tier 预测 vs 人工标注**：没有 ground truth，准确率未知。
+- **Tier 预测 vs 人工标注**：首轮校准已做（2026-11-16，11 个有真机结论的 jar：10 一致 / 1 过估，见
+  [analyzer-calibration.md](features/analyzer-calibration.md)）。仍缺：只有 3 个语料未标注（Searchables / Controlling / mcwifipnp）、
+  **Fabric 语料完全没校准**（intermediary 名导致 tier 规则退化）、置信度数值本身没校准。
 - **Fabric intermediary 映射**：`class_XXX` 目标识别仍退化。
 - **多版本 / 多加载器**：1.21.1 之外未测试。
 - **存档一致性**：还没有写操作，谈不上验证。
@@ -227,6 +230,18 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近几条。
 
+- **2026-11-16（分析器首轮真机校准 + AT 维度：11 个标注 jar 10 个对，修掉一个危险方向的 bug）**：
+  新增 `tools/analyzer/calibrate.py` + `calibration/ground-truth.tsv`（只存 jar 文件名，不提交 jar），把 tier 预测和
+  status 表尺/兼容性矩阵里的真机结论对上：**11 个有标注 jar → 10 个 tier 一致、1 个已知过估**（ZeroCore2：分析器 GUIFEI、
+  实际只需 fei；过估只多一条警告，方向安全，暂不修）。
+  两处实质改进：① **AT 现在能看见了**——之前只认 Fabric 的 `accessWidener`，NeoForge 的
+  `META-INF/accesstransformer.cfg` 完全没解析，而 AT 是运行期第一拒绝原因；现在解析规则/目标、默认表格加 `AT` 列，
+  6 个 AT jar 的规则数与游戏内 `-PverifyAtSpike` 的独立测量**逐个相同**（57/21/75/94/47/1），两条代码路径互证。
+  ② **修掉一个漏估**：`DeferredRegister$Blocks/$Items` 这类**嵌套子类**上的 `register*` 之前不匹配
+  （旧规则 `endswith("/DeferredRegister")`），导致 t4fixture 被预测成 PIN、而运行期其实要开注册表窗口（GUIFEI）；
+  现在改成按类名含 `DeferredRegister` + 方法名 `register*`，加单测钉住。漏估会让用户以为能热加、构造时崩，方向危险。
+  顺带纠正一个口口相传的假设：MekanismGenerators 没有 AT，它在矩阵里是**缺依赖**被拒。
+  文档：[analyzer-calibration.md](features/analyzer-calibration.md)、[tools/analyzer/README.md](../tools/analyzer/README.md)、AGENTS §2。
 - **2026-11-16（A1 产品化的两小步：第二个妃级模组 PASS；客户端内「保存→重开」卡死并撤掉）**：
   `AddCommandCheck` 新增 `-PverifyAddCommand2` / `-PverifyAddCommand2ModId`：先 in-world add 众星捧月（贵妃级），再用同一条命令路径
   加 `lanserverproperties`（妃级），两边 `isLoaded=true`、第一个不受影响 → `SECOND ADD RESULT: PASS`（20:2x，干净的复跑）。

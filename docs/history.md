@@ -315,3 +315,22 @@
   记为已知问题 30，并写明「要覆盖同一件事就走专用服（无 GL）路径」——存档可读的既有证据仍是 t4-fixture 的
   「热加 → 放方块 → 存盘 → 重启读档 `isT4Block=true`」。文档：[a1-mixin-hotadd.md](features/a1-mixin-hotadd.md) §10、
   status 表尺/已知问题 30/下一步（P2-4 剩构造后 listener 回滚、服务端+客户端同时妃级）。
+
+- **（分析器首轮真机校准 + AT 维度 / P3 一部分）**：新增 `tools/analyzer/calibrate.py` 与
+  `tools/analyzer/calibration/ground-truth.tsv`（ground truth 只按 jar **文件名**索引，不提交任何 jar）：
+  逐 jar 输出 `tier / AT / JiJ / 已验证(tier/结果) / match`，有不一致时退出码 1（可进 CI）。首轮 21 个 jar 里
+  11 个有真机标注 → **10 个 tier 一致、1 个已知过估**（ZeroCore2：分析器 GUIFEI，真机只需 fei——它注册的是 capabilities
+  而非方块/物品内容；过估只多一条警告，方向安全，暂不修）。
+  实质改进两处：① **AT 之前完全没解析**（只认 Fabric `accessWidener`），而 AT 是运行期第一拒绝原因。
+  `metadata.py` 现在解析 `META-INF/accesstransformer.cfg`（`at_rules` / `at_targets`，语义与运行期
+  `inspect/AccessTransformerRules` 一致），`rules.py` 把它写成理由、`report.py` 默认表格加 **AT 列**；
+  6 个 AT jar 的规则数与游戏内 `-PverifyAtSpike` 的独立测量**逐个相同**（Jade 57 / JEI 21 / AE2 75 / Mekanism 94 /
+  guideme 47 / ER2 1）= 两条完全不同的代码路径互证。顺带纠正：**MekanismGenerators 没有 AT**，它在矩阵里是缺依赖被拒
+  （「6 个 AT jar」始终是 Jade/JEI/AE2/Mekanism/guideme/ER2）。
+  ② **修掉一个漏估方向的 bug**：真实 mod 用 `DeferredRegister$Blocks` / `$Items` 这些**嵌套子类**的 `register*`，
+  旧规则 `cls_name.endswith("/DeferredRegister")` 漏掉 → t4fixture 被预测成 PIN，而运行期实际开了注册表窗口（GUIFEI）。
+  改成「类名含 `DeferredRegister` 且方法名以 `register` 开头」，并用 `DeferredRegisterNestedClassesTest` 钉住。
+  证据（2026-11-16 20:4x）：校准表 21 行、`labelled jars: 11, matches: 10, mismatches: 1`；`run.py scan /tmp/lanmods --verbose`
+  在默认表格里显示新的 `AT` 列；分析器单测 **14 passed**（原 9 + AT 规则 2 + AT 解析 2 + 嵌套 DeferredRegister 1）。
+  文档：[analyzer-calibration.md](features/analyzer-calibration.md)、tools/analyzer/README.md、AGENTS §2、status 表尺/未验证/最近变更。
+  仍缺：Fabric 语料没校准（intermediary 名）、3 个语料未标注、置信度数值没校准。

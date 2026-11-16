@@ -52,3 +52,32 @@ class RulesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AccessTransformerTest(unittest.TestCase):
+    def test_access_transformer_is_reported_as_a_boundary(self):
+        report = classify(make(at_rules=3,
+                               at_targets={"net.minecraft.client.Minecraft",
+                                           "net.minecraft.world.level.block.Block"}))
+        self.assertTrue(any("access-transformer" in reason for reason in report.reasons),
+                        report.reasons)
+        self.assertEqual(3, report.signals["at_rules"])
+        self.assertIn("net.minecraft.client.Minecraft", report.signals["at_targets"])
+
+    def test_no_access_transformer_is_the_normal_case(self):
+        report = classify(make())
+        self.assertEqual(0, report.signals["at_rules"])
+        self.assertFalse(any("access-transformer" in reason for reason in report.reasons))
+
+
+class DeferredRegisterNestedClassesTest(unittest.TestCase):
+    def test_registration_refs_from_nested_deferred_register_are_guifei(self):
+        # Regression for the t4fixture miscalibration: DeferredRegister$Blocks#register
+        # is the shape real NeoForge mods use, and it must land in GUIFEI.
+        report = classify(make(
+            registration_refs={
+                "net/neoforged/neoforge/registries/DeferredRegister$Blocks#register",
+            },
+            content_refs={"net/minecraft/world/level/block/Block"}))
+        self.assertEqual("GUIFEI", report.tier)
+        self.assertIn("registration calls", " ".join(report.reasons))

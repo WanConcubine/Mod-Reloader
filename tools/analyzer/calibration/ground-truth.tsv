@@ -1,0 +1,32 @@
+# Ground truth for tools/analyzer/calibrate.py.
+# Sources: docs/status.md 表尺 + docs/features/hotadd-compatibility-matrix.md;
+# every "pass" was produced by a real harness, every "refused:*" by the runtime.
+# Columns: <jar file name>	<verified tier>	<runtime outcome>
+# tier '-'  = the add never got past VALIDATE, so no tier was exercised.
+# outcome    = pass | refused:at | refused:dependency | refused:client_registration | untested
+#
+# Client fixtures and dedicated-server fixtures (built by ./build.sh in experiments/)
+clientfixture-1.0.0.jar	pin	pass
+wgfixture-1.0.0.jar	pin	pass
+t4fixture-1.0.0.jar	guifei	pass
+servertest-1.0.0.jar	pin	pass
+payloadfix-1.0.0.jar	pin	pass
+# Real mods verified by the hot-add harnesses
+EasyLAN-neoforge-1.21.1-v1.6a.jar	pin	pass
+lanserverproperties-1.13.2-neoforge.jar	fei	pass
+appleskin-neoforge-mc1.21-3.0.9.jar	pin	pass
+exnihilosatellitium-1.21.1-1.5.0.jar	guifei	pass
+ZeroCore2-1.21.1-2.4.9.jar	fei	pass
+jecharacters-neoforge-4.5.15.jar	pin	pass
+# Access-transformer jars: the runtime refuses them at VALIDATE (AT is a hard boundary)
+Jade-1.21.1-NeoForge-15.10.6.jar	-	refused:at
+jei-1.21.1-neoforge-19.27.0.340.jar	-	refused:at
+ae2-19.2.18.jar	-	refused:at
+Mekanism-1.21.1-10.7.19.85.jar	-	refused:at
+MekanismGenerators-1.21.1-10.7.19.85.jar	-	refused:dependency
+guideme-21.1.22.jar	-	refused:at
+ExtremeReactors2-1.21.1-2.4.9.jar	-	refused:at
+# Present in the corpus but not verified as a full hot-add
+Searchables-neoforge-1.21.1-1.0.2.jar	fei	untested
+Controlling-neoforge-1.21.1-19.0.5.jar	-	untested
+mcwifipnp-1.9.0-1.21-neoforge.jar	-	untested

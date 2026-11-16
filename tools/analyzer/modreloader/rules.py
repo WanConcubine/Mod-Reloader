@@ -153,6 +153,11 @@ def classify(analysis: Analysis) -> ModReport:
         reasons.append("%d entrypoint(s)" % analysis.entrypoint_count)
     if analysis.access_widener:
         reasons.append("ships an access widener")
+    if analysis.at_rules:
+        reasons.append(
+            "%d access-transformer rule(s) over %d target class(es): ATs apply only when a "
+            "class loads, so a hot-add needs a restart (not content tier)"
+            % (analysis.at_rules, len(analysis.at_targets)))
     if analysis.errors:
         reasons.append("metadata warning: %s" % analysis.errors[0])
 
@@ -173,6 +178,8 @@ def classify(analysis: Analysis) -> ModReport:
         "assets": analysis.has_assets,
         "data": analysis.has_data,
         "bundled_jars": analysis.bundled_jars,
+        "at_rules": analysis.at_rules,
+        "at_targets": sorted(analysis.at_targets)[:20],
     }
 
     return ModReport(

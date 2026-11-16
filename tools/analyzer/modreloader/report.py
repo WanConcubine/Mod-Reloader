@@ -19,6 +19,12 @@ def _clip(text: str, width: int) -> str:
     return text[: width - 1] + "…"
 
 
+def _at_cell(report: ModReport) -> str:
+    """Access-transformer marker: rule count, or '-' when the jar ships none."""
+    rules = report.signals.get("at_rules") or 0
+    return str(rules) if rules else "-"
+
+
 def _summary(reports: List[ModReport]) -> str:
     by_loader = {}
     by_tier = {tier: 0 for tier in TIER_ORDER}
@@ -45,16 +51,18 @@ def _summary(reports: List[ModReport]) -> str:
 
 def render_text(reports: List[ModReport], verbose: bool = False) -> str:
     lines = [_summary(reports)]
-    header = "%-26s %-10s %-8s %-8s %-5s %s" % ("MOD", "VERSION", "LOADER", "TIER", "CONF", "VERDICT")
+    header = "%-26s %-10s %-8s %-8s %-4s %-5s %s" % (
+        "MOD", "VERSION", "LOADER", "TIER", "AT", "CONF", "VERDICT")
     lines.append("")
     lines.append(header)
     lines.append("-" * len(header))
     for report in sorted(reports, key=lambda r: (TIER_ORDER.index(r.tier), r.mod_id)):
-        lines.append("%-26s %-10s %-8s %-8s %-5.2f %s" % (
+        lines.append("%-26s %-10s %-8s %-8s %-4s %-5.2f %s" % (
             _clip(report.mod_id, 26),
             _clip(report.version, 10),
             _clip(report.loader, 8),
             report.tier,
+            _at_cell(report),
             report.confidence,
             report.verdict,
         ))
@@ -80,15 +88,16 @@ def render_markdown(reports: List[ModReport]) -> str:
     lines.append(_summary(reports).rstrip())
     lines.append("```")
     lines.append("")
-    lines.append("| Mod | Version | Loader | Tier | Confidence | Verdict | Top reason |")
-    lines.append("|---|---|---|---|---|---|---|")
+    lines.append("| Mod | Version | Loader | Tier | AT | Confidence | Verdict | Top reason |")
+    lines.append("|---|---|---|---|---|---|---|---|")
     for report in sorted(reports, key=lambda r: (TIER_ORDER.index(r.tier), r.mod_id)):
         reason = report.reasons[0].replace("|", "\\|") if report.reasons else ""
-        lines.append("| %s | %s | %s | %s | %.2f | %s | %s |" % (
+        lines.append("| %s | %s | %s | %s | %s | %.2f | %s | %s |" % (
             report.mod_id.replace("|", "\\|"),
             report.version.replace("|", "\\|"),
             report.loader,
             report.tier,
+            _at_cell(report),
             report.confidence,
             report.verdict,
             reason,

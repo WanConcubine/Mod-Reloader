@@ -31,6 +31,8 @@ class Analysis:
     has_assets: bool = False
     has_data: bool = False
     access_widener: bool = False
+    at_rules: int = 0
+    at_targets: Set[str] = field(default_factory=set)
     bundled_jars: int = 0
     errors: List[str] = field(default_factory=list)
 

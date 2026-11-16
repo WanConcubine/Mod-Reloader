@@ -131,6 +131,8 @@ def analyze(path: Path, depth: int = 0) -> Analysis:
         jar_size=info.jar_size,
         entrypoint_count=len(info.entrypoints),
         access_widener=bool(info.access_widener),
+        at_rules=info.at_rules,
+        at_targets=set(info.at_targets),
         errors=list(info.errors),
     )
 
@@ -171,10 +173,16 @@ def analyze(path: Path, depth: int = 0) -> Analysis:
                 static_mutable += parsed.static_mutable_fields
                 registry_refs.update(_match(parsed.class_refs, REGISTRY_MARKERS))
                 for cls_name, method_name in parsed.method_refs:
-                    if method_name not in ("register", "registerSimple"):
+                    # Registration is the GUIFEI trigger. NeoForge's DeferredRegister
+                    # is used through its nested subclasses (DeferredRegister$Blocks /
+                    # $Items / $DataComponents …), and the registration call is made on
+                    # those, so a suffix match on "/DeferredRegister" misses the most
+                    # common real-world shape — measured with the t4fixture jar, which
+                    # came out PIN while the runtime had to open a registry window.
+                    if not method_name.startswith("register"):
                         continue
                     if (cls_name == "net/minecraft/core/Registry"
-                            or cls_name.endswith("/DeferredRegister")
+                            or "DeferredRegister" in cls_name
                             or cls_name.endswith("/RegisterEvent")
                             or cls_name.endswith("/BuiltInRegistries")):
                         registration_refs.add("%s#%s" % (cls_name, method_name))

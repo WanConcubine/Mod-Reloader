@@ -30,6 +30,11 @@ python3 tools/analyzer/run.py scan /path/to/mods
 # 输出 JSON / Markdown
 python3 tools/analyzer/run.py scan /path/to/mods --json report.json --md report.md
 
+# 真机校准：tier 预测 vs 已验证的热加结果（ground truth 只存 jar 文件名）
+python3 tools/analyzer/calibrate.py \
+  --ground-truth tools/analyzer/calibration/ground-truth.tsv \
+  /tmp/lanmods/*.jar /tmp/user-mods/*.jar ~/Projects/Ex-Nihilo-Satellitium/run/mods/*.jar
+
 # 真实 dev 语料（本机）
 python3 tools/analyzer/run.py scan ~/Projects/Ex-Nihilo-Satellitium/run/mods --verbose
 python3 tools/analyzer/run.py scan ~/Projects/Ex-Nihilo-Satellitium/build/libs/exnihilosatellitium-1.21.1-1.5.0.jar --verbose

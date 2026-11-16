@@ -75,6 +75,9 @@ python3 tools/analyzer/run.py scan /path/to/instance --recursive
 - **对象世界风险**：可变静态字段数量、`Thread`/`Executor` 引用、`MethodHandles`/反射引用、native 方法
 - **打包方式**：Jar-in-Jar（Fabric API 这类 bundle 会递归拆开分析）
 - **资源/数据**：`assets/`、`data/` 是否存在
+- **Access transformer**（2026-11-16 新增）：`META-INF/accesstransformer.cfg` 的规则数与目标类。AT 在**类加载时**由 FML 应用，
+  所以带 AT 的模组热加必须重启——这是和 tier 并列的一条轴，默认表格里有 `AT` 列（`-` = 没有）。
+  规则语义与运行期 `inspect/AccessTransformerRules` 一致；6 个真实 jar 的规则数与游戏内 `-PverifyAtSpike` 的独立测量逐个相同。
 
 ## 已知限制（v0，别当成结论）
 
@@ -85,12 +88,19 @@ python3 tools/analyzer/run.py scan /path/to/instance --recursive
 5. **种子列表是策略，不是测量**：`sodium`、`lithium` 等性能模组和 `fabric-api` 这类库模组被直接标成 HUANGHOU（皇后级），因为社区经验认为它们不该热换。
 6. **不覆盖 NeoForge 的 FML 内部模块**，只按元数据识别。
 
-## 测试
+## 测试与校准
 
 ```bash
 cd tools/analyzer
-python3 -m unittest discover -s tests -v
+python3 -m unittest discover -s tests -v      # 14 个纯规则/解析测试
+
+# 真机校准：tier 预测 vs 已验证的热加结果（ground truth 只存文件名）
+python3 calibrate.py --ground-truth calibration/ground-truth.tsv \
+  /tmp/lanmods/*.jar /tmp/user-mods/*.jar ~/Projects/Ex-Nihilo-Satellitium/run/mods/*.jar
 ```
+
+首轮结果（2026-11-16，11 个有标注的 jar，10 个一致、1 个已知过估）与两个修掉的 bug 见
+[docs/features/analyzer-calibration.md](../../docs/features/analyzer-calibration.md)。
 
 ## 下一步
 

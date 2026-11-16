@@ -13,6 +13,13 @@ from . import tomlmini
 
 MAX_TEXT = 4 * 1024 * 1024
 
+# NeoForge/Forge access transformers. This is a hot-add boundary, not "content
+# shape": FML applies the rules when a class loads, so a mod that ships them can
+# only work after a restart (the runtime refuses such mods before injecting
+# anything). The runtime side is inspect/AccessTransformerRules + the
+# FailureKind.ACCESS_TRANSFORMER gate.
+AT_ENTRY = "META-INF/accesstransformer.cfg"
+
 
 @dataclass
 class ModInfo:
@@ -25,6 +32,8 @@ class ModInfo:
     entrypoints: List[str] = field(default_factory=list)
     declared_mixins: List[str] = field(default_factory=list)
     access_widener: Optional[str] = None
+    at_rules: int = 0
+    at_targets: List[str] = field(default_factory=list)
     depends: Dict[str, str] = field(default_factory=dict)
     client_only: bool = False
     namespace: str = ""
@@ -147,6 +156,29 @@ def _mixin_paths(raw: Any) -> List[str]:
     elif isinstance(raw, str):
         paths.append(raw)
     return paths
+
+
+def _read_access_transformer(zf: zipfile.ZipFile):
+    """(rule count, dotted target class names) of META-INF/accesstransformer.cfg.
+
+    Mirrors the runtime parser (hotadd/AccessTransformerRules): one rule per
+    non-comment line, the second whitespace-separated token is the target class.
+    """
+    text = _read_text(zf, AT_ENTRY)
+    if not text:
+        return 0, []
+    rules = 0
+    targets = set()
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        parts = stripped.split()
+        if len(parts) < 2:
+            continue
+        rules += 1
+        targets.add(parts[1].replace("/", "."))
+    return rules, sorted(targets)
 
 
 def _detect_loader(names: set) -> str:
@@ -302,6 +334,7 @@ def inspect_jar(path: Path) -> ModInfo:
     parsed: Optional[ModInfo] = None
     # Reopen the zip: metadata parsers are easier to keep safe when each one
     # gets a fresh handle and can fail without poisoning the rest of the scan.
+    at_rules, at_targets = 0, []
     try:
         with zipfile.ZipFile(path) as zf:
             manifest = _read_manifest(zf)
@@ -315,6 +348,7 @@ def inspect_jar(path: Path) -> ModInfo:
                 parsed = _from_toml(zf, "META-INF/mods.toml", "forge")
             elif info.loader == "forge-legacy":
                 parsed = _from_mcmod(zf)
+            at_rules, at_targets = _read_access_transformer(zf)
     except (zipfile.BadZipFile, OSError) as exc:
         info.errors.append("cannot read metadata: %s" % exc)
 
@@ -332,6 +366,8 @@ def inspect_jar(path: Path) -> ModInfo:
         info.declared_mixins = [part.strip() for part in manifest["MixinConfigs"].split(",") if part.strip()]
 
     info.declared_mixins = _discover_mixin_configs(names, info.declared_mixins)
+    info.at_rules = at_rules
+    info.at_targets = list(at_targets)
     return info
 
 
