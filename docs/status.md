@@ -148,26 +148,40 @@
 
 ## 下一步
 
-> 结构性技术债与架构升级点见 [tech-debt.md](tech-debt.md)。多人同步之后的顺序：
+> 下一会话从 **P0-1** 开始。所有 harness 命令见 [AGENTS §2](../AGENTS.md)，细节在对应 feature 文档。
+> **热加类 harness 要求 `run/mods/` 里没有众星捧月 jar**（已加载就不能再热加）；备份在 `/tmp/dogfood-runmods-backup.jar`。
 
-0. ~~**注册审计**~~ 与 ~~**重放 `RegisterCapabilitiesEvent`**~~ 都已完成（2026-11-16；capability 的 A/B 见已知问题 26）。
-   **下一个按收益排**：`RegisterGuiLayersEvent`（语料 3/16，HUD，静默缺失）→ `RegisterItemDecorationsEvent` /
-   `EntityRenderersEvent.RegisterLayerDefinitions`（模型层已 bake，需要重建 `EntityModelSet`，成本高）。
-1. **贵妃级的下一层：datapack 删除/更新语义、WORLDGEN 层**。多人「连接后热加」已于 2026-11-16 完成
-   （[t4-registry-hotadd.md](features/t4-registry-hotadd.md) §9、[ADR-0010](decisions/0010-post-connect-registry-sync.md)）；
-   剩下的「客户端不装 jar」属于资源/类的分发问题，是产品级决策，不在注册表适配范围内。
-2. **Git 收尾**：CI（分析器单测 + `./gradlew test`/`build`）、截图入 `docs/`、首个 tag `v0.1.0`。
-   已知问题 12 已消除（构建不再需要 `libs/`），CI 只差 JDK 21 + Gradle。
-3. **人工收尾**：点一次 EasyLAN 的 GUI 按钮；跑众星捧月的桶/坩埚/堆肥手动清单（`-PverifyGameplayKeepOpen=true`）。
-4. **A1 产品化**：构造后 listener 回滚 / 存档回读；第二个妃级模组；专用服妃级已验证（2026-11-16），但「服务端 + 客户端同时妃级」未测。
-5. **GUI / 文件夹监听完善**：Phase 3/4（忽略/重试持久化、批量/依赖排序、`-PverifyGui`）。
-6. **分析器校准**：20–30 个 1.21.1 模组填矩阵；把 AT/JiJ/依赖纳入预测维度，修 `mekanismgenerators` 类漏判。
-7. **游戏内 `/modreload why <mod>`**：只读。
-8. **B fallback**：只在 A 失败时提供 offline/republish；不是主线。
-9. **可选的小事**：AT 拒绝文案写清目标组成（已加载/未加载/是否 datagen，**不放行**）；嵌套 mod 的 `ModContainer`。
+| 优先 | 任务 | 关键点 / 落点 | 验收 |
+|---|---|---|---|
+| **P0-1** | 修 in-world add 的 BlockState id 竞态（已知问题 28） | 把 `RegistryStage.commit` 的「清 `BLOCKSTATE_TO_ID_MAP` + `GameData.freezeData()`」投到服务器线程（`server.isSameThread()` 时直跑，否则 `execute` + 等完成；超时回退并 warn）；`RegisterEvent` 重放仍留在调用线程 | `-PverifyAddCommand=<dogfood> -PverifyAddCommandModId=exnihilosatellitium -PverifyGameplay=true` 连跑 3 次：无 `No value with id -1`、每次 `GameplayCheck RESULT: PASS`、capability 五项 present |
+| **P0-2** | 重放 `RegisterGuiLayersEvent`（语料 3/16，HUD 静默） | 先读 NeoForge 注册面（`LayeredDraw`）再定临时 sink/合并；加进 `RegistrationAudit.COVERED`；新 harness 断言层数 +1、渲染不崩 | `-PverifyRegAudit` 里该事件变 `covered`；harness `RESULT: PASS`；`-PverifyGameplay -PverifyCreative` 回归 |
+| **P1-1** | AT「晚注入」逐 jar 复核（只读） | 扩展 `dev/AtSpikeCheck`：每个 jar 输出「是否**所有** AT 目标都未加载（排除 datagen）」；决定这条是否彻底关闭 | 6 个 AT jar 跑一次，表补进 [matrix](features/hotadd-compatibility-matrix.md) §8 |
+| **P1-2** | WORLDGEN 边界实验 | 做一个带 dimension 的夹具：标题屏热加 → **新建世界** → 断言维度可进；决定「WORLDGEN 需重启」能否改写成「需新世界」 | 新 harness `-PverifyWorldgen` PASS + 文档 |
+| **P1-3** | Git 收尾 | CI（analyzer unittest + `./gradlew test`/`build`）、截图入 `docs/`、首个 tag `v0.1.0` | CI 绿 + tag |
+| **P2-1** | 剩余一次性事件 | `RegisterItemDecorationsEvent`；`EntityRenderersEvent.RegisterLayerDefinitions`（模型层已 bake，要重建 `EntityModelSet`，先调研成本） | 同 P0-2 |
+| **P2-2** | 剩余 behavior 事件 | `ModifyDefaultComponentsEvent`、`NewRegistryEvent`、属性/刷怪/POI、`AddPackFindersEvent` 逐个评估（多数只能 warn） | 每个要么变 covered，要么在注册审计 §7 写清为什么不做 |
+| **P2-3** | 贵妃级下一层 | datapack 删除/更新语义（很可能不可行，先写结论）；WORLDGEN 与 P1-2 合并 | 结论进 ADR/feature 文档 |
+| **P2-4** | A1 产品化 | 构造后 listener 回滚 / 存档回读 / 第二个妃级模组 / 服务端+客户端同时妃级 | 每项 harness PASS + 文档 |
+| **P3** | GUI/watcher Phase 3/4、分析器校准（20–30 jar + AT/JiJ 维度）、`/modreload why`、B fallback、AT 文案、嵌套 mod 容器 | 见 [tech-debt.md](tech-debt.md) 与对应 feature 文档 | 各自文档的判据 |
+
+### 验收清单（给自己/所有者）
+
+```bash
+./gradlew build && ./gradlew test        # 21 passed
+# 确认 run/mods/ 里没有众星捧月 jar（它必须可热加）
+./gradlew runClient -PverifyCapabilities=<dogfood.jar>                              # 五项 present，RESULT: PASS
+./gradlew runClient -PverifyCapabilities=<dogfood.jar> -PskipCapabilityReplay=true  # 五项 MISSING，RESULT: FAIL（反证）
+./gradlew runClient -PverifyAddCommand=<dogfood.jar> -PverifyAddCommandModId=exnihilosatellitium -PverifyGameplay=true
+#   -> GameplayCheck RESULT: PASS，capability providers 五项 present
+./gradlew runClient -PverifyRegAudit=<16 jars>          # 66 covered / 10 behavior，RESULT: PASS
+./gradlew runClient -PverifyCreativeAtTitle=<dogfood.jar>  # 创造栏路径之一：RESULT: PASS
+```
+
+已知问题 27（1.4.2 创造栏缺失）仍需要那台机器的 `logs/latest.log` 才能继续，不阻塞上面任何一项。
 
 已完成（保留参考，细节见 history 与对应 feature 文档）：**多人连接后注册表 id 同步**；**MixinRuntime 反射化（构建不再需要 `libs/`）**；
-**AT 晚注入量测（结论：不做）**；**JiJ 内嵌依赖抽取**；**datapack 热加载**；**狗粮玩法验收 + 五个客户端 bug**；**兼容性矩阵首轮 + AT/缺依赖的变更前拒绝**。
+**AT 晚注入量测（结论：不做，P1-1 复核）**；**JiJ 内嵌依赖抽取**；**datapack 热加载**；**dogfood 玩法验收 + 五个客户端 bug**；
+**兼容性矩阵首轮 + AT/缺依赖的变更前拒绝**；**注册审计**；**capability 重放**。
 
 ## 最近变更
 

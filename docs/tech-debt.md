@@ -44,6 +44,19 @@
 
 `src/dev/java` + Gradle `dev` source set，作为同一个 mod 的第二个 source set 参与 dev run，但不进 `jar`。主源集与 dev 之间只剩一个**按名字反射**的入口 `DevEntry.install()`；`check` 依赖 `compileDevJava`，只坏 dev 也会让构建失败。**剩余**：`ServerBootstrap` 的 `autoAdd`/`probe` 触发还在主源集（它们调用的是命令也用的主 API，风险低）。
 
+### ⚠️ 4. 注册表 id 重建与 chunk 发送的竞态（2026-11-16 一次性复现，未修）
+
+**症状**：进世界后热加众星捧月，客户端收到一个 chunk 包报 `IllegalArgumentException: No value with id -1`（`LinearPalette.read`），
+随后服务端以「网络协议错误」断开玩家（status 已知问题 28）。同一次 add 刚执行过 `RegistryStage.commit`（清 `BLOCKSTATE_TO_ID_MAP` → `GameData.freezeData()`）。
+
+**为什么**：id 重建在**调用线程**（单人游戏里是 render 线程）执行，而集成服务器线程可能同时在序列化 chunk；
+`IdMapper.add()` 在重建窗口内对尚未重新加入的 BlockState 会给出 -1，服务器把 -1 写进 palette，客户端解码即失败。
+
+**修法（下一会话 P0-1）**：把 commit 里的「清 id + freeze」投到服务器线程（`server.isSameThread()` 时直跑，否则 `execute` +
+等完成，超时回退并 warn）；`RegisterEvent` 重放仍留在调用线程。验收：`-PverifyAddCommand + -PverifyGameplay` 连跑 3 次无 `id -1`。
+
+**为什么没当场修**：只复现过一次，之后同路径两次正常；先记录并给出修法，避免在无法稳定复现时盲改。
+
 ## P1：结构上不干净，但现在还能忍
 
 4. **`command ↔ client` 循环**：`ReloaderCommands` 为了 `gui` 节点 import 了 `ClientCommands`。
