@@ -56,6 +56,7 @@ import java.util.List;
 public final class AddCommandCheck {
     private enum Stage {
         OPEN_CREATE, WAIT_CREATE_SCREEN, WAIT_WORLD, RUN_COMMAND, VERIFY,
+        SECOND_ADD, SECOND_VERIFY,
         WATCH_COPY, WATCH_WAIT, WATCH_VERIFY, DONE
     }
 
@@ -146,6 +147,17 @@ public final class AddCommandCheck {
     private static final String VERIFY_WORLDGEN =
             System.getProperty("modreloader.verifyWorldgen", "").trim();
 
+    /**
+     * Optional second in-world add ({@code -PverifyAddCommand2=<jar>} +
+     * {@code -PverifyAddCommand2ModId=<id>}): "a second fei-tier mod in the same
+     * session". The second jar is added after the first one is verified.
+     */
+    private static final String SECOND_JAR =
+            System.getProperty("modreloader.verifyAddCommand2", "").trim();
+    private static final String SECOND_MOD_ID =
+            System.getProperty("modreloader.verifyAddCommand2ModId", "").trim();
+
+
     private AddCommandCheck() {
     }
 
@@ -175,6 +187,8 @@ public final class AddCommandCheck {
             case WAIT_WORLD -> waitForWorld(mc);
             case RUN_COMMAND -> runCommand(mc, jar);
             case VERIFY -> verify(mc, jar);
+            case SECOND_ADD -> secondAdd(mc);
+            case SECOND_VERIFY -> secondVerify(mc);
             case WATCH_COPY -> watchCopy(mc);
             case WATCH_WAIT -> watchWait(mc);
             case WATCH_VERIFY -> watchVerify(mc);
@@ -356,8 +370,81 @@ public final class AddCommandCheck {
         if (VERIFY_DATAPACK && !verifyDatapack(mc)) {
             return;
         }
+        ModReloader.LOGGER.info("[AddCmdCheck] primary add verified: {}", EXPECT_MOD_ID);
+        if (!SECOND_JAR.isEmpty()) {
+            stage = Stage.SECOND_ADD;
+            ticks = 0;
+            return;
+        }
+        continueAfterAdds();
+    }
+
+    /** Finishes the add phase (after the optional second add). */
+    private static void continueAfterAdds() {
         ModReloader.LOGGER.info("[AddCmdCheck] RESULT: PASS");
         advanceAfterVerify();
+    }
+
+    private static void secondAdd(Minecraft mc) {
+        Path jar = Path.of(SECOND_JAR).toAbsolutePath().normalize();
+        if (!Files.isRegularFile(jar)) {
+            fail("second add: not a file: " + jar);
+            return;
+        }
+        if (SECOND_MOD_ID.isEmpty()) {
+            fail("second add: -PverifyAddCommand2ModId is required with -PverifyAddCommand2");
+            return;
+        }
+        ModReloader.LOGGER.info("[AddCmdCheck] second in-world add: {} (expecting {})",
+                jar, SECOND_MOD_ID);
+        if (!addJar(mc, jar)) {
+            return;
+        }
+        stage = Stage.SECOND_VERIFY;
+        ticks = 0;
+    }
+
+    private static void secondVerify(Minecraft mc) {
+        if (ticks < 20) {
+            return;
+        }
+        boolean loaded = ModList.get().isLoaded(SECOND_MOD_ID);
+        boolean first = ModList.get().isLoaded(EXPECT_MOD_ID);
+        boolean container = ModList.get().getModContainerById(SECOND_MOD_ID).isPresent();
+        ModReloader.LOGGER.info(
+                "[AddCmdCheck] second fei-tier mod: {} isLoaded={} container={} (first {} still loaded={})",
+                SECOND_MOD_ID, loaded, container, EXPECT_MOD_ID, first);
+        if (!loaded || !container) {
+            fail("the second in-world add did not load " + SECOND_MOD_ID);
+            return;
+        }
+        if (!first) {
+            fail("the first hot-added mod " + EXPECT_MOD_ID + " disappeared after the second add");
+            return;
+        }
+        ModReloader.LOGGER.info("[AddCmdCheck] SECOND ADD RESULT: PASS "
+                + "(both hot-added mods are live in one session)");
+        continueAfterAdds();
+    }
+
+    /** Executes /modreloader add for {@code jar}; returns false after failing. */
+    private static boolean addJar(Minecraft mc, Path jar) {
+        CommandDispatcher<CommandSourceStack> dispatcher = ReloaderCommands.dispatcher();
+        if (dispatcher == null) {
+            fail("client command dispatcher was never captured");
+            return false;
+        }
+        String path = jar.toAbsolutePath().normalize().toString();
+        String command = "modreloader add " + (path.contains(" ") ? "\"" + path + "\"" : path);
+        try {
+            CommandSourceStack source = mc.player.createCommandSourceStack();
+            int result = dispatcher.execute(command, source);
+            ModReloader.LOGGER.info("[AddCmdCheck] /{} returned {}", command, result);
+            return true;
+        } catch (Throwable t) {
+            fail("executing /" + command + " threw " + t);
+            return false;
+        }
     }
 
     /**

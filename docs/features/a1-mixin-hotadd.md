@@ -351,3 +351,37 @@ src/dev/java/dev/modreloader/dev/   # 独立 source set，不进发布 jar
 ```
 
 `A1Spike` 已删除；`-Pa1` 入口已移除。
+
+## 10. 第二个妃级模组（同一会话，2026-11-16）与存档回读的现状
+
+### 10.1 第二个妃级模组：PASS
+
+A1.2 之前只验证过"一个妃级模组"。现在 `AddCommandCheck` 支持第二个 in-world add
+（`-PverifyAddCommand2=<jar>` + `-PverifyAddCommand2ModId=<id>`）：第一个加完并断言后，用同一条命令路径再加一个，
+断言两边都在 `ModList` 里、第一个没被搞坏。
+
+```bash
+./gradlew runClient \
+  -PverifyAddCommand=<dogfood.jar> -PverifyAddCommandModId=exnihilosatellitium \
+  -PverifyAddCommand2=/tmp/lanmods/lanserverproperties-1.13.2-neoforge.jar \
+  -PverifyAddCommand2ModId=lanserverproperties
+```
+
+实测（2026-11-16 20:2x，dev client）：`primary add verified: exnihilosatellitium` →
+`second in-world add: …lanserverproperties…` →
+`second fei-tier mod: lanserverproperties isLoaded=true container=true (first exnihilosatellitium still loaded=true)` →
+`SECOND ADD RESULT: PASS` → `AddCmdCheck RESULT: PASS`。
+即：**同一会话里两次 in-world add（贵妃级 + 妃级、含 4 个 mixin + 布局变更）都成立**，没有互相污染。
+
+### 10.2 存档回读：内容路径早已 PASS，"退到标题再重开"的自动化没做成
+
+- **存档可读**（AGENTS §6 的一项）在内容路径上已有证据：[t4-fixture](../../experiments/t4-fixture/README.md)：
+  专用服热加方块 → 放置 → 存盘 → **重启读档** `isT4Block=true RESULT: PASS`（贵妃级 add-only 的 id 稳定）。
+- 本轮尝试把"in-world add → 保存 → 退到标题 → 重开同一存档 → 断言模组仍活、方块仍在"也自动化
+  （`-PverifySaveReadback` + `-PverifySaveReadbackBlock=<block>`）。**两次运行都在 `Minecraft.disconnect(...)` 卡死**：
+  jcmd 线程转储显示 Render thread 停在 `Minecraft.disconnect → Minecraft.runTick → Window.updateDisplay → glfwSwapBuffers`
+  （`DISCONNECT` 内部会跑一次 `runTick`），同会话早前还出现过 `GLFW: Failed to locate a primary monitor`。
+  这更像**环境/显示层**问题而不是热加代码本身，但连续两次卡死不可接受，**该路径已从 harness 里移除**，
+  并在 status 记为已知问题 30；不宣称"客户端内保存→重开"已验证。
+- 想要覆盖同一件事、又不需要 GL 的做法：用专用服跑（无窗口），把块放好后 `stop`，再带 jar 重启读档——
+  这正是 t4-fixture 已经做的；等有稳定的显示环境再考虑把客户端内的重开路径加回来。

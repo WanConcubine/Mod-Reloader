@@ -168,6 +168,16 @@ neoForge {
                 // the data pack has to be applied by the deferred world-start hook.
                 systemProperty 'modreloader.verifyDatapackAtTitle', 'true'
             }
+            if (providers.gradleProperty('verifyAddCommand2').orNull) {
+                // Optional second in-world add in the same session ("second
+                // fei-tier mod"); verified after the first one.
+                systemProperty 'modreloader.verifyAddCommand2',
+                        providers.gradleProperty('verifyAddCommand2').get()
+            }
+            if (providers.gradleProperty('verifyAddCommand2ModId').orNull) {
+                systemProperty 'modreloader.verifyAddCommand2ModId',
+                        providers.gradleProperty('verifyAddCommand2ModId').get()
+            }
             if (providers.gradleProperty('verifyItemDecorators').orNull) {
                 // With verifyAddCommand: the hot-added mod's
                 // RegisterItemDecorationsEvent listener must have run (lookup grew

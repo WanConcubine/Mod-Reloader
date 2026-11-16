@@ -64,6 +64,7 @@
 | **AT「晚注入」逐 jar 判定（只读，**已关闭**）** | 6 个带 AT 的 jar 共 295 条规则 / 151 个目标类（排除 datagen 后 146 个运行期目标）；**晚 AT 可行：0/6**（标题屏与进世界各一次；一个已加载目标就足够否掉）；ExtremeReactors2 的 AT **只服务 datagen**（0 运行期目标）→ 拒绝文案现在写清组成 | `-PverifyAtSpike=<jars>`；[matrix](features/hotadd-compatibility-matrix.md) §8.1 |
 | **注册表 id 重建的线程**（修已知问题 28） | commit/abort 的「清 `BLOCKSTATE_TO_ID_MAP` + `freezeData`」投到服务器线程（日志 `registry freeze: hopping from the thread 'Render thread' to the server thread`），`RegisterEvent` 重放仍留调用线程；**连跑 3 次** `-PverifyAddCommand` + `-PverifyGameplay`：3/3 `AddCmdCheck`/`GameplayCheck RESULT: PASS`、capability 五项 present、`stoneId 1 -> 1 (stable)`、0 处 `No value with id`；专用服 guifei commit 在 `[Server thread]` 直跑（`RESULT: PLACED` + datapack PASS）、嫔级 add 回归 PASS | 2026-11-16 19:27–19:31：`-PverifyAddCommand=<dogfood> -PverifyAddCommandModId=exnihilosatellitium -PverifyGameplay=true` / `runServer -PautoAdd=<t4fixture> -Pt4fixtureSelftest=true` / `-PverifyAddCommand=<EasyLAN>`；[t4-registry-hotadd.md](features/t4-registry-hotadd.md) §11 |
 | **WORLDGEN 边界（维度）** | 标题屏热加 `wgfixture`（数据夹具：1 个超平坦维度）→ **新建世界** → `dimension wgfixture:wgflat registered=true level=true`、`worldgen RESULT: PASS`（修前同一路径 `registered=false level=false`）；机制：`server == null` 时把包预注册进 `ResourceLoader.modResourcePacks`，world load 时随 `mod_data` 一起加载；**已存在的世界仍需重启**，专用服启动期仍不行 | 2026-11-16 20:1x：`-PverifyAddCommand=/tmp/wgfixture/wgfixture-1.0.0.jar -PverifyAddCommandModId=wgfixture -PverifyDatapackAtTitle=true -PverifyWorldgen=wgfixture:wgflat`；[t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) §10 |
+| **第二个妃级模组（同一会话）** | 先 in-world add 众星捧月（贵妃级），再 add `lanserverproperties`（妃级：4 mixin + 布局变更）：两边 `isLoaded=true`、第一个不受影响，`SECOND ADD RESULT: PASS` | 2026-11-16 20:2x：`-PverifyAddCommand=<dogfood> … -PverifyAddCommand2=<lsp> -PverifyAddCommand2ModId=lanserverproperties`；[a1-mixin-hotadd.md](features/a1-mixin-hotadd.md) §10 |
 | **工程底座** | `capabilities: module_injection … registry_sync … resource_packs` 全 ok（server `resource_packs=n/a`）；**无 `libs/` 可 `clean build`**；**21 个无游戏单测** | `./gradlew test`；[tech-debt.md](tech-debt.md) |
 | **JDK / JBR 21** | 编译用 Temurin 21 toolchain；**`runClient` 与 `runServer` 都**用 JBR 21.0.11 + `-XX:+AllowEnhancedClassRedefinition`（`enhancedRedefinition=true`） | 启动日志 `[ModReloader] JVM … enhancedRedefinition=` |
 
@@ -175,6 +176,14 @@
     client reload listener」时**跳过资源包注入与整次重载**（既省掉几秒，也去掉了无意义重载与 chunk 重镶的竞争面）。
     **未做**：真正的串行化（重载期间暂停/清空 chunk 重建任务），需要稳定复现再动。
 
+30. **客户端「保存 → 退到标题 → 重开同一存档」的自动化会卡死（2026-11-16，环境相关，未定位）**：为验证 AGENTS §6 的
+    「存档可读」，给 `AddCommandCheck` 加了 `-PverifySaveReadback`：放方块 → `saveEverything` → `mc.disconnect(...)` →
+    重开存档再断言。**连续两次运行都卡死**：jcmd 线程转储为 Render thread 停在
+    `Minecraft.disconnect → runTick → Window.updateDisplay → glfwSwapBuffers`（`disconnect` 内部会跑一次 `runTick`），
+    同会话早前还出现过 `GLFW: Failed to locate a primary monitor` —— 更像显示环境不可用，而不是热加逻辑问题。
+    处理：**该 harness 路径已删除**（不把会卡死的自动化留在仓库里），存档回读的既有证据仍是专用服 t4-fixture 的重启读档。
+    要在无显示环境覆盖同一件事，应该走专用服（无 GL）路径。
+
 ## 下一步
 
 > 下一会话从 **P2-4**（A1 产品化）或 **P3** 开始；P1-2/P1-3/P2-1/P2-2/P2-3 已完成或已收口。所有 harness 命令见 [AGENTS §2](../AGENTS.md)，细节在对应 feature 文档。
@@ -187,7 +196,7 @@
 | **P2-1** | 剩余一次性事件 | ~~`RegisterItemDecorationsEvent`~~ **已完成**（`ItemDecoratorReplay` + `client-fixture`）；剩下的是逐个判死的清单：`RegisterLayerDefinitions`（要重建 `EntityModelSet`）、`ColorResolvers`、`ModifyDefaultComponentsEvent` 等，结论已写进 [client-registration-audit.md](features/client-registration-audit.md) §7.1 | 已有 harness 的必须 PASS；其余在 §7.1 写明为什么不做 |
 | **P2-2** | ~~剩余 behavior 事件~~ **已完成 2026-11-16** | 11 个 behavior + 剩下的 silent 逐个给了结论：`RegisterItemDecorationsEvent`/`RegisterGuiLayersEvent` 变 covered；其余写进 [client-registration-audit.md](features/client-registration-audit.md) §7.1（框架启动后关闭、没有 subject、改已注册对象风险等） | 每个要么变 covered，要么在 §7.1 写清为什么不做（已满足） |
 | **P2-3** | 贵妃级下一层（**删除/更新结论已完成 2026-11-16**） | datapack 删除：**实测不可能**（deselect 后 id 从 selected 消失，但 required `mod_data` 聚合包把子包重新加回来，`selectedPacks` 仍有它、recipes 164 / loot 75 仍在）；更新：不做（聚合包 children 启动期固定 + `SecureJar` 已绑定，等价 managed relaunch）→ [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) §9 + 回归 `-PverifyDatapackRemove`。剩：WORLDGEN 与 P1-2 合并 | 结论已进 feature 文档；`-PverifyDatapackRemove` PASS |
-| **P2-4** | A1 产品化 | 构造后 listener 回滚 / 存档回读 / 第二个妃级模组 / 服务端+客户端同时妃级 | 每项 harness PASS + 文档 |
+| **P2-4** | A1 产品化（**部分完成 2026-11-16**） | ✅ **第二个妃级模组**（同一会话，`-PverifyAddCommand2`，PASS）；存档回读：内容路径已有 t4-fixture 重启读档 PASS，**客户端内「保存→退标题→重开」的 harness 两次卡死已移除**（已知问题 30，建议改走专用服）；仍缺：**构造后 listener 回滚**（NeoForge 无注销接口，需 bus 快照/恢复）、**服务端+客户端同时妃级** | 每一项 harness PASS + 文档；剩两项未做 |
 | **P3** | GUI/watcher Phase 3/4、分析器校准（20–30 jar + AT/JiJ 维度）、`/modreload why`、B fallback、AT 文案、嵌套 mod 容器 | 见 [tech-debt.md](tech-debt.md) 与对应 feature 文档 | 各自文档的判据 |
 
 ### 验收清单（给自己/所有者）
@@ -206,7 +215,7 @@
 
 已知问题 27（1.4.2 创造栏缺失）仍需要那台机器的 `logs/latest.log` 才能继续，不阻塞上面任何一项。
 
-已完成（保留参考，细节见 history 与对应 feature 文档）：**WORLDGEN 边界（标题屏热加 + 新世界可用维度）**；**datapack 删除/更新结论**；**客户端重放：HUD 层 + 物品装饰（含首个 client fixture）**；**AT 晚注入逐 jar 判死（0/6）**；**注册表 id 重建的线程（服务器线程 hop）**；**多人连接后注册表 id 同步**；**MixinRuntime 反射化（构建不再需要 `libs/`）**；
+已完成（保留参考，细节见 history 与对应 feature 文档）：**第二个妃级模组（同一会话，in-world 连续两次 add）**；**WORLDGEN 边界（标题屏热加 + 新世界可用维度）**；**datapack 删除/更新结论**；**客户端重放：HUD 层 + 物品装饰（含首个 client fixture）**；**AT 晚注入逐 jar 判死（0/6）**；**注册表 id 重建的线程（服务器线程 hop）**；**多人连接后注册表 id 同步**；**MixinRuntime 反射化（构建不再需要 `libs/`）**；
 **AT 晚注入量测（结论：不做，P1-1 复核）**；**JiJ 内嵌依赖抽取**；**datapack 热加载**；**dogfood 玩法验收 + 五个客户端 bug**；
 **兼容性矩阵首轮 + AT/缺依赖的变更前拒绝**；**注册审计**；**capability 重放**。
 
@@ -214,6 +223,13 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近几条。
 
+- **2026-11-16（A1 产品化的两小步：第二个妃级模组 PASS；客户端内「保存→重开」卡死并撤掉）**：
+  `AddCommandCheck` 新增 `-PverifyAddCommand2` / `-PverifyAddCommand2ModId`：先 in-world add 众星捧月（贵妃级），再用同一条命令路径
+  加 `lanserverproperties`（妃级），两边 `isLoaded=true`、第一个不受影响 → `SECOND ADD RESULT: PASS`（20:2x，干净的复跑）。
+  另外试了 `-PverifySaveReadback`（放方块 → 保存 → `mc.disconnect` 退标题 → 重开存档 → 断言模组/方块还在）：
+  **两次都卡死在 `Minecraft.disconnect → runTick → glfwSwapBuffers`**（jcmd 转储；同会话还出现过
+  `GLFW: Failed to locate a primary monitor`），判定为显示环境问题、但连续卡死不可接受 → **该路径已从 harness 删除**，
+  记为已知问题 30；存档可读的既有证据仍是 t4-fixture 的专用服重启读档。P2-4 还剩构造后 listener 回滚与服务端+客户端同时妃级。
 - **2026-11-16（WORLDGEN 边界：从「需重启」改写为「需新世界」）**：新增 `experiments/worldgen-fixture`（只有数据：一个超平坦维度
   `wgfixture:wgflat`）与 `-PverifyWorldgen=<维度 id>`。**修前**标题屏热加 → 新建世界：`registered=false level=false`
   （注入点在 `ServerStartedEvent`，世界已经加载完，WORLDGEN 层补不上）。**修法**：`DatapackStage` 在 `server == null` 时先把

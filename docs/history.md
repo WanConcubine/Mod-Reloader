@@ -299,3 +299,19 @@
   初始化（`findResourcePacks` 懒加载），`preregister` 只能 warn 并退回 `defer`，WORLDGEN 仍不可用（要覆盖得在热加前触发一次
   `findResourcePacks`，没做）。文档：[t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) §10、status 表尺/已知问题 19、
   [ADR-0009](decisions/0009-datapack-hotadd.md) 补注（不改结论）、AGENTS §3.16。
+
+- **（A1 产品化两小步：第二个妃级模组 PASS；客户端内保存→重开的自动化卡死并撤掉 / P2-4 一部分）**：
+  ① `AddCommandCheck` 新增 `-PverifyAddCommand2=<jar>` + `-PverifyAddCommand2ModId=<id>`：第一个 add 验证完后，
+  用同一条命令路径再加第二个，断言两边都在 ModList、第一个没被破坏。实测（2026-11-16 20:2x，干净的复跑）：
+  `primary add verified: exnihilosatellitium` → `second fei-tier mod: lanserverproperties isLoaded=true container=true
+  (first exnihilosatellitium still loaded=true)` → `SECOND ADD RESULT: PASS` → `AddCmdCheck RESULT: PASS`。
+  也就是说同一会话里「贵妃级 + 妃级（4 mixin + 布局变更）」连续两次 in-world add 成立。
+  ② 为了补 AGENTS §6 的「存档可读」，先写了 `-PverifySaveReadback`（放 `exnihilosatellitium:wooden_crucible` →
+  `saveEverything` → `mc.disconnect(new TitleScreen())` → `createWorldOpenFlows().openWorld(levelId, …)` → 重开后断言模组仍活、方块仍在）。
+  **两次运行都卡死**：第一次 level id 取错（`getWorldPath(ROOT).getFileName()` 得到 `"."`），第二次卡在
+  `Minecraft.disconnect → runTick → Window.updateDisplay → glfwSwapBuffers`（jcmd Thread.print 证据），同会话早些时候还出现过
+  `GLFW: Failed to locate a primary monitor`。判断：`disconnect` 内部会跑一次 `runTick`，在显示/交换缓冲不可用时直接阻塞；
+  这是环境问题但后果是"自动化永久卡住"，不可接受 → **删掉整条路径**（enum/阶段/属性/build.gradle 映射都清掉），
+  记为已知问题 30，并写明「要覆盖同一件事就走专用服（无 GL）路径」——存档可读的既有证据仍是 t4-fixture 的
+  「热加 → 放方块 → 存盘 → 重启读档 `isT4Block=true`」。文档：[a1-mixin-hotadd.md](features/a1-mixin-hotadd.md) §10、
+  status 表尺/已知问题 30/下一步（P2-4 剩构造后 listener 回滚、服务端+客户端同时妃级）。
