@@ -165,6 +165,9 @@ public final class GameplayCheck {
             if (!checkMenuScreens()) {
                 return;
             }
+            if (!checkClientRegistrations()) {
+                return;
+            }
             setupFuture = new CompletableFuture<>();
             server.execute(() -> {
                 try {
@@ -347,6 +350,77 @@ public final class GameplayCheck {
                 total, modId, missing);
         if (total > 0 && !missing.isEmpty()) {
             fail("the hot-added mod's GUIs have no screen factory: " + missing);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Client-side registrations that are replayed by
+     * {@code client/ClientRegistrationReplay}: block entity renderers must be
+     * instantiated for the mod's block entities, item tints must exist, and the
+     * mod's fluid types must have client extensions.
+     */
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static boolean checkClientRegistrations() {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+
+        Object renderersObject = dev.modreloader.hotadd.UnsafeAccess.get(
+                mc.getBlockEntityRenderDispatcher(),
+                net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher.class,
+                "renderers");
+        java.util.Set<Object> rendered = renderersObject instanceof java.util.Map<?, ?> map
+                ? new java.util.HashSet<>(map.keySet())
+                : java.util.Set.of();
+        List<String> missingRenderers = new ArrayList<>();
+        int beTypes = 0;
+        for (var holder : BuiltInRegistries.BLOCK_ENTITY_TYPE.holders().toList()) {
+            ResourceLocation key = holder.unwrapKey()
+                    .map(resourceKey -> resourceKey.location()).orElse(null);
+            if (key == null || !modId.equals(key.getNamespace())) {
+                continue;
+            }
+            beTypes++;
+            if (!rendered.contains(holder.value())) {
+                missingRenderers.add(key.toString());
+            }
+        }
+
+        Object itemColorsObject = dev.modreloader.hotadd.UnsafeAccess.get(
+                mc.getItemColors(), net.minecraft.client.color.item.ItemColors.class, "itemColors");
+        boolean hasBucketTint = itemColorsObject instanceof java.util.Map<?, ?> map
+                && map.containsKey(item(modId + ":porcelain_bucket"));
+        int tint = mc.getItemColors().getColor(new ItemStack(item(modId + ":porcelain_bucket")), 1);
+
+        Object extensionsObject = dev.modreloader.hotadd.UnsafeAccess.getStatic(
+                net.neoforged.neoforge.client.extensions.common.ClientExtensionsManager.class,
+                "FLUID_TYPE_EXTENSIONS");
+        int fluids = 0;
+        if (extensionsObject instanceof java.util.Map<?, ?> map) {
+            for (Object fluidType : map.keySet()) {
+                ResourceLocation key = net.neoforged.neoforge.registries.NeoForgeRegistries.FLUID_TYPES
+                        .getKey((net.neoforged.neoforge.fluids.FluidType) fluidType);
+                if (key != null && modId.equals(key.getNamespace())) {
+                    fluids++;
+                }
+            }
+        }
+
+        ModReloader.LOGGER.info(
+                "[GameplayCheck] client registrations: beRenderers {}/{} (missing={}), "
+                        + "porcelainBucketTintRegistered={} (tint={}), fluidExtensions={}",
+                beTypes - missingRenderers.size(), beTypes, missingRenderers,
+                hasBucketTint, tint, fluids);
+        if (beTypes > 0 && !missingRenderers.isEmpty()) {
+            fail("block entity renderers missing for " + missingRenderers);
+            return false;
+        }
+        if (!hasBucketTint) {
+            fail("no item color handler registered for " + modId + ":porcelain_bucket");
+            return false;
+        }
+        if (fluids == 0) {
+            fail("no client extensions for " + modId + " fluid types");
             return false;
         }
         return true;

@@ -17,7 +17,8 @@
 | 3 | 筛子：放筛子 → 装铁网 → 放泥土（只接受已注册输入）→ 连点 240 tick | 掉 `cobblestone_pebble x6`、`andesite x5`、`granite x5`、`diorite x6`、`deepslate x3`、`grass_seeds x1` |
 | 4 | 真实 3×3 合成：铁锭×2 + 木棍×2 | 命中 `exnihilosatellitium:iron_hammer` |
 | 5 | 机器 GUI 的 screen factory（`MenuScreens`） | 2 个 menu type 全部有 screen（`missing=[]`） |
-| 6 | 创造物品栏渲染 40 tick（`-PverifyCreative`） | 不崩，`defaults=4`，PASS |
+| 6 | 客户端注册：BE 渲染器 / 物品染色 / 流体扩展 | `beRenderers 6/6 (missing=[])`、瓷桶染色已注册、`fluidExtensions=3` |
+| 7 | 创造物品栏渲染 40 tick（`-PverifyCreative`） | 不崩，`defaults=4`，PASS |
 
 ```bash
 ./gradlew runClient \
@@ -83,6 +84,39 @@ creative RESULT: PASS
 [GameplayCheck] menu screens: 2 type(s) in exnihilosatellitium, missing=[]
 ```
 
+### 2.3 桶/坩埚内部内容不渲染、瓷桶颜色不对（已修）
+
+同一个「启动期一次性事件」问题还有三处，且比 GUI 更隐蔽：**方块本体在，但内部内容不画**——
+桶里的流体、筛网上的物品、坩埚里的熔融物都空着；瓷桶的流体颜色也不对。
+
+根因链：
+
+1. `EntityRenderersEvent.RegisterRenderers` / `RegisterColorHandlersEvent` /
+   `RegisterClientExtensionsEvent` 都只在启动时 fire 一次；
+2. 渲染器 provider 表（`BlockEntityRenderers.PROVIDERS`）重放是安全的（纯 `put`），
+   **但真正的渲染器实例是启动时由 `BlockEntityRenderDispatcher.onResourceManagerReload`
+   从 provider 烤出来的**——只放 provider 不重建 dispatcher，就永远不会实例化；
+3. 颜色处理（`ItemColors`/`BlockColors`）也是纯 `put`，幂等；
+4. 客户端扩展（`ClientExtensionsManager` 的四个静态 map）**重复 key 会抛异常**，不能直接重放。
+
+修法（`client/ClientRegistrationReplay`）：
+
+- 重放 `RegisterRenderers`，然后显式调 `BlockEntityRenderDispatcher` / `EntityRenderDispatcher`
+  的 `onResourceManagerReload`，用新 provider 重建实例；
+- 重放 `RegisterColorHandlersEvent.Block` / `.Item`（幂等）；
+- 扩展事件：四个静态 map 先换成临时 map → 重放 → 把「原 map 里没有的」条目合并回去 → 还原原 map。
+
+```text
+[ModReloader] renderers replayed; block entity renderers rebuilt
+[ModReloader] color handlers replayed
+[ModReloader] client extensions replayed: 3 new
+[GameplayCheck] client registrations: beRenderers 6/6 (missing=[]),
+                porcelainBucketTintRegistered=true (tint=-1), fluidExtensions=3
+```
+
+> 注：瓷桶空桶时 handler 返回 `0xFFFFFFFF`，在 Java 里就是 `-1`，所以断言查的是「`ItemColors` 的 map 里有这个 item」，
+> 而不是 tint 值。
+
 ## 3. 手动清单（待所有者）
 
 用 `-PverifyGameplayKeepOpen=true` 起一个热加后的世界（检查完留在世界里；该世界已开 LAN/作弊，
@@ -101,10 +135,11 @@ creative RESULT: PASS
 - **多人**：两端「登录前热加」未验证；连接后热加仍不支持（注册表快照）。
 - **删除 / 更新**：仍是 add-only。
 - 桶/坩埚/堆肥只有手动清单，没有自动断言（需要流体/热量/时间的组合状态）。
-- **其它客户端注册事件还没重放**（同样的「启动期一次性事件」问题）：`EntityRenderersEvent.RegisterRenderers`
-  （block entity 渲染器——桶/坩埚内部内容会不显示）、`RegisterColorHandlersEvent`（物品/方块染色）、
-  `RegisterClientExtensionsEvent`（流体外观）、`RegisterClientReloadListenersEvent`（客户端 reload listener）。
-  这些事件要么在 key 重复时抛异常、要么依赖启动时构建好的 dispatcher，需要单独设计重放策略。
+- **客户端注册还剩两项没重放**：`RegisterClientReloadListenersEvent`（客户端侧机器数据，主要给 JEI 用；
+  本环境没装 JEI，且真 manager 里会重复注册 listener、无法区分新旧，需要临时 manager + diff）、
+  `EntityRenderersEvent.RegisterLayerDefinitions`（模型层在启动时已 bake，热加渲染器若需要新 layer 会失败；
+  众星捧月的机器/桶/筛用的是现成模型，没踩到）。`RegisterColorHandlersEvent.ColorResolvers`（群系着色 resolver）同样没重放。
+- **实体渲染器**：事件已重放、`EntityRenderDispatcher` 也重建了，但众星捧月没有实体，未实测。
 - **机器 GUI 交互**：screen 已注册且能开，但放取物品/按钮没有自动断言（手动清单里）。
 - `DEFAULT_TABS` 是 NeoForge 私有字段；如果将来改名，`reset` 只会 warn，
   创造物品栏会退回「重复页签 → 越界」的旧行为（`-PverifyCreative` 会在 dev 抓到）。

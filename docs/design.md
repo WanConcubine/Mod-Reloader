@@ -111,6 +111,7 @@ mods/*.jar
 - **顺序不变量**：datapack 阶段必须在注册表提交之后——数据里的 item id 要对着已提交的注册表解析。
 - **端无关**：`PlatformHooks.reloadDataPacks` 由两端各自取服务器（集成 / 专用）；不在服务器线程时投递过去再等。
 - **幂等**：pack id = `mod/<modId>`；已有数据（标题屏热加 + 世界加载已发现）直接短路。
+- **客户端注册重放**：`ClientRegistrationReplay` 重放 key mappings / menu screens / renderers（并重建两个 dispatcher）/颜色 / 客户端扩展；`DEFAULT_TABS` 先清空再 `sortTabs()`（该方法非幂等）。
 - **单向提交**：注册表无删除接口，datapack 只 add；失败后运行时标记 dirty、只能重启。详见 [features/t4-registry-hotadd.md](features/t4-registry-hotadd.md) / [features/t4-datapack-hotadd.md](features/t4-datapack-hotadd.md)、[ADR-0008](decisions/0008-t4-registry-adaptation-poc.md) / [ADR-0009](decisions/0009-datapack-hotadd.md)。
 
 ### Watcher / GUI（dev 初版）

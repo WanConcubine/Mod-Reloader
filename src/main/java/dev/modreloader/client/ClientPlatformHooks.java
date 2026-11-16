@@ -28,8 +28,9 @@ import java.util.Set;
 
 /**
  * Client implementation of {@link PlatformHooks}: key mappings, client setup,
- * resource packs, the client half of live connections, and command replay for
- * the integrated server.
+ * the client-side registrations NeoForge only performs at startup (menu screens,
+ * renderers, color handlers, client extensions), resource packs, the client half
+ * of live connections, and command replay for the integrated server.
  */
 public final class ClientPlatformHooks implements PlatformHooks {
     @Override
@@ -46,6 +47,7 @@ public final class ClientPlatformHooks implements PlatformHooks {
         queue.runTasks();
         container.acceptEvent(new RegisterKeyMappingsEvent(Minecraft.getInstance().options));
         replayMenuScreens(container);
+        ClientRegistrationReplay.replay(container);
     }
 
     /**
