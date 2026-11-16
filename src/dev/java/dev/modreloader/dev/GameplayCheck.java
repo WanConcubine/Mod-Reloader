@@ -110,6 +110,7 @@ public final class GameplayCheck {
 
     private static BlockPos hammerPos;
     private static BlockPos sievePos;
+    private static BlockPos machinePos;
     private static CompletableFuture<Setup> setupFuture;
     private static CompletableFuture<Verify> verifyFuture;
 
@@ -118,7 +119,7 @@ public final class GameplayCheck {
                          boolean ironHammerRecipeLoaded, String craftDetail) {
     }
 
-    private record Verify(List<String> sieveDrops, boolean pebbleInInventory) {
+    private record Verify(List<String> sieveDrops, boolean pebbleInInventory, boolean machineAlive) {
     }
 
     private GameplayCheck() {
@@ -300,6 +301,11 @@ public final class GameplayCheck {
         ItemInteractionResult insert = sieveState.useItemOn(dirt, level, player, InteractionHand.MAIN_HAND, hit);
         boolean insertAccepted = insert.consumesAction();
 
+        // Automatic machine: its block entity tick and its renderer both read
+        // ConfigValues, so this is the check for "the mod's config was loaded".
+        machinePos = base.offset(8, 0, 3);
+        level.setBlockAndUpdate(machinePos, block(modId + ":electric_sieve").defaultBlockState());
+
         // 4) Crafting: the iron hammer recipe (iron ingot + c:rods/wooden = stick).
         List<ItemStack> grid = new ArrayList<>(Collections.nCopies(9, ItemStack.EMPTY));
         // pattern: [" x ", " yx", "y  "] -> x=(1,0),(2,1); y=(1,1),(0,2)
@@ -443,11 +449,26 @@ public final class GameplayCheck {
             }
         }
 
+        Object configsByMod = dev.modreloader.hotadd.UnsafeAccess.get(
+                net.neoforged.fml.config.ConfigTracker.INSTANCE,
+                net.neoforged.fml.config.ConfigTracker.class, "configsByMod");
+        int configs = 0;
+        int loadedConfigs = 0;
+        if (configsByMod instanceof java.util.Map<?, ?> map && map.get(modId) instanceof java.util.List<?> list) {
+            configs = list.size();
+            for (Object entry : list) {
+                if (((net.neoforged.fml.config.ModConfig) entry).getLoadedConfig() != null) {
+                    loadedConfigs++;
+                }
+            }
+        }
+
         ModReloader.LOGGER.info(
                 "[GameplayCheck] client registrations: beRenderers {}/{} (missing={}), "
-                        + "porcelainBucketTintRegistered={} (tint={}), fluidExtensions={}",
+                        + "porcelainBucketTintRegistered={} (tint={}), fluidExtensions={}, "
+                        + "configs {}/{} loaded",
                 beTypes - missingRenderers.size(), beTypes, missingRenderers,
-                hasBucketTint, tint, fluids);
+                hasBucketTint, tint, fluids, loadedConfigs, configs);
         if (beTypes > 0 && !missingRenderers.isEmpty()) {
             fail("block entity renderers missing for " + missingRenderers);
             return false;
@@ -458,6 +479,11 @@ public final class GameplayCheck {
         }
         if (fluids == 0) {
             fail("no client extensions for " + modId + " fluid types");
+            return false;
+        }
+        if (configs > 0 && loadedConfigs != configs) {
+            fail("the hot-added mod's config was not loaded (" + loadedConfigs + "/" + configs
+                    + "); reading any config value throws");
             return false;
         }
         return true;
@@ -519,7 +545,8 @@ public final class GameplayCheck {
                     boolean inInventory = player.getInventory().items.stream()
                             .filter(stack -> !stack.isEmpty())
                             .anyMatch(stack -> itemId(stack).equals(id(modId + ":cobblestone_pebble")));
-                    verifyFuture.complete(new Verify(drops, inInventory));
+                    boolean machineAlive = machinePos != null && level.getBlockEntity(machinePos) != null;
+                    verifyFuture.complete(new Verify(drops, inInventory, machineAlive));
                 } catch (Throwable t) {
                     verifyFuture.completeExceptionally(t);
                 }
@@ -532,6 +559,11 @@ public final class GameplayCheck {
         Verify result = await(verifyFuture);
         ModReloader.LOGGER.info("[GameplayCheck] sieve after {} ticks: ground={}, pebbleInInventory={}",
                 SIEVE_WORK_TICKS + WAIT_TICKS, result.sieveDrops(), result.pebbleInInventory());
+        if (!result.machineAlive()) {
+            fail("the automatic machine's block entity disappeared at " + machinePos
+                    + " (config value read crashed the tick?)");
+            return;
+        }
         boolean pebbles = result.pebbleInInventory()
                 || hasItem(result.sieveDrops(), id(modId + ":cobblestone_pebble"));
         if (!pebbles) {

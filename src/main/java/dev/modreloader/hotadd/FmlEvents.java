@@ -38,6 +38,9 @@ public final class FmlEvents {
         context.setActiveContainer(container);
         try {
             construct.invoke(container);
+            // registerConfig() only records the spec; FML normally loads it in the
+            // startup sequence, so a hot-added mod would throw on the first read.
+            ModConfigs.load(container);
         } finally {
             context.setActiveContainer(null);
         }

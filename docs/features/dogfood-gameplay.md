@@ -19,7 +19,8 @@
 | 5 | 机器 GUI 的 screen factory（`MenuScreens`） | 2 个 menu type 全部有 screen（`missing=[]`） |
 | 6 | 客户端注册：BE 渲染器 / 物品染色 / 流体扩展 | `beRenderers 6/6 (missing=[])`、瓷桶染色已注册、`fluidExtensions=3` |
 | 7 | 物品图标模型 | `181/181 resolved, missing=[]` |
-| 8 | 创造物品栏渲染 40 tick（`-PverifyCreative`） | 不崩，`defaults=4`，PASS |
+| 8 | 自动机器的 tick + 渲染（读配置值） | 机器 BE 存活、配置 `1/1 loaded` |
+| 9 | 创造物品栏渲染 40 tick（`-PverifyCreative`） | 不崩，`defaults=4`，PASS |
 
 ```bash
 ./gradlew runClient \
@@ -143,6 +144,36 @@ creative RESULT: PASS
 [GameplayCheck] RESULT: PASS
 ```
 
+### 2.5 放自动机器就崩：配置从未加载（已修）
+
+手动验收放 `electric_sieve`/`fuel_sieve`（自动筛）后客户端崩：
+
+```text
+Description: Rendering Block Entity
+java.lang.IllegalStateException: Cannot get config value before config is loaded.
+  at ModConfigSpec$ConfigValue.getRaw
+  at ...ModConfig.machineTicksPerOperation(ModConfig.java:88)
+  at ...MachineBlockEntity.ticksPerOperation
+  at ...client.MachineRenderer.render
+```
+
+根因：`ModContainer#registerConfig` 只是把 spec 登记到 `ConfigTracker`，**真正的加载发生在 FML 启动流程里**；
+热加 mod 的构造器登记了 config，却没有人加载它。于是第一次读配置值（机器的 tick 时长）就抛异常——
+放在服务器线程是 BE tick 崩，放在客户端是渲染线程崩。
+
+修法（`hotadd/ModConfigs`，在 `FmlEvents.construct` 里调用）：从
+`ConfigTracker.INSTANCE.configsByMod` 取出这个容器登记的 `ModConfig`，对每个未加载的调用包私有的
+`ConfigTracker.openConfig(config, configDir, null)`——它会解析 `<configDir>/<fileName>`、加载并 post
+`ModConfigEvent.Loading`（**不要再自己调 `loadConfig`**，那会二次读取，文件刚创建时还会触发 recreate 失败）。
+
+```text
+[ModReloader] loaded 1 config(s) for exnihilosatellitium: [exnihilosatellitium-common.toml]
+[GameplayCheck] client registrations: ..., configs 1/1 loaded
+```
+
+`SERVER` 类型的配置需要世界的 `serverconfig` 路径（`ServerLifecycleHooks` 里是私有 helper），
+目前**跳过并 warn**：把机器参数放在 SERVER config 的 mod 仍需要重启。
+
 ## 3. 手动清单（待所有者）
 
 用 `-PverifyGameplayKeepOpen=true` 起一个热加后的世界（检查完留在世界里；该世界已开 LAN/作弊，
@@ -166,6 +197,7 @@ creative RESULT: PASS
   `EntityRenderersEvent.RegisterLayerDefinitions`（模型层在启动时已 bake，热加渲染器若需要新 layer 会失败；
   众星捧月的机器/桶/筛用的是现成模型，没踩到）。`RegisterColorHandlersEvent.ColorResolvers`（群系着色 resolver）同样没重放。
 - **实体渲染器**：事件已重放、`EntityRenderDispatcher` 也重建了，但众星捧月没有实体，未实测。
-- **机器 GUI 交互**：screen 已注册且能开，但放取物品/按钮没有自动断言（手动清单里）。
+- **机器 GUI 交互**：screen 已注册且能开，机器 BE 的 tick/渲染也不再崩（配置已加载），但放取物品/按钮没有自动断言（手动清单里）。
+- **`SERVER` 类型 config**：热加 mod 若注册 `SERVER` config，目前跳过（需要世界 `serverconfig` 路径），要重启。
 - `DEFAULT_TABS` 是 NeoForge 私有字段；如果将来改名，`reset` 只会 warn，
   创造物品栏会退回「重复页签 → 越界」的旧行为（`-PverifyCreative` 会在 dev 抓到）。
