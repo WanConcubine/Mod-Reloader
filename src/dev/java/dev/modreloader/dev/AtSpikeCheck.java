@@ -2,6 +2,7 @@ package dev.modreloader.dev;
 
 import dev.modreloader.ModReloader;
 import dev.modreloader.hotadd.JvmAccess;
+import dev.modreloader.inspect.AccessTransformerRules;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractButton;
 import net.minecraft.client.gui.screens.worldselection.CreateWorldScreen;
@@ -9,9 +10,7 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.lang.instrument.Instrumentation;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -21,8 +20,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
 
 /**
  * Dev-only, read-only measurement for the "apply access transformers late" idea.
@@ -40,6 +37,13 @@ import java.util.zip.ZipFile;
  * already loaded, "late AT" can only rescue a vanishing fraction and the
  * conclusion is "restart or soft restart", not "implement it".
  *
+ * <p>Since 2026-11-16 it also answers the decisive question per jar: is
+ * <strong>every</strong> runtime AT target still unloaded at this moment? (One
+ * already-loaded target is enough to make late AT impossible.) Datagen-only
+ * targets are excluded — a playing game never loads {@code RecipeProvider} — and
+ * a jar whose ATs are entirely datagen-only is reported as such, because
+ * refusing it "for having ATs" would be a false positive.
+ *
  * <p>{@code -PverifyAtSpike=<jar>[,<jar>...]}. It creates a throwaway world to
  * get the in-world numbers; nothing is hot-added and nothing is written.
  */
@@ -47,7 +51,6 @@ public final class AtSpikeCheck {
     private static final int TITLE_SETTLE_TICKS = 100;
     private static final int WORLD_SETTLE_TICKS = 20;
     private static final int TIMEOUT_TICKS = 20 * 240;
-    private static final String AT_PATH = "META-INF/accesstransformer.cfg";
 
     private enum Stage {
         WAIT_TITLE, MEASURE_TITLE, OPEN_CREATE, WAIT_CREATE_SCREEN, WAIT_WORLD, MEASURE_WORLD, DONE
@@ -181,50 +184,91 @@ public final class AtSpikeCheck {
         Set<String> loaded = loadedClassNames();
         ModReloader.LOGGER.info("[AtSpike] --- {} : {} loaded classes, world={} ---",
                 when, loaded.size(), mc.level != null);
+        int jars = 0;
+        int viableJars = 0;
+        int datagenOnlyJars = 0;
         for (Path jar : JARS) {
             try {
-                report(jar, when, loaded);
+                Verdict verdict = report(jar, when, loaded);
+                if (verdict == null) {
+                    continue;
+                }
+                jars++;
+                if (verdict.viable()) {
+                    viableJars++;
+                }
+                if (verdict.datagenOnly()) {
+                    datagenOnlyJars++;
+                }
             } catch (Throwable t) {
                 ModReloader.LOGGER.error("[AtSpike] cannot measure {}", jar.getFileName(), t);
             }
         }
+        ModReloader.LOGGER.info(
+                "[AtSpike] SUMMARY [{}]: {} jar(s) with ATs; late-AT viable on {} of them "
+                        + "({} jar(s) have datagen-only ATs)",
+                when, jars, viableJars, datagenOnlyJars);
     }
 
-    private static void report(Path jar, String when, Set<String> loaded) throws IOException {
-        Map<String, Integer> rules = readAccessTransformer(jar);
-        if (rules.isEmpty()) {
-            ModReloader.LOGGER.info("[AtSpike] {} [{}]: no {}", jar.getFileName(), when, AT_PATH);
-            return;
+    /** Per-jar answer to "could the late-AT idea work for this jar, at this moment?". */
+    private record Verdict(boolean viable, boolean datagenOnly) {
+    }
+
+    private static Verdict report(Path jar, String when, Set<String> loaded) throws IOException {
+        AccessTransformerRules rules = AccessTransformerRules.read(jar);
+        if (rules.ruleCount() == 0) {
+            ModReloader.LOGGER.info("[AtSpike] {} [{}]: no {}", jar.getFileName(), when,
+                    AccessTransformerRules.ENTRY);
+            return null;
         }
-        int totalRules = rules.values().stream().mapToInt(Integer::intValue).sum();
         Map<String, int[]> buckets = new HashMap<>();  // bucket -> {classes, loaded}
+        List<String> runtimeLoaded = new ArrayList<>();
         Set<String> unloaded = new TreeSet<>();
-        int classes = 0;
-        int classesLoaded = 0;
-        for (Map.Entry<String, Integer> entry : rules.entrySet()) {
-            String target = entry.getKey();
-            classes++;
+        for (String target : rules.targets()) {
             boolean isLoaded = loaded.contains(target) || loaded.contains(target + "$");
             int[] bucket = buckets.computeIfAbsent(bucketOf(target), key -> new int[2]);
             bucket[0]++;
             if (isLoaded) {
-                classesLoaded++;
                 bucket[1]++;
+                if (!AccessTransformerRules.isDatagenClass(target)) {
+                    runtimeLoaded.add(target);
+                }
             } else {
                 unloaded.add(target);
             }
         }
-        int unloadedCount = classes - classesLoaded;
+        int classes = rules.targetCount();
+        int classesLoaded = classes - unloaded.size();
         ModReloader.LOGGER.info(
-                "[AtSpike] {} [{}]: rules={} targets={} loaded={} unloaded={} ({}) | {}",
-                jar.getFileName(), when, totalRules, classes, classesLoaded, unloadedCount,
-                percent(unloadedCount, classes), describeBuckets(buckets));
+                "[AtSpike] {} [{}]: {} | targets={} loaded={} unloaded={} ({}) | {}",
+                jar.getFileName(), when, rules.describe(), classes, classesLoaded, unloaded.size(),
+                percent(unloaded.size(), classes), describeBuckets(buckets));
         if (!unloaded.isEmpty()) {
             List<String> sample = unloaded.stream().limit(8).toList();
             ModReloader.LOGGER.info("[AtSpike] {} [{}]: unloaded sample {}", jar.getFileName(), when,
-                    sample.size() == unloadedCount ? sample
-                            : sample + " ... (" + unloadedCount + " total)");
+                    sample.size() == unloaded.size() ? sample
+                            : sample + " ... (" + unloaded.size() + " total)");
         }
+
+        // The decisive question: could a late AT (applied at hot-add time) still
+        // reach every class this jar's AT rules need? One already-loaded runtime
+        // target is enough to answer "no" - a class cannot be re-transformed
+        // safely once it is defined.
+        boolean datagenOnly = rules.datagenOnly();
+        boolean viable = !datagenOnly && runtimeLoaded.isEmpty();
+        ModReloader.LOGGER.info(
+                "[AtSpike] {} [{}]: late-AT viable here: {} ({} runtime target(s), {} already "
+                        + "loaded{})",
+                jar.getFileName(), when, viable ? "YES" : "NO",
+                rules.runtimeTargets().size(), runtimeLoaded.size(),
+                datagenOnly ? "; every target is a datagen class"
+                        : runtimeLoaded.isEmpty() ? "" : ": " + sampleOf(runtimeLoaded));
+        return new Verdict(viable, datagenOnly);
+    }
+
+    /** Up to five names, for a one-line log. */
+    private static List<String> sampleOf(List<String> names) {
+        return names.size() <= 5 ? names : new ArrayList<>(names.subList(0, 5));
     }
 
     private static String describeBuckets(Map<String, int[]> buckets) {
@@ -237,6 +281,9 @@ public final class AtSpikeCheck {
     }
 
     private static String bucketOf(String className) {
+        if (AccessTransformerRules.isDatagenClass(className)) {
+            return "datagen";
+        }
         if (className.startsWith("net.minecraft.")) {
             return "vanilla";
         }
@@ -252,35 +299,6 @@ public final class AtSpikeCheck {
         }
         return String.format(java.util.Locale.ROOT, "%.0f%% still unloaded",
                 part * 100.0 / whole);
-    }
-
-    /** AT class name -> number of rules that mention it. */
-    private static Map<String, Integer> readAccessTransformer(Path jar) throws IOException {
-        Map<String, Integer> rules = new HashMap<>();
-        try (ZipFile zip = new ZipFile(jar.toFile())) {
-            ZipEntry entry = zip.getEntry(AT_PATH);
-            if (entry == null) {
-                return rules;
-            }
-            String text;
-            try (InputStream in = zip.getInputStream(entry)) {
-                text = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-            }
-            for (String line : text.split("\\R")) {
-                String trimmed = line.trim();
-                if (trimmed.isEmpty() || trimmed.startsWith("#")) {
-                    continue;
-                }
-                String[] parts = trimmed.split("\\s+");
-                if (parts.length < 2) {
-                    continue;
-                }
-                // <modifier> <class> [member]; modifiers end with -f for "and final".
-                String className = parts[1].replace('/', '.');
-                rules.merge(className, 1, Integer::sum);
-            }
-        }
-        return rules;
     }
 
     private static Set<String> loadedClassNames() {

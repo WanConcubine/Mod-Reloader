@@ -97,8 +97,19 @@ public final class AddCommandCheck {
      */
     private static final boolean TITLE_ADD = Boolean.getBoolean("modreloader.verifyDatapackAtTitle");
 
+    /**
+     * Optional HUD-layer phase ({@code -PverifyGuiLayers=true}): the hot-added mod
+     * registers {@code RegisterGuiLayersEvent}, which fires once at startup. The
+     * check asserts the live layer list grew, kept its order and renders without
+     * crashing.
+     */
+    private static final boolean VERIFY_GUI_LAYERS = Boolean.getBoolean("modreloader.verifyGuiLayers");
+
     /** Recipes in the mod namespace measured before the add; -1 when not measured. */
     private static long recipesBefore = -1;
+
+    /** HUD layer ids measured before the add; {@code null} when not measured. */
+    private static List<ResourceLocation> layersBefore;
 
     private AddCommandCheck() {
     }
@@ -239,6 +250,11 @@ public final class AddCommandCheck {
             ModReloader.LOGGER.info("[AddCmdCheck] datapack baseline before add: "
                     + "recipes in {} = {} (a fresh world has none)", EXPECT_MOD_ID, recipesBefore);
         }
+        if (VERIFY_GUI_LAYERS) {
+            layersBefore = GuiLayers.ids();
+            ModReloader.LOGGER.info("[AddCmdCheck] GUI layer baseline before add: {} layer(s) {}",
+                    layersBefore.size(), layersBefore);
+        }
         String path = jar.toAbsolutePath().normalize().toString();
         String command = "modreloader add " + (path.contains(" ") ? "\"" + path + "\"" : path);
         try {
@@ -254,7 +270,10 @@ public final class AddCommandCheck {
     }
 
     private static void verify(Minecraft mc, Path jar) {
-        if (ticks < 20) {
+        // With the HUD-layer phase, hold in the world long enough that the new
+        // layers are drawn on every frame before they are judged: a replay that
+        // registers a layer whose render() throws must fail this harness.
+        if (ticks < (VERIFY_GUI_LAYERS ? 60 : 20)) {
             return;
         }
         // The command reports through chat + log; the state we assert is ModList.
@@ -278,11 +297,63 @@ public final class AddCommandCheck {
                     + ", container=" + container + ")");
             return;
         }
+        if (VERIFY_GUI_LAYERS && !verifyGuiLayers(mc)) {
+            return;
+        }
         if (VERIFY_DATAPACK && !verifyDatapack(mc)) {
             return;
         }
         ModReloader.LOGGER.info("[AddCmdCheck] RESULT: PASS");
         advanceAfterVerify();
+    }
+
+    /**
+     * Asserts that the hot-added mod's {@code RegisterGuiLayersEvent} listener ran.
+     *
+     * <p>Measured properties, not "it did not throw": the live HUD layer list grew,
+     * the new ids belong to the hot-added mod, every pre-existing layer kept its
+     * relative order (the replay swaps a copy of the list in, so a bad merge would
+     * show up here), and the client is still in the world after the layers were
+     * rendered for {@code 60} ticks — the HUD draws every frame in that window.
+     */
+    private static boolean verifyGuiLayers(Minecraft mc) {
+        if (layersBefore == null) {
+            fail("GUI layer check: the layer list was not captured before the add");
+            return false;
+        }
+        List<ResourceLocation> after = GuiLayers.ids();
+        List<ResourceLocation> added = GuiLayers.added(layersBefore, after);
+        int inNamespace = GuiLayers.countInNamespace(EXPECT_MOD_ID);
+        ModReloader.LOGGER.info(
+                "[AddCmdCheck] GUI layers: {} -> {} layer(s); {} new, {} in namespace {}; new: {}",
+                layersBefore.size(), after.size(), added.size(), inNamespace, EXPECT_MOD_ID, added);
+        if (after.isEmpty()) {
+            fail("cannot read the live GUI layer list; refusing to guess");
+            return false;
+        }
+        if (added.isEmpty()) {
+            fail("RegisterGuiLayersEvent was not replayed: the HUD layer list did not grow");
+            return false;
+        }
+        if (inNamespace == 0) {
+            fail("the new GUI layers are not in the namespace of " + EXPECT_MOD_ID
+                    + " (new: " + added + ")");
+            return false;
+        }
+        if (!GuiLayers.containsInOrder(after, layersBefore)) {
+            fail("the replay reordered or dropped pre-existing GUI layers: before="
+                    + layersBefore + ", after=" + after);
+            return false;
+        }
+        if (mc.level == null || mc.player == null || mc.screen != null) {
+            fail("the client is not in the world after rendering the new HUD layers (screen="
+                    + (mc.screen == null ? "null" : mc.screen.getClass().getSimpleName()) + ")");
+            return false;
+        }
+        ModReloader.LOGGER.info("[AddCmdCheck] GUI layers RESULT: PASS "
+                        + "(replayed, order preserved, {} ticks rendered with the new layers)",
+                ticks);
+        return true;
     }
 
     /**

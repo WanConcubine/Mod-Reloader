@@ -53,6 +53,9 @@ import java.util.Set;
  *   <li><b>client reload listeners</b>: not replayed — the real
  *       {@code ReloadableResourceManager} would end up with duplicate listeners
  *       and no way to tell them apart (documented in known issue 21).</li>
+ *   <li><b>GUI layers</b> ({@code RegisterGuiLayersEvent}): the API orders a new
+ *       layer relative to an existing id, so this one replays against a copy of
+ *       the live HUD layer list and swaps the copy in — see {@link GuiLayerReplay}.</li>
  * </ul>
  *
  * <p>Model layers ({@code EntityRenderersEvent.RegisterLayerDefinitions}) are
@@ -71,6 +74,7 @@ public final class ClientRegistrationReplay {
         replayClientExtensions(container);
         replayClientReloadListeners(container);
         replayTooltipComponentFactories(container);
+        GuiLayerReplay.replay(container);
     }
 
     /**

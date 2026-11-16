@@ -125,6 +125,8 @@ public final class RegistrationAudit {
             "net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent",
             "net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent",
             "net.neoforged.neoforge.client.event.RegisterClientTooltipComponentFactoriesEvent",
+            // client/GuiLayerReplay (copy of the live GuiLayerManager list, then swap)
+            "net.neoforged.neoforge.client.event.RegisterGuiLayersEvent",
             // NetworkAdaptation / RegistryStage / CapabilityReplay
             "net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent",
             "net.neoforged.neoforge.registries.RegisterEvent",

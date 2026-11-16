@@ -77,6 +77,19 @@ class RegistrationAuditTest {
     }
 
     @Test
+    void guiLayersAreCoveredSinceTheReplayExists() {
+        // Was the first "silent" bucket entry (AppleSkin's hunger overlays): the
+        // mod keeps working, its HUD element just never draws. ClientRegistrationReplay
+        // -> GuiLayerReplay now replays the event against a copy of the live list.
+        RegistrationAudit.Report report = classify(true,
+                "net.neoforged.neoforge.client.event.RegisterGuiLayersEvent");
+
+        assertEquals(RegistrationAudit.Severity.COVERED, report.entries().get(0).severity());
+        assertTrue(report.events(RegistrationAudit.Severity.SILENT).isEmpty());
+        assertFalse(report.fatal());
+    }
+
+    @Test
     void recurringAndDatagenEventsNeedNoReplay() {
         assertEquals(RegistrationAudit.Severity.RECURRING, classify(true,
                 "net.neoforged.neoforge.client.event.RenderLevelStageEvent")
@@ -96,24 +109,26 @@ class RegistrationAuditTest {
 
     @Test
     void unknownEventsAreSilentWarnings() {
+        // Item decorations are still the "no replay yet" bucket; GUI layers moved
+        // to covered on 2026-11-16 (see guiLayersAreCoveredSinceTheReplayExists).
         RegistrationAudit.Report report = classify(true,
-                "net.neoforged.neoforge.client.event.RegisterGuiLayersEvent");
+                "net.neoforged.neoforge.client.event.RegisterItemDecorationsEvent");
 
         assertEquals(RegistrationAudit.Severity.SILENT,
                 report.entries().get(0).severity());
         assertFalse(report.fatal());
-        assertTrue(report.line().contains("silent [client.event.RegisterGuiLayersEvent]"),
+        assertTrue(report.line().contains("silent [client.event.RegisterItemDecorationsEvent]"),
                 report.line());
     }
 
     @Test
     void clientEventsAreNotGradedOnADedicatedServer() {
-        String guiLayers = "net.neoforged.neoforge.client.event.RegisterGuiLayersEvent";
+        String itemDecorations = "net.neoforged.neoforge.client.event.RegisterItemDecorationsEvent";
         assertEquals(RegistrationAudit.Severity.NOT_THIS_SIDE,
-                RegistrationAudit.classify(Set.of(guiLayers), false, List.of())
+                RegistrationAudit.classify(Set.of(itemDecorations), false, List.of())
                         .entries().get(0).severity());
         assertEquals(RegistrationAudit.Severity.SILENT,
-                RegistrationAudit.classify(Set.of(guiLayers), true, List.of())
+                RegistrationAudit.classify(Set.of(itemDecorations), true, List.of())
                         .entries().get(0).severity());
         // A server-side gap is still reported on the server.
         assertEquals(RegistrationAudit.Severity.BEHAVIOR,

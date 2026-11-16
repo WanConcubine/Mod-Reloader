@@ -19,7 +19,7 @@ NeoForge 的 mod bus 上有一批**只在启动时 fire 一次**的注册事件�
 
 | 形态 | 例子 | 用户怎么看到 |
 |---|---|---|
-| 静默 | `RegisterGuiLayersEvent`、`RegisterItemDecorationsEvent` | 少了个 HUD 元素，没人知道 |
+| 静默 | `RegisterGuiLayersEvent`（已补）、`RegisterItemDecorationsEvent` | 少了个 HUD 元素 / 装饰，没人知道 |
 | 点一下崩 | `RegisterClientTooltipComponentFactoriesEvent`、`RegisterRecipeBookCategoriesEvent`、`RegisterParticleProvidersEvent`、`RegisterShadersEvent` | 悬停/开配方书/粒子/自定义渲染时崩 |
 | 行为变了 | `RegisterCapabilitiesEvent`、`ModifyDefaultComponentsEvent` | 机器不工作、组件缺失 |
 | 加载期崩 | `RegisterSpriteSourceTypesEvent`（资源重载） | 热加当次就崩 |
@@ -71,7 +71,7 @@ NeoForge 的 mod bus 上有一批**只在启动时 fire 一次**的注册事件�
 | `datagen` | `GatherDataEvent` / `RegisterGameTestsEvent` | 无 |
 | `crash` | 用到就崩：`RegisterParticleProvidersEvent`、`RegisterRecipeBookCategoriesEvent`、`RegisterShadersEvent`、`RegisterSpriteSourceTypesEvent` | **变更前拒绝**（`FailureKind.CLIENT_REGISTRATION`） |
 | `behavior` | 能跑但功能变了：默认组件、自注册 registry、属性/刷怪/POI、模型层（已 bake） | 大声 warn，**不拒绝** |
-| `silent` | 没有已知症状（HUD 层、物品装饰、维度特效…） | warn |
+| `silent` | 没有已知症状（物品装饰、维度特效、地图装饰…；HUD 层已移出，见下） | warn |
 | `base` | 抽象事件基类（`EntityRenderersEvent`、`RegisterColorHandlersEvent`、`DataPackRegistryEvent`）；真正 fire 的是具体子类 | 仅记录 |
 | `other-side` | 专用服上的纯客户端事件（那里本来就不会 fire） | 仅记录 |
 
@@ -105,7 +105,7 @@ registration audit <ids>: N mod-bus event(s); covered [...]; crash [...]; behavi
 它做两件只读的事：① 扫描给定 jar 并逐条打印分级（**不热加**，所以 AT/缺依赖的 jar 也能进语料）；
 ② 现造两个最小 mod jar（`neoforge.mods.toml` + 一个字段引用事件），
 一个引用 `RegisterParticleProvidersEvent`（必须被 `HotAddEngine` 以 `CLIENT_REGISTRATION` 拒绝在 `VALIDATE`），
-一个只引用 `RegisterGuiLayersEvent`（必须**不**被判致命）。
+一个只引用仍然没有重放的 `RegisterItemDecorationsEvent`（必须**不**被判致命）。
 
 ## 4. 事件清单
 
@@ -117,7 +117,7 @@ registration audit <ids>: N mod-bus event(s); covered [...]; crash [...]; behavi
 `RegisterKeyMappingsEvent`、`RegisterMenuScreensEvent`、`EntityRenderersEvent.RegisterRenderers`、
 `RegisterColorHandlersEvent.Block/.Item`、`RegisterClientExtensionsEvent`、`RegisterClientReloadListenersEvent`、
 `RegisterClientTooltipComponentFactoriesEvent`、`RegisterPayloadHandlersEvent`、`RegisterEvent`、
-`RegisterCapabilitiesEvent`（`CapabilityReplay`，2026-11-16）。
+`RegisterCapabilitiesEvent`（`CapabilityReplay`，2026-11-16）、`RegisterGuiLayersEvent`（`client/GuiLayerReplay`，2026-11-16）。
 
 **已知崩溃（拒绝）**：`RegisterParticleProvidersEvent`、`RegisterRecipeBookCategoriesEvent`、`RegisterShadersEvent`、`RegisterSpriteSourceTypesEvent`。
 
@@ -126,7 +126,7 @@ registration audit <ids>: N mod-bus event(s); covered [...]; crash [...]; behavi
 `BlockEntityTypeAddBlocksEvent`、`RegisterDataMapTypesEvent`、`RegisterCauldronFluidContentEvent`、`AddPackFindersEvent`、
 `ExtendPoiTypesEvent`、`EntityRenderersEvent.RegisterLayerDefinitions`。
 
-**无已知症状（warn）**：`RegisterGuiLayersEvent`、`RegisterItemDecorationsEvent`、`RegisterDimensionSpecialEffectsEvent`、
+**无已知症状（warn）**：`RegisterItemDecorationsEvent`、`RegisterDimensionSpecialEffectsEvent`、
 `RegisterDimensionTransitionScreenEvent`、`RegisterEntitySpectatorShadersEvent`、`RegisterJsonAnimationTypesEvent`、
 `RegisterMaterialAtlasesEvent`、`RegisterNamedRenderTypesEvent`、`RegisterPresetEditorsEvent`、`RegisterRenderBuffersEvent`、
 `RegisterMapDecorationRenderersEvent`、`RegisterTicketControllersEvent`。
@@ -139,13 +139,16 @@ Mekanism、MekanismGenerators、ExtremeReactors2），共 **129 处事件引用*
 
 | 计数 | covered | recurring | datagen | silent | behavior | crash | base |
 |---|---|---|---|---|---|---|---|
-| 129 | 66 | 24 | 6 | 19 | 10 | **3** | 1 |
+| 129 | **68** | 24 | 6 | **17** | 10 | **3** | 1 |
+
+（2026-11-16 19:48 复跑：`RegisterGuiLayersEvent` 从 `silent` 移入 `covered`，2 处引用 / AppleSkin 与 Mekanism 各 1 个 jar；
+总数仍是 129，没有任何当前 PASS 的模组变拒绝。）
 
 逐 jar（只列非空项）：
 
 | jar | 事件数 | 结果 |
 |---|---|---|
-| AppleSkin 3.0.9 | 4 | 3 covered + silent `RegisterGuiLayersEvent` → **仍 PASS** |
+| AppleSkin 3.0.9 | 4 | **4 covered**（含 `RegisterGuiLayersEvent`）→ 仍 PASS；HUD 层已有 `-PverifyGuiLayers` 断言 |
 | Searchables 1.0.2 / EasyLAN / lanserverproperties / mcwifipnp | 0 | 没有启动期事件 |
 | Controlling 19.0.5 | 1 | covered（`FMLClientSetupEvent`） |
 | 众星捧月 1.5.0 | 10 | **9 covered（含 capabilities）** + datagen |
@@ -154,7 +157,7 @@ Mekanism、MekanismGenerators、ExtremeReactors2），共 **129 处事件引用*
 | jecharacters 4.5.15 | 3 | 1 covered + silent `ModConfigEvent.Loading/.Reloading`（config 已由 `ModConfigs` 直接加载，事件本身不 fire） |
 | AE2 19.2.18 | 24 | 11 covered + 1 **crash**（粒子）+ 2 behavior + 5 silent + 3 recurring + 2 datagen |
 | guideme 21.1.22 | 10 | 5 covered + 4 recurring + datagen |
-| Mekanism 10.7.19 | 38 | 12 covered + **2 crash**（粒子、shader）+ 7 behavior + 8 silent + 8 recurring + 1 base |
+| Mekanism 10.7.19 | 38 | 13 covered（含 HUD 层）+ **2 crash**（粒子、shader）+ 7 behavior + 7 silent + 8 recurring + 1 base |
 | MekanismGenerators | 13 | 7 covered + behavior 模型层 + 2 silent + 3 recurring |
 | ExtremeReactors2 2.4.9 | 11 | 7 covered（含 capabilities）+ 1 silent + 2 recurring + datagen |
 
@@ -168,7 +171,12 @@ Mekanism、MekanismGenerators、ExtremeReactors2），共 **129 处事件引用*
   我们从来没有重放这个事件 → 热加会话里这些 capability 没登记。2026-11-16 补了 `hotadd/CapabilityReplay`，
   `-PverifyCapabilities` 断言五项 provider 全 present，`-PskipCapabilityReplay=true` 反证全 MISSING（见 [dogfood-gameplay.md](dogfood-gameplay.md) §1.1）；
   本表随之把该事件从 `behavior` 移入 `covered`（61→66 covered，15→10 behavior）。
-- 下一批收益：`RegisterGuiLayersEvent`（3/16，HUD，静默）；`RegisterItemDecorationsEvent` / 模型层（成本更高）。
+- 2026-11-16 已补 `RegisterGuiLayersEvent`（实测语料里 2/16 个 jar 引用：AppleSkin、Mekanism；HUD 静默）：
+  `client/GuiLayerReplay` 对 live 层表副本重放再换入，harness `-PverifyAddCommand=<appleskin> -PverifyGuiLayers=true`
+  断言 25 → 31 层、6 个 `appleskin:*` 层、原有层顺序不变、渲染 60 tick 不崩。
+- 下一批收益：`RegisterItemDecorationsEvent`（物品装饰，静默；`ItemDecoratorHandler.DECORATOR_LOOKUP` 是静态
+  `ImmutableMap`，可照 `GuiLayerReplay` 的「读 live → 副本重放 → 换回」做法）、模型层
+  `EntityRenderersEvent.RegisterLayerDefinitions`（已 bake，要重建 `EntityModelSet`，成本更高）。
 - 没有 `unresolved`：16 个 jar 里所有 `net.neoforged.**Event` 都能加载（客户端）。
 
 ## 6. 验证
@@ -182,15 +190,21 @@ Mekanism、MekanismGenerators、ExtremeReactors2），共 **129 处事件引用*
 
 # 引擎集成回归：真实热加仍 PASS，且日志出现 audit 行
 ./gradlew runClient -PverifyCompat=/tmp/user-mods/appleskin-neoforge-mc1.21-3.0.9.jar
-#   registration audit [appleskin]: 4 mod-bus event(s); covered [...]; silent [client.event.RegisterGuiLayersEvent]
+#   registration audit [appleskin]: 4 mod-bus event(s); covered [..., client.event.RegisterGuiLayersEvent, ...]
 #   RESULT ... ok=true stage=NONE kind=NONE isLoaded=true
+
+# HUD 层重放的实测断言（AppleSkin 注册 6 个 appleskin:* 层）
+./gradlew runClient -PverifyAddCommand=/tmp/user-mods/appleskin-neoforge-mc1.21-3.0.9.jar \
+  -PverifyAddCommandModId=appleskin -PverifyGuiLayers=true
+#   [AddCmdCheck] GUI layers: 25 -> 31 layer(s); 6 new, 6 in namespace appleskin; ...
+#   [AddCmdCheck] GUI layers RESULT: PASS (replayed, order preserved, 60 ticks rendered with the new layers)
 ```
 
 专用服路径（2026-11-16 15:25，`runServer -PautoAdd=<appleskin>`，日志原文）：
 
 ```
 registration audit [appleskin]: 4 mod-bus event(s); covered [fml.event.lifecycle.FMLClientSetupEvent, network.event.RegisterPayloadHandlersEvent];
-  other-side [client.event.RegisterClientTooltipComponentFactoriesEvent, client.event.RegisterGuiLayersEvent]
+  other-side [client.event.RegisterClientTooltipComponentFactoriesEvent, client.event.RegisterGuiLayersEvent]   # 客户端事件在专用服不 fire，仅记录
 ```
 
 纯客户端事件在专用服上归入 `other-side`，服务端事件照常分级——`Class.forName` 在服务端不会因为事件类引用了客户端类型而失败。
@@ -201,8 +215,10 @@ registration audit [appleskin]: 4 mod-bus event(s); covered [fml.event.lifecycle
 [RegAudit] synthetic crash jar: 1 mod-bus event(s); crash [client.event.RegisterParticleProvidersEvent]
 [ModReloader] registration audit [regauditcrash]: 1 mod-bus event(s); crash [...]
 [RegAudit] engine on crash jar: ok=false stage=VALIDATE kind=CLIENT_REGISTRATION msg=[regauditcrash] registers [...]
-[RegAudit] synthetic silent jar: 1 mod-bus event(s); silent [client.event.RegisterGuiLayersEvent]
+[RegAudit] synthetic silent jar: 1 mod-bus event(s); silent [client.event.RegisterItemDecorationsEvent]
 [RegAudit] fatal path graded=true refused=true silentNotFatal=true -> PASS
+# （合成 silent jar 的示例事件从 RegisterGuiLayersEvent 换成 RegisterItemDecorationsEvent：
+#   前者 2026-11-16 起是 covered，实例必须是仍然没重放的事件）
 ```
 
 ## 7. 边界与下一步

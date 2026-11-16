@@ -12,7 +12,9 @@
 （运行时自有 play 通道，跨进程两端 29475 行 id 一致；前提是两端热加同一批 jar）、**MixinRuntime 反射化（构建不再需要 `libs/`）**、
 **注册审计**（16 个真实 jar 的启动期事件清单；已知崩溃四类变更前拒绝，不再靠手写枚举碰运气）、
 **capability 重放**（`RegisterCapabilitiesEvent` 只投新容器；众星捧月桶/坩埚/机器的 item/fluid/energy provider 热加后可用）。
-同日收尾：in-world add 的 **id 重建竞态**（`No value with id -1`，已知问题 28）已修——「清 id + freeze」改在服务器线程执行，3 次回归 PASS。
+同日收尾：in-world add 的 **id 重建竞态**（`No value with id -1`，已知问题 28）已修——「清 id + freeze」改在服务器线程执行，3 次回归 PASS；
+**HUD 层（`RegisterGuiLayersEvent`）已重放**（AppleSkin 25→31 层、顺序不变、渲染 60 tick PASS）；
+**「晚注入 AT」按 jar 逐条判死**（6 个真实 jar 在两个时机都是 0/6 可行，见 status 表尺）。
 **硬边界**：access transformer（6/9 真实模组）、世界生成注册表、一次性启动事件的**重放**（审计只能报告/拒绝）、删除/更新、软重启未开始。
 失败回滚只覆盖 post-ModList / post-pack。按 [§6 契约](../AGENTS.md) 尚不算「完成」的项见文末「未验证」。
 
@@ -54,9 +56,10 @@
 | **AppleSkin 悬停食物崩溃（已修）** | **崩溃报告 `IllegalArgumentException: Unknown TooltipComponent` @ `ClientTooltipComponent.create`；根因：`RegisterClientTooltipComponentFactoriesEvent` 从未重放。修后 `tooltip component factories replayed: 1 new, 1 total`、`isLoaded=true`；**悬停渲染那一步还没复测**（需要鼠标）** | 2026-11-16 14:56（崩溃）/ 14:57（修复）：`run/crash-reports/crash-2026-11-16_14.56.09-client.txt` + `-PverifyCompat=<appleskin>` |
 | **JiJ 内嵌库抽取** | jecharacters `ok=true`、`modules [jecharacters, PinIn, JustEnoughCharacters.coremod.neoforge]`、资源包重载；ZeroCore2 + jecharacters 同进程回归 PASS | `-PverifyCompat=<jecharacters>`；[matrix](features/hotadd-compatibility-matrix.md) §5 |
 | **热加兼容性矩阵（首轮）** | 9 个真实模组：**2 PASS**（ZeroCore2 含 mixin、jecharacters）/ 6 个 AT 变更前拒绝 / 1 个缺依赖 | `-PverifyCompat=<jar>[,<jar>]`；[matrix](features/hotadd-compatibility-matrix.md) |
-| **注册审计（启动期事件）**（[ADR-0012](decisions/0012-registration-audit-severity.md)） | 16 个真实 jar、**129 处事件引用**：66 covered / 24 recurring / 6 datagen / 19 silent / **10 behavior** / **3 crash** / 1 base；3 处 crash 全在 AE2/Mekanism（本就被 AT 拒）→ 没有任何当前 PASS 的模组变成被拒；合成 jar 证明 crash 事件在 module 注入前被 `CLIENT_REGISTRATION` 拒绝；专用服上纯客户端事件记为 `other-side` | `-PverifyRegAudit=<jars>`；[client-registration-audit.md](features/client-registration-audit.md) §5 |
+| **注册审计（启动期事件）**（[ADR-0012](decisions/0012-registration-audit-severity.md)） | 16 个真实 jar、**129 处事件引用**：**68 covered** / 24 recurring / 6 datagen / **17 silent** / 10 behavior / **3 crash** / 1 base（2026-11-16 19:48 复跑，HUD 层移入 covered）；3 处 crash 全在 AE2/Mekanism（本就被 AT 拒）→ 没有任何当前 PASS 的模组变成被拒；合成 jar 证明 crash 事件在 module 注入前被 `CLIENT_REGISTRATION` 拒绝；专用服上纯客户端事件记为 `other-side` | `-PverifyRegAudit=<jars>`；[client-registration-audit.md](features/client-registration-audit.md) §5 |
+| **HUD 层重放（`RegisterGuiLayersEvent`）** | `client/GuiLayerReplay`：对 live `GuiLayerManager` 层表**副本**重放再整表换入（事件只能插入/包裹，不能删/改序），`acceptEvent` 只投新容器；AppleSkin 热加后 **25 → 31 层、6 个 `appleskin:*`、原有层顺序不变**，在世界里渲染 60 tick 不崩；审计把该事件从 `silent` 移入 `covered` | 2026-11-16 19:47：`-PverifyAddCommand=<appleskin> -PverifyAddCommandModId=appleskin -PverifyGuiLayers=true`；[client-registration-audit.md](features/client-registration-audit.md) §5 |
 | **capability 重放（`RegisterCapabilitiesEvent`）** | 众星捧月热加后五项全部 present：桶 item/fluid、坩埚 fluid、机器 item/energy；A/B：`-PskipCapabilityReplay=true` 时五项全 MISSING（FAIL），重放后 PASS；provider 计数 `item 16/48、fluid 24/27、energy 4/4`（本模组/总数） | `-PverifyCapabilities=<jar>`；[dogfood-gameplay.md](features/dogfood-gameplay.md) §1.1 |
-| **AT「晚注入」量测（只读）** | 6 个带 AT 的 jar 共 295 条规则 / 151 个目标类；标题屏 19%、进世界 8% 还没加载 → **结论：不做** | `-PverifyAtSpike=<jars>`；[matrix](features/hotadd-compatibility-matrix.md) §8 |
+| **AT「晚注入」逐 jar 判定（只读，**已关闭**）** | 6 个带 AT 的 jar 共 295 条规则 / 151 个目标类（排除 datagen 后 146 个运行期目标）；**晚 AT 可行：0/6**（标题屏与进世界各一次；一个已加载目标就足够否掉）；ExtremeReactors2 的 AT **只服务 datagen**（0 运行期目标）→ 拒绝文案现在写清组成 | `-PverifyAtSpike=<jars>`；[matrix](features/hotadd-compatibility-matrix.md) §8.1 |
 | **注册表 id 重建的线程**（修已知问题 28） | commit/abort 的「清 `BLOCKSTATE_TO_ID_MAP` + `freezeData`」投到服务器线程（日志 `registry freeze: hopping from the thread 'Render thread' to the server thread`），`RegisterEvent` 重放仍留调用线程；**连跑 3 次** `-PverifyAddCommand` + `-PverifyGameplay`：3/3 `AddCmdCheck`/`GameplayCheck RESULT: PASS`、capability 五项 present、`stoneId 1 -> 1 (stable)`、0 处 `No value with id`；专用服 guifei commit 在 `[Server thread]` 直跑（`RESULT: PLACED` + datapack PASS）、嫔级 add 回归 PASS | 2026-11-16 19:27–19:31：`-PverifyAddCommand=<dogfood> -PverifyAddCommandModId=exnihilosatellitium -PverifyGameplay=true` / `runServer -PautoAdd=<t4fixture> -Pt4fixtureSelftest=true` / `-PverifyAddCommand=<EasyLAN>`；[t4-registry-hotadd.md](features/t4-registry-hotadd.md) §11 |
 | **工程底座** | `capabilities: module_injection … registry_sync … resource_packs` 全 ok（server `resource_packs=n/a`）；**无 `libs/` 可 `clean build`**；**21 个无游戏单测** | `./gradlew test`；[tech-debt.md](tech-debt.md) |
 | **JDK / JBR 21** | 编译用 Temurin 21 toolchain；**`runClient` 与 `runServer` 都**用 JBR 21.0.11 + `-XX:+AllowEnhancedClassRedefinition`（`enhancedRedefinition=true`） | 启动日志 `[ModReloader] JVM … enhancedRedefinition=` |
@@ -118,12 +121,15 @@
 18. **贵妃级只到 add-only**：能热加方块/物品并保证存盘/重启可读，单人客户端资源包与创造栏、datapack、**多人连接后的 id 同步**都已验证（[t4-registry-hotadd.md](features/t4-registry-hotadd.md) §9）；但**客户端不装 jar 的多人场景**仍不行——而且比预想的硬：实测它会被 datapack 的配方同步直接踢下线，装回同一 jar 之前**连不回来**（§10）。jar / 资源 / payload channel 都无法从服务端同步，能同步的只有 id 映射。现在有告知层（[ADR-0011](decisions/0011-hotadd-must-inform-clients.md)）：通知 + 客户端 ack + 服务端 WARN；「有玩家在线时是否默认拒绝注册表内容热加」仍未决。实体类 post-register 事件未重放、删除/更新未做、提交后不可回滚。
 19. **datapack 热加载的边界**：只覆盖 `RegistryLayer.RELOADABLE`（战利品/附魔/伤害类型/纹饰/物品修饰器…）；维度/生物群系/结构属于 WORLDGEN 层，要世界加载才生效。存档会记录 `mod/<modId>` 这个 data pack，重启时若 jar 也在 `mods/` 里该包会出现两次（实测按 id 归并、计数不变、无报错，但不优雅）。失败文案必须强调「注册表已提交、运行时 dirty、请重启」。见 [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) §7。
 20. **创造页签排序非幂等（已修，留作坑）**：`CreativeModeTabRegistry.sortTabs()` 每次调用都往 `DEFAULT_TABS` 追加 HOTBAR/SEARCH/OP_BLOCKS/INVENTORY 且不清空，热加后再调一次 4→8，创造界面列 7/8 越界崩（`renderTabButton` 只有 7 张贴图）。修法：`afterRegistryContent()` 调 `sortTabs()` 前先清空 `DEFAULT_TABS`（失败只 warn）；回归 `-PverifyCreative`。
-21. **客户端启动期注册事件：仍然是一张手写清单（结构性问题）**：2026-11-16 实测 AppleSkin 悬停食物崩溃（`Unknown TooltipComponent`），根因是 `RegisterClientTooltipComponentFactoriesEvent` 没重放——第六次同类缺口。NeoForge 1.21.1 的 mod bus 上有一批一次性事件（sources 里 44 个顶层 `IModBusEvent` 实现 + 若干嵌套），我们只重放其中十几个，**漏一个就是一类 bug**，失败形态从静默到崩溃不等。已重放：`FMLClientSetupEvent` / `RegisterKeyMappingsEvent` / `RegisterMenuScreensEvent` / `EntityRenderersEvent.RegisterRenderers`（+ 重建两个 dispatcher）/ `RegisterColorHandlersEvent.Block/.Item` / `RegisterClientExtensionsEvent`（临时 map 合并）/ `RegisterClientReloadListenersEvent`（临时 manager + 按类名去重），并补齐 `ItemRenderer` 的 item→model 快照与 `RegisterClientTooltipComponentFactoriesEvent`（tooltip 组件工厂）。**仍未重放**：`RegisterLayerDefinitions`（模型层启动时已 bake）与 `ColorResolvers`（群系着色）。见 [dogfood-gameplay.md](features/dogfood-gameplay.md) §4。
+21. **客户端启动期注册事件：仍然是一张手写清单（结构性问题）**：2026-11-16 实测 AppleSkin 悬停食物崩溃（`Unknown TooltipComponent`），根因是 `RegisterClientTooltipComponentFactoriesEvent` 没重放——第六次同类缺口。NeoForge 1.21.1 的 mod bus 上有一批一次性事件（sources 里 44 个顶层 `IModBusEvent` 实现 + 若干嵌套），我们只重放其中十几个，**漏一个就是一类 bug**，失败形态从静默到崩溃不等。已重放：`FMLClientSetupEvent` / `RegisterKeyMappingsEvent` / `RegisterMenuScreensEvent` / `EntityRenderersEvent.RegisterRenderers`（+ 重建两个 dispatcher）/ `RegisterColorHandlersEvent.Block/.Item` / `RegisterClientExtensionsEvent`（临时 map 合并）/ `RegisterClientReloadListenersEvent`（临时 manager + 按类名去重），并补齐 `ItemRenderer` 的 item→model 快照、`RegisterClientTooltipComponentFactoriesEvent`（tooltip 组件工厂）与 `RegisterGuiLayersEvent`（HUD 层，`GuiLayerReplay`：live 层表副本重放再换入）。**仍未重放**：`RegisterItemDecorationsEvent`（物品装饰）、`RegisterLayerDefinitions`（模型层启动时已 bake）与 `ColorResolvers`（群系着色）。见 [dogfood-gameplay.md](features/dogfood-gameplay.md) §4。
     **2026-11-16 起有注册审计**（`-PverifyRegAudit`）：`VALIDATE` 打印每个 jar 的 covered/recurring/datagen/crash/behavior/silent 清单；
     已知「一用就崩」的四类（粒子 / 配方书 / shader / sprite source）像 AT 一样**变更前拒绝**（`FailureKind.CLIENT_REGISTRATION`），
     其余只 warn。清单仍然手写，但**漏了哪个现在是可报告、可排期的数据**，见 [client-registration-audit.md](features/client-registration-audit.md)。
 22. ✅ **专用服妃级热加（已修，留作坑）**：`build.gradle` 原来只给 `runClient` 配 JBR，于是 ZeroCore2 在专用服上 redefining `Slot` 会失败（`UnsupportedOperationException: attempted to change superclass or interfaces`，`ROLLBACK_PARTIAL`）。2026-11-16 把同一个 helper 用到 `runServer`（JBR + `-XX:+AllowEnhancedClassRedefinition`，JBR 缺失时 warn），实测 `redefined net.minecraft.world.inventory.Slot` + `hot-added [zerocore]`。教训：**客户端能过的 mixin 操作，服务端要单独验证一次**——JVM 参数不一致会让同一条路径表现不同。
-23. **access transformer 是热加的硬边界**：9 个真实模组里 6 个带 `META-INF/accesstransformer.cfg`；AT 只在类加载时由 FML 应用，热加不应用 → 依赖它的 mod 在构造时 `IllegalAccessError`（Jade 实测），而对已加载原版类做 AT 式 redefine 会丢 NeoForge patch。现在变更前拒绝（`FailureKind.ACCESS_TRANSFORMER` + UI 预检）。「晚注入」已量过（[matrix](features/hotadd-compatibility-matrix.md) §8）：151 个目标类里标题屏只有 19%、进世界 8% 还没加载，且集中在 datagen/服务端类——一个已加载目标缺规则就足够失败，**结论是不做**。
+23. **access transformer 是热加的硬边界**：9 个真实模组里 6 个带 `META-INF/accesstransformer.cfg`；AT 只在类加载时由 FML 应用，热加不应用 → 依赖它的 mod 在构造时 `IllegalAccessError`（Jade 实测），而对已加载原版类做 AT 式 redefine 会丢 NeoForge patch。现在变更前拒绝（`FailureKind.ACCESS_TRANSFORMER` + UI 预检）。「晚注入」已量过两轮（[matrix](features/hotadd-compatibility-matrix.md) §8 / §8.1）：第一轮 151 个目标类里标题屏 19%、进世界 8% 未加载；
+第二轮按「**每个 jar 是否所有运行期目标都未加载**」逐条判（排除 datagen）——**6 个 jar 在标题屏与进世界都是 0/6 可行**，
+所以「晚 AT」**彻底关闭**（不是「先量着看」）。附带：ExtremeReactors2 的 AT 只放宽 `RecipeProvider`（datagen 类），
+属于「AT 只服务 datagen」的误伤——放行仍不在结论内，但拒绝文案现在会打印 AT 组成（`inspect/AccessTransformerRules`）。
 24. **JiJ 的剩余边界**（内嵌库已能读到）：带 `mods.toml` 的嵌套 **mod** 只有 module、没有 `ModContainer`（`@Mod` 构造器不跑）；`isObfuscated: true` 跳过；coremod（`FMLCorePlugin`）**不会运行** → 类能加载但字节码变换不生效（jecharacters 的拼音搜索没有验证）。见 [matrix](features/hotadd-compatibility-matrix.md) §3.2。
 25. **已加载类的布局变更 / 无 JBR 的妃级热加（2026-11-16 实测修正）**：JBR 的 enhanced redefinition **可以**给已加载类加接口
     （`EditBox` 经 Searchables、`AbstractWidget` 经 LSP 都成功），所以「已加载 + 改接口」不是布局边界；
@@ -155,13 +161,11 @@
 
 ## 下一步
 
-> 下一会话从 **P0-2** 开始。所有 harness 命令见 [AGENTS §2](../AGENTS.md)，细节在对应 feature 文档。
+> 下一会话从 **P1-2** 开始。所有 harness 命令见 [AGENTS §2](../AGENTS.md)，细节在对应 feature 文档。
 > **热加类 harness 要求 `run/mods/` 里没有众星捧月 jar**（已加载就不能再热加）；备份在 `/tmp/dogfood-runmods-backup.jar`。
 
 | 优先 | 任务 | 关键点 / 落点 | 验收 |
 |---|---|---|---|
-| **P0-2** | 重放 `RegisterGuiLayersEvent`（语料 3/16，HUD 静默） | 先读 NeoForge 注册面（`LayeredDraw`）再定临时 sink/合并；加进 `RegistrationAudit.COVERED`；新 harness 断言层数 +1、渲染不崩 | `-PverifyRegAudit` 里该事件变 `covered`；harness `RESULT: PASS`；`-PverifyGameplay -PverifyCreative` 回归 |
-| **P1-1** | AT「晚注入」逐 jar 复核（只读） | 扩展 `dev/AtSpikeCheck`：每个 jar 输出「是否**所有** AT 目标都未加载（排除 datagen）」；决定这条是否彻底关闭 | 6 个 AT jar 跑一次，表补进 [matrix](features/hotadd-compatibility-matrix.md) §8 |
 | **P1-2** | WORLDGEN 边界实验 | 做一个带 dimension 的夹具：标题屏热加 → **新建世界** → 断言维度可进；决定「WORLDGEN 需重启」能否改写成「需新世界」 | 新 harness `-PverifyWorldgen` PASS + 文档 |
 | **P1-3** | Git 收尾 | CI（analyzer unittest + `./gradlew test`/`build`）、截图入 `docs/`、首个 tag `v0.1.0` | CI 绿 + tag |
 | **P2-1** | 剩余一次性事件 | `RegisterItemDecorationsEvent`；`EntityRenderersEvent.RegisterLayerDefinitions`（模型层已 bake，要重建 `EntityModelSet`，先调研成本） | 同 P0-2 |
@@ -186,7 +190,7 @@
 
 已知问题 27（1.4.2 创造栏缺失）仍需要那台机器的 `logs/latest.log` 才能继续，不阻塞上面任何一项。
 
-已完成（保留参考，细节见 history 与对应 feature 文档）：**注册表 id 重建的线程（服务器线程 hop）**；**多人连接后注册表 id 同步**；**MixinRuntime 反射化（构建不再需要 `libs/`）**；
+已完成（保留参考，细节见 history 与对应 feature 文档）：**HUD 层重放（`RegisterGuiLayersEvent`）**；**AT 晚注入逐 jar 判死（0/6）**；**注册表 id 重建的线程（服务器线程 hop）**；**多人连接后注册表 id 同步**；**MixinRuntime 反射化（构建不再需要 `libs/`）**；
 **AT 晚注入量测（结论：不做，P1-1 复核）**；**JiJ 内嵌依赖抽取**；**datapack 热加载**；**dogfood 玩法验收 + 五个客户端 bug**；
 **兼容性矩阵首轮 + AT/缺依赖的变更前拒绝**；**注册审计**；**capability 重放**。
 
@@ -194,6 +198,21 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近几条。
 
+- **2026-11-16（HUD 层重放：`RegisterGuiLayersEvent`，审计 silent 桶里第一个被补的）**：新增 `client/GuiLayerReplay`。
+  这个事件不能像别的重放那样投进空 sink——它的 API 是 `registerBelow/Above(VanillaGuiLayers.HOTBAR, …)`，
+  必须能看见已有层才能排序。做法：拿 live `GuiLayerManager` 的层表**副本**重放（`container.acceptEvent` 只跑新模组的监听器，
+  已加载模组不会二次注册），再把副本整表换入；事件只能插入/包裹，所以「副本 = live + 新层」。
+  从服务器线程触发时（聊天命令）把换入投到客户端线程，避免与 HUD 渲染并发。
+  审计里 `RegisterGuiLayersEvent` 从 `silent` 移入 `covered`（66→68 covered、19→17 silent；16 jar / 129 引用不变）。
+  证据：`-PverifyAddCommand=<appleskin> -PverifyAddCommandModId=appleskin -PverifyGuiLayers=true` →
+  `GUI layers: 25 -> 31 layer(s); 6 new, 6 in namespace appleskin`、`order preserved`、`60 ticks rendered`、RESULT: PASS；
+  `-PverifyRegAudit=<16 jars>` RESULT: PASS（合成 silent jar 的示例事件换成 `RegisterItemDecorationsEvent`）；
+  众星捧月 `-PverifyGameplay -PverifyCreative` 回归 PASS。22+6 个单测。
+- **2026-11-16（AT「晚注入」逐 jar 判死：0/6，这条关闭）**：`dev/AtSpikeCheck` 现在逐 jar 输出「**所有运行期 AT 目标**是否都未加载」，
+  datagen / gametest 目标排除（`inspect/AccessTransformerRules`，纯解析 + 6 个单测）。6 个真实 jar 在标题屏与进世界**都是 0/6 可行**
+  （Jade 32/39、JEI 9/12、Mekanism 38/45、AE2 26/33、guideme 16/17 已加载；ExtremeReactors2 的 AT 只针对 `RecipeProvider`，0 运行期目标）。
+  顺带把「AT 组成」写进拒绝文案（`57 rule(s) over 39 target class(es) (39 runtime, 0 datagen-only); e.g. […]`），
+  让「AT 只服务 datagen」的误伤变成可见事实（放行仍不在结论内）。表见 [matrix](features/hotadd-compatibility-matrix.md) §8.1。
 - **2026-11-16（in-world add 的 id 重建竞态修掉了：`No value with id -1`）**：18:50 一次性复现的客户端 chunk 解码崩溃，
   根因是 `RegistryStage.commit` 在调用线程（dev harness 里是 render 线程）做「清 `BLOCKSTATE_TO_ID_MAP`（= `Block.BLOCK_STATE_REGISTRY`）→ `freezeData()`」，
   而区块序列化在服务器线程上，清空到 bake 重建之间 `getId` 返回 -1，服务器把 -1 写进 palette。

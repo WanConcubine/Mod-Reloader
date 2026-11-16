@@ -169,9 +169,15 @@ public final class HotAddEngine {
                     // private vanilla member fail with IllegalAccessError during
                     // construction - which happens after mixins were applied and
                     // cannot be undone. Refuse before touching anything.
+                    //
+                    // The composition is part of the message on purpose: ATs are the
+                    // most common refusal (6 of 9 real mods), and some jars only widen
+                    // datagen classes a playing client never loads. The gate stays
+                    // conservative; the user gets the facts.
                     return fail(rollback, Stage.VALIDATE, FailureKind.ACCESS_TRANSFORMER,
-                            ids + " ships META-INF/accesstransformer.cfg; access transformers only "
-                                    + "apply at startup. Restart with the jar in mods/.");
+                            ids + " ships " + dev.modreloader.inspect.AccessTransformerRules.ENTRY
+                                    + " (" + accessTransformerComposition(jar) + "); access "
+                                    + "transformers only apply at startup. Restart with the jar in mods/.");
                 }
             } catch (Throwable t) {
                 ModReloader.LOGGER.warn("[ModReloader] cannot predict registry content for {}", jar, t);
@@ -507,6 +513,16 @@ public final class HotAddEngine {
                                 + "unstable until restarted", ids);
             }
             return fail(rollback, stage, kindFor(stage), message);
+        }
+    }
+
+    /** AT composition for the refusal message; never throws. */
+    private static String accessTransformerComposition(Path jar) {
+        try {
+            return dev.modreloader.inspect.AccessTransformerRules.read(jar).describe();
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn("[ModReloader] cannot read the access transformer of {}", jar, t);
+            return "composition unavailable";
         }
     }
 

@@ -280,9 +280,12 @@ java.lang.IllegalStateException: Cannot get config value before config is loaded
 - **多人**：连接后的注册表 id 同步已实现并跨进程验证（见 [t4-registry-hotadd.md](t4-registry-hotadd.md) §9）；众星捧月本身没有跑过「专用服 + 客户端两端都热加」的组合，dogfood 的多人玩法未验证。
 - **删除 / 更新**：仍是 add-only。
 - 桶/坩埚/堆肥只有手动清单，没有自动断言（需要流体/热量/时间的组合状态）。
-- **客户端注册还剩两项没重放**：`EntityRenderersEvent.RegisterLayerDefinitions`（模型层在启动时已 bake，
-  热加渲染器若需要新 layer 会失败；众星捧月的机器/桶/筛用的是现成模型，没踩到）与
-  `RegisterColorHandlersEvent.ColorResolvers`（群系着色 resolver）。
+- **客户端注册还剩三项没重放**：`EntityRenderersEvent.RegisterLayerDefinitions`（模型层在启动时已 bake，
+  热加渲染器若需要新 layer 会失败；众星捧月的机器/桶/筛用的是现成模型，没踩到）、
+  `RegisterColorHandlersEvent.ColorResolvers`（群系着色 resolver）与 `RegisterItemDecorationsEvent`
+  （物品装饰；`ItemDecoratorHandler.DECORATOR_LOOKUP` 是静态 `ImmutableMap`，可照 `GuiLayerReplay` 的做法补）。
+  HUD 层（`RegisterGuiLayersEvent`）已由 `client/GuiLayerReplay` 补上（2026-11-16），见
+  [client-registration-audit.md](client-registration-audit.md) §5。
 - **reload listener 按类名去重**：同一 mod 故意注册两个不同配置的同类别 listener 时只会保留一个（已知 mod 没有这么做的）。
 - **实体渲染器**：事件已重放、`EntityRenderDispatcher` 也重建了，但众星捧月没有实体，未实测。
 - **机器 GUI 交互**：screen 已注册且能开，机器 BE 的 tick/渲染也不再崩（配置已加载），但放取物品/按钮没有自动断言（手动清单里）。

@@ -168,6 +168,12 @@ neoForge {
                 // the data pack has to be applied by the deferred world-start hook.
                 systemProperty 'modreloader.verifyDatapackAtTitle', 'true'
             }
+            if (providers.gradleProperty('verifyGuiLayers').orNull) {
+                // With verifyAddCommand: the hot-added mod's RegisterGuiLayersEvent
+                // listener must have run (HUD layers present, order preserved,
+                // 60 ticks rendered without crashing).
+                systemProperty 'modreloader.verifyGuiLayers', 'true'
+            }
             if (providers.gradleProperty('skipCapabilityReplay').orNull) {
                 // A/B proof for the capability assertions: without the replay the
                 // dogfood's barrel/crucible/machine providers must be missing.

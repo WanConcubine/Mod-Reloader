@@ -141,9 +141,38 @@ jecharacters 原先因 JiJ 内嵌依赖在 CONSTRUCT 失败，修好抽取后转
 3. **代价与失败语义都不划算**：要在类定义期挂 transformer，和 NeoForge 的 patch 流水线、Mixin 的变换顺序竞争；
    而失败点会落在「注册表已提交、不可回滚」之后。相比之下，软重启（[ADR-0006](../decisions/0006-t4-managed-relaunch.md)）是确定能覆盖的办法。
 
-**顺带发现（记录，未做）**：ExtremeReactors2 唯一一条 AT 目标是 `net.minecraft.data.recipes.RecipeProvider`——datagen 类，
-运行期永不加载。也就是说「带 AT 就一律变更前拒绝」会误伤「AT 只服务 datagen」的模组。可做的小改进是：
-拒绝文案里写清 AT 目标的组成（已加载/未加载、是否 datagen 命名空间），让用户而不是框架去判断；**放行不在本次结论内**。
+### 8.1 逐 jar 判定：这条能不能彻底关掉？（2026-11-16 19:52 复跑，排除 datagen）
+
+上面的百分比回答的是「有多少目标还没加载」，但**决定性问题**是另一个：**有没有任何 jar 的
+所有运行期 AT 目标都还没加载**（只需要一个已加载目标，晚 AT 就不可能）。`dev/AtSpikeCheck` 现在逐 jar 直接输出这个判定，
+并把 datagen / gametest 目标排除在外（`inspect/AccessTransformerRules.isDatagenClass`，纯规则 + 6 个单测）。
+
+| jar | 运行期目标 | 标题屏已加载 | 进世界已加载 | 晚 AT 可行？ |
+|---|---|---|---|---|
+| Jade 15.10.6 | 39 | 32 | 35 | **否** |
+| JEI 19.27.0.34 | 12 | 9 | 11 | **否** |
+| Mekanism 10.7.19 | 45 | 38 | 42 | **否** |
+| AE2 19.2.18 | 33（另 4 个 datagen） | 26 | 33 | **否** |
+| guideme 21.1.22 | 17 | 16 | 16 | **否** |
+| ExtremeReactors2 2.4.9 | **0**（唯一目标 `net.minecraft.data.recipes.RecipeProvider` 是 datagen） | — | — | **n/a（AT 只服务 datagen）** |
+| **合计** | **146** | **121** | **137** | **0/6 可行** |
+
+日志原文（进世界那一刻）：
+
+```
+[AtSpike] Jade-...jar [in world]: late-AT viable here: NO (39 runtime target(s), 35 already loaded: [...])
+[AtSpike] ExtremeReactors2-...jar [in world]: late-AT viable here: NO (0 runtime target(s), 0 already loaded; every target is a datagen class)
+[AtSpike] SUMMARY [in world]: 6 jar(s) with ATs; late-AT viable on 0 of them (1 jar(s) have datagen-only ATs)
+```
+
+**结论：这条彻底关闭**（不再是「先量着看」）：6 个真实 jar 在两个时机上都没有一个满足「所有运行期目标都未加载」，
+连最理想的情形（标题屏、世界未加载）也是 0/6。
+
+**顺带把 datagen-only 的误伤变成可见事实**：ExtremeReactors2 的 AT 只放宽 `RecipeProvider`，运行期永不加载。
+放行仍然**不在本次结论内**（还有别的边界，例如它本身是贵妃级内容模组），但拒绝文案现在会写清 AT 的组成：
+`… ships META-INF/accesstransformer.cfg (1 rule(s) over 1 target class(es) (0 runtime, 1 datagen-only); every target
+is a datagen class, which a playing game never loads); access transformers only apply at startup. Restart …`
+（`inspect/AccessTransformerRules`，纯解析 + 6 个单测；UI 预检与 `-PverifyCompat` 都走同一条消息）。
 
 复现：`./gradlew runClient -PverifyAtSpike=<jar>[,<jar>]`。它会像 `-PverifyAddCommand` 那样新建一个世界来取「进世界」那组数字
 （会留下一个 `run/saves` 里的测试存档），除读类和读 jar 外不做任何写操作。

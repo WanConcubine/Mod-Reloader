@@ -201,3 +201,30 @@
   → commit 打在 `[Server thread]`（没有 hop 日志，`isSameThread()` 分支生效）、`stoneId 1 -> 1 (stable)`、`world saved; RESULT: PLACED`、
   `datapack (after hot-add) RESULT: PASS`；嫔级 `-PverifyAddCommand=<EasyLAN>` → `AddCmdCheck RESULT: PASS`（不经过 hop）。
   顺带记一笔：run3 的日志里有一条 authlib 取皮肤的 `JsonSyntaxException`（离线环境返回非 JSON），与本次改动无关。
+
+- **（HUD 层重放 / P0-2）**：注册审计 silent 桶里第一个被补的事件。`client/GuiLayerReplay` 把 live `GuiLayerManager`
+  的层表**副本**交给 `container.acceptEvent(new RegisterGuiLayersEvent(copy))`（只跑新模组的监听器），然后整表换入——
+  必须用副本是因为事件 API 是 `registerBelow/Above(VanillaGuiLayers.HOTBAR, …)`，投进空列表会 "ordered against an
+  unregistered layer"；整表换入是安全的，因为事件只能插入/包裹、不能删除或改序。从服务器线程（聊天命令）触发时，
+  换入投到客户端线程，避免与 HUD 渲染并发。`ClientRegistrationReplay.replay` 调它，审计把该事件从 `silent` 移入 `covered`。
+  harness：`AddCommandCheck` 新增 `-PverifyGuiLayers=true`（`dev/GuiLayers` 只读 live 层表）：add 前记基线，
+  add 后等 60 tick（HUD 每帧都在画新层），断言层数增长、新层属于该 mod 的命名空间、**原有层相对顺序不变**、仍在世界里且无 screen。
+  证据（2026-11-16 19:47，AppleSkin 3.0.9）：`GUI layer baseline before add: 25 layer(s)` →
+  `GUI layers replayed for appleskin: 6 new (25 -> 31 total); new layers: [appleskin:health_offset, appleskin:health_restored,
+  appleskin:food_offset, appleskin:exhaustion_level, appleskin:saturation_level, appleskin:hunger_restored]` →
+  `GUI layers RESULT: PASS (replayed, order preserved, 60 ticks rendered with the new layers)` → `AddCmdCheck RESULT: PASS`。
+  审计复跑（19:48，16 jar / 129 引用）：**68 covered / 24 recurring / 6 datagen / 17 silent / 10 behavior / 3 crash / 1 base**，
+  RESULT: PASS（顺带把合成 silent jar 的示例事件从 `RegisterGuiLayersEvent` 换成 `RegisterItemDecorationsEvent`，
+  单测里用 GUI 层当 silent 例子的两处也换成物品装饰，新增 `guiLayersAreCoveredSinceTheReplayExists`）。
+  回归：众星捧月 `-PverifyAddCommand … -PverifyGameplay -PverifyCreative` PASS（capability 五项 present、创造栏 182 项 / 第 2/2 页 / 渲染 40 tick）。
+  文档：status 表尺/已知问题 21、[client-registration-audit.md](features/client-registration-audit.md) §4/§5/§6、[dogfood-gameplay.md](features/dogfood-gameplay.md) §4。
+- **（AT 晚注入逐 jar 判死 / P1-1）**：新增 `inspect/AccessTransformerRules`（纯解析：规则数、目标类、排除
+  `net.minecraft.data.*` / `neoforge.data.*` / `.datagen.` / gametest / testframework 后的运行期目标、`datagenOnly()`、一行 `describe()`），
+  6 个单测（含用 `ZipOutputStream` 现造一个带 AT 的 jar）。`dev/AtSpikeCheck` 改用它，并逐 jar 输出判定：
+  「是否**所有**运行期 AT 目标都未加载」——一个已加载目标就足够让晚 AT 不可能。同时 `HotAddEngine` 的 AT 拒绝文案
+  现在带组成（`… (57 rule(s) over 39 target class(es) (39 runtime, 0 datagen-only); e.g. […]); access transformers only apply at startup …`）。
+  证据（2026-11-16 19:52，6 jar）：标题屏 `SUMMARY: 6 jar(s) with ATs; late-AT viable on 0 of them (1 jar(s) have datagen-only ATs)`；
+  进世界同样 **0/6**（Jade 32→35 / 39 已加载、JEI 9→11 / 12、Mekanism 38→42 / 45、AE2 26→33 / 33、guideme 16→16 / 17；
+  ExtremeReactors2 的运行期目标是 **0**，唯一目标是 `net.minecraft.data.recipes.RecipeProvider`）。
+  结论：**「晚注入 AT」彻底关闭**（不是「先量着看」）。表与日志原文进 [matrix](features/hotadd-compatibility-matrix.md) §8.1，
+  status 表尺/已知问题 23、下一步（下一条 P1-2）。
