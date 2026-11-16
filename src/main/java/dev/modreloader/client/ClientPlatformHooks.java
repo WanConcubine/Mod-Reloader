@@ -7,6 +7,8 @@ import dev.modreloader.hotadd.Rollback;
 import dev.modreloader.hotadd.UnsafeAccess;
 import dev.modreloader.server.ServerCommands;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.MenuScreens;
+import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.network.Connection;
@@ -16,9 +18,12 @@ import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.fml.loading.moddiscovery.ModFile;
 import net.neoforged.fml.loading.moddiscovery.ModFileInfo;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforgespi.language.IModFileInfo;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -40,6 +45,37 @@ public final class ClientPlatformHooks implements PlatformHooks {
         container.acceptEvent(new FMLClientSetupEvent(container, queue));
         queue.runTasks();
         container.acceptEvent(new RegisterKeyMappingsEvent(Minecraft.getInstance().options));
+        replayMenuScreens(container);
+    }
+
+    /**
+     * Menu screens are registered once at startup by {@code MenuScreens.init()}
+     * through {@code RegisterMenuScreensEvent}. A hot-added mod's listener never
+     * ran, so opening one of its GUIs logs
+     * {@code Failed to create screen for menu type: ...} and nothing opens.
+     *
+     * <p>The real {@code SCREENS} map throws on duplicate registrations, and the
+     * event is global, so replay it into a throwaway map (other mods re-register
+     * harmlessly) and merge only the entries that are genuinely new.
+     */
+    @SuppressWarnings("unchecked")
+    private static void replayMenuScreens(ModContainer container) {
+        try {
+            Map<MenuType<?>, MenuScreens.ScreenConstructor<?, ?>> fresh = new HashMap<>();
+            container.acceptEvent(new RegisterMenuScreensEvent(fresh));
+            Map<MenuType<?>, MenuScreens.ScreenConstructor<?, ?>> screens =
+                    UnsafeAccess.getStatic(MenuScreens.class, "SCREENS");
+            int added = 0;
+            for (Map.Entry<MenuType<?>, MenuScreens.ScreenConstructor<?, ?>> entry : fresh.entrySet()) {
+                if (screens.putIfAbsent(entry.getKey(), entry.getValue()) == null) {
+                    added++;
+                }
+            }
+            ModReloader.LOGGER.info("[ModReloader] menu screens replayed: {} new, {} total",
+                    added, screens.size());
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn("[ModReloader] menu screen replay failed", t);
+        }
     }
 
     @Override

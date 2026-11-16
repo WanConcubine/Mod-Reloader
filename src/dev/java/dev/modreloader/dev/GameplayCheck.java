@@ -1,6 +1,7 @@
 package dev.modreloader.dev;
 
 import dev.modreloader.ModReloader;
+import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.level.GameType;
@@ -161,6 +162,9 @@ public final class GameplayCheck {
 
     private static void setup(MinecraftServer server) {
         if (setupFuture == null) {
+            if (!checkMenuScreens()) {
+                return;
+            }
             setupFuture = new CompletableFuture<>();
             server.execute(() -> {
                 try {
@@ -315,6 +319,37 @@ public final class GameplayCheck {
 
         return new Setup(tables, commandRc, hammerDrops, insertAccepted, craft,
                 modRecipes.size(), hammerRecipeLoaded, craftDetail);
+    }
+
+    /**
+     * Machine GUIs: every menu type of the hot-added mod must have a screen
+     * factory. NeoForge registers them once at startup, so without the replay in
+     * {@code ClientPlatformHooks} the client logs
+     * "Failed to create screen for menu type" and the GUI never opens.
+     */
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static boolean checkMenuScreens() {
+        int total = 0;
+        List<String> missing = new ArrayList<>();
+        for (var holder : BuiltInRegistries.MENU.holders().toList()) {
+            ResourceLocation key = holder.unwrapKey()
+                    .map(resourceKey -> resourceKey.location()).orElse(null);
+            if (key == null || !modId.equals(key.getNamespace())) {
+                continue;
+            }
+            total++;
+            if (MenuScreens.getScreenFactory((net.minecraft.world.inventory.MenuType) holder.value())
+                    .isEmpty()) {
+                missing.add(key.toString());
+            }
+        }
+        ModReloader.LOGGER.info("[GameplayCheck] menu screens: {} type(s) in {}, missing={}",
+                total, modId, missing);
+        if (total > 0 && !missing.isEmpty()) {
+            fail("the hot-added mod's GUIs have no screen factory: " + missing);
+            return false;
+        }
+        return true;
     }
 
     // --------------------------------------------------------------- verify

@@ -16,7 +16,8 @@
 | 2 | 铁锤砸圆石（走 `BlockDropsEvent` 替换） | 掉 `minecraft:gravel x1` |
 | 3 | 筛子：放筛子 → 装铁网 → 放泥土（只接受已注册输入）→ 连点 240 tick | 掉 `cobblestone_pebble x6`、`andesite x5`、`granite x5`、`diorite x6`、`deepslate x3`、`grass_seeds x1` |
 | 4 | 真实 3×3 合成：铁锭×2 + 木棍×2 | 命中 `exnihilosatellitium:iron_hammer` |
-| 5 | 创造物品栏渲染 40 tick（`-PverifyCreative`） | 不崩，`defaults=4`，PASS |
+| 5 | 机器 GUI 的 screen factory（`MenuScreens`） | 2 个 menu type 全部有 screen（`missing=[]`） |
+| 6 | 创造物品栏渲染 40 tick（`-PverifyCreative`） | 不崩，`defaults=4`，PASS |
 
 ```bash
 ./gradlew runClient \
@@ -59,6 +60,29 @@ creative inventory rendered 40 ticks without crashing
 creative RESULT: PASS
 ```
 
+### 2.2 机器 GUI 打不开（已修）
+
+手动验收时打开 `exnihilosatellitium:fuel_machine`，日志只有一行警告、界面不出来：
+
+```text
+[Render thread/WARN] [minecraft/MenuScreens]: Failed to create screen for menu type: exnihilosatellitium:fuel_machine
+```
+
+根因在我们的客户端生命周期重放：`MenuScreens.init()`（`@ApiStatus.Internal`）只在启动时 fire 一次
+`RegisterMenuScreensEvent`，把 screen 工厂写进 `MenuScreens.SCREENS`；热加 mod 的
+`@EventBusSubscriber` 虽然注册了，但那个事件早就 fire 过了，所以它的 2 个 GUI 从来没有工厂。
+
+修法：`ClientPlatformHooks.acceptClientLifecycle()` 里重放 `RegisterMenuScreensEvent`。注意两个坑：
+
+1. `MenuScreens.SCREENS` 的 `register` 在 key 已存在时**抛异常**，而事件是全局的——直接用真 map 会让
+   已加载 mod 的监听器再注册一遍并抛 `Duplicate attempt to register screen`；
+2. 所以先往一个**临时 map** 重放（其他 mod 的重复写入只落在临时 map 里），再把「真 map 里没有」的条目合并进去。
+
+```text
+[ModReloader] menu screens replayed: 2 new, 27 total
+[GameplayCheck] menu screens: 2 type(s) in exnihilosatellitium, missing=[]
+```
+
 ## 3. 手动清单（待所有者）
 
 用 `-PverifyGameplayKeepOpen=true` 起一个热加后的世界（检查完留在世界里；该世界已开 LAN/作弊，
@@ -70,12 +94,17 @@ creative RESULT: PASS
 | 坩埚 crucible | 放坩埚，下面放点燃的营火/火/熔炉，放入圆石 | 按 39 条熔化表出熔融物，9 种热源都认 |
 | 堆肥 compost | 用可堆肥物喂桶/堆肥流程 | 按 67 条堆肥表产出 |
 | 网耐久 | 木网(10) / 丝网(64) / 铁网(256) 连续筛 | 次数用尽后网消失 |
-| 机器界面 | 打开桶/坩埚 GUI 并交互 | 能开、能放取 |
+| 机器界面 | 打开桶/坩埚/fuel machine GUI | 能开（screen 已注册）；放取物品/按钮交互待验；**内部内容可能不显示**（BE 渲染器未重放，见 §4） |
 
 ## 4. 未覆盖 / 已知
 
 - **多人**：两端「登录前热加」未验证；连接后热加仍不支持（注册表快照）。
 - **删除 / 更新**：仍是 add-only。
 - 桶/坩埚/堆肥只有手动清单，没有自动断言（需要流体/热量/时间的组合状态）。
+- **其它客户端注册事件还没重放**（同样的「启动期一次性事件」问题）：`EntityRenderersEvent.RegisterRenderers`
+  （block entity 渲染器——桶/坩埚内部内容会不显示）、`RegisterColorHandlersEvent`（物品/方块染色）、
+  `RegisterClientExtensionsEvent`（流体外观）、`RegisterClientReloadListenersEvent`（客户端 reload listener）。
+  这些事件要么在 key 重复时抛异常、要么依赖启动时构建好的 dispatcher，需要单独设计重放策略。
+- **机器 GUI 交互**：screen 已注册且能开，但放取物品/按钮没有自动断言（手动清单里）。
 - `DEFAULT_TABS` 是 NeoForge 私有字段；如果将来改名，`reset` 只会 warn，
   创造物品栏会退回「重复页签 → 越界」的旧行为（`-PverifyCreative` 会在 dev 抓到）。
