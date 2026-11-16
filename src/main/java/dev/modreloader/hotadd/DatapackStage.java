@@ -18,6 +18,7 @@ import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.resource.ResourcePackLoader;
 import net.neoforged.neoforgespi.language.IModFileInfo;
 import net.neoforged.neoforgespi.language.IModInfo;
+import net.neoforged.neoforgespi.locating.IModFile;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -26,6 +27,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -107,9 +109,18 @@ public final class DatapackStage {
             return new Result(false, "no data/ directory in the jar");
         }
         if (server == null) {
+            // Title screen / dedicated server before a world exists. Registering the
+            // pack in NeoForge's mod data pack map now means the repository that is
+            // built when a world loads (ServerPacksSource.create ->
+            // ResourcePackLoader.populatePackRepository) already contains it. That
+            // is the only moment WORLDGEN content (dimensions, biomes, structures)
+            // can be picked up: it is built during world load, before
+            // ServerStartedEvent, so a deferred reload could never add it.
+            preregister(fileInfo, modIds);
             defer(fileInfo, modIds);
             return new Result(false,
-                    "no server yet (title screen); the data pack is applied when a world starts");
+                    "no server yet; the data pack is registered for the next world load "
+                            + "and applied then");
         }
         if (server.isSameThread()) {
             return inject(server, fileInfo, modIds);
@@ -225,6 +236,37 @@ public final class DatapackStage {
                 throw state;
             }
             throw new IllegalStateException("the data reload failed: " + cause, cause);
+        }
+    }
+
+    /**
+     * Puts the pack into {@code ResourcePackLoader.modResourcePacks} so the next
+     * world's pack repository (built from that map) includes it as a child of the
+     * required {@code mod_data} root.
+     *
+     * <p>Why this is not the same as {@link #defer}: {@code defer} reloads an
+     * existing server, which is enough for RELOADABLE data (recipes/loot/tags) but
+     * too late for WORLDGEN content — dimensions are registered while the world
+     * loads. Measured 2026-11-16: without this, a title-screen add left
+     * {@code wgfixture:wgflat} unregistered in a new world; with it, the dimension
+     * is there (see docs/features/t4-datapack-hotadd.md §10).
+     */
+    private static void preregister(IModFileInfo fileInfo, Set<String> modIds) {
+        try {
+            Map<IModFile, Object> packs = UnsafeAccess.getStatic(ResourcePackLoader.class, "modResourcePacks");
+            if (packs == null) {
+                ModReloader.LOGGER.warn("[ModReloader] cannot pre-register the data pack of {}: "
+                        + "NeoForge's mod pack map is not initialised", modIds);
+                return;
+            }
+            packs.put(fileInfo.getFile(), ResourcePackLoader.createPackForMod(fileInfo));
+            ModReloader.LOGGER.info("[ModReloader] datapack for {} pre-registered for the next world "
+                    + "load (mod data packs now {})", modIds, packs.size());
+        } catch (Throwable t) {
+            // Not fatal: the deferred reload still applies RELOADABLE data, only
+            // WORLDGEN content would stay missing.
+            ModReloader.LOGGER.warn("[ModReloader] cannot pre-register the data pack of {}; "
+                    + "WORLDGEN content will not be available in the next world", modIds, t);
         }
     }
 

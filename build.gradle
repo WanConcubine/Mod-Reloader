@@ -178,6 +178,12 @@ neoForge {
                 systemProperty 'modreloader.verifyItemDecoratorItem',
                         providers.gradleProperty('verifyItemDecoratorItem').get()
             }
+            if (providers.gradleProperty('verifyWorldgen').orNull) {
+                // With verifyAddCommand (+ title-screen add): assert the hot-added
+                // mod's dimension is usable in a world created after the add.
+                systemProperty 'modreloader.verifyWorldgen',
+                        providers.gradleProperty('verifyWorldgen').get()
+            }
             if (providers.gradleProperty('verifyDatapackRemove').orNull) {
                 // With verifyAddCommand/verifyDatapack: deselect the hot-added data
                 // pack and reload, asserting recipes/loot return to the baseline.

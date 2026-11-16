@@ -279,3 +279,23 @@
   截图：`run/screenshots/` 里的 `a1-lan-screen.png`、`watch-prompt{,-en,-t4}.png`、`watch-failure.png`、`pending-screen.png`
   复制进 `docs/features/images/`，并把 `a1-mixin-hotadd.md`、`gui-mod-watcher.md` 与 `README.md` 里指向 `run/screenshots/`
   的链接改成 `images/…`（README 相对仓库根，用 `docs/features/images/…`）——`run/` 是 gitignore 的，之前那些图在仓库里根本不存在。
+
+- **（WORLDGEN 边界：标题屏热加 + 新建世界就能拿到维度 / P1-2）**：新增 `experiments/worldgen-fixture`——**只有数据**的夹具
+  （`data/wgfixture/dimension/wgflat.json` 超平坦 + `dimension_type`，`build.sh` 输出 `/tmp/wgfixture/wgfixture-1.0.0.jar`），
+  以及 `-PverifyWorldgen=<维度 id>`（`AddCommandCheck`）：标题屏热加（`-PverifyDatapackAtTitle`）→ 新建世界 →
+  断言 `Registries.DIMENSION` 里有该 id 且 `server.getLevel(key) != null`（"能进"而不是"json 存在"）。
+  **修前实测**（2026-11-16 20:13）：`worldgen: dimension wgfixture:wgflat registered=false level=false`，FAIL——
+  标题屏走 `defer`，注入点是 `ServerStartedEvent`，世界已加载完，WORLDGEN 层补不上。
+  **修法**：`DatapackStage.apply(server == null)` 里先 `preregister`：把 `ResourcePackLoader.createPackForMod(fileInfo)`
+  放进 NeoForge 的 `modResourcePacks`（`IModFile → ResourcesSupplier`），下一次 world load 的
+  `ServerPacksSource.create → populatePackRepository → buildPackFinder` 会把包作为 required `mod_data` 的子包带上，
+  维度随世界注册；`defer` 保留作 RELOADABLE 数据的兜底。**修后实测**（20:14）：
+  `datapack for [wgfixture] pre-registered for the next world load (mod data packs now 4)`、
+  `worldgen: dimension wgfixture:wgflat registered=true level=true`、`worldgen RESULT: PASS`。
+  附带效果：标题屏热加众星捧月现在 world load 时就是 `already live (recipes=164, loot tables=75, block tags=1, item tags=2)`，
+  世界启动后那次多余的全量数据重载被短路掉（省一次 reload）。
+  回归：`-PverifyDatapackAtTitle + -PverifyDatapack` PASS；进世界 `-PverifyGameplay` PASS（capability 五项 present）。
+  边界：**已存在的世界仍需重启**（维度在它的 world load 时定死）；**专用服启动期**热加时 `modResourcePacks` 还没被 FML
+  初始化（`findResourcePacks` 懒加载），`preregister` 只能 warn 并退回 `defer`，WORLDGEN 仍不可用（要覆盖得在热加前触发一次
+  `findResourcePacks`，没做）。文档：[t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) §10、status 表尺/已知问题 19、
+  [ADR-0009](decisions/0009-datapack-hotadd.md) 补注（不改结论）、AGENTS §3.16。

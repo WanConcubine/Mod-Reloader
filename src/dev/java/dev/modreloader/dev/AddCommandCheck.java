@@ -17,6 +17,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -135,6 +136,15 @@ public final class AddCommandCheck {
 
     /** Decorators on {@link #ITEM_DECORATOR_ITEM} measured before the add; -1 when not measured. */
     private static int decoratorsBefore = -1;
+
+    /**
+     * Optional worldgen phase ({@code -PverifyWorldgen=<dimension id>}): the mod
+     * ships a dimension (WORLDGEN registry layer). With a title-screen add the
+     * dimension must be usable in the world that is created afterwards — that is
+     * the difference between "needs a restart" and "needs a new world".
+     */
+    private static final String VERIFY_WORLDGEN =
+            System.getProperty("modreloader.verifyWorldgen", "").trim();
 
     private AddCommandCheck() {
     }
@@ -340,6 +350,9 @@ public final class AddCommandCheck {
         if (VERIFY_ITEM_DECORATORS && !verifyItemDecorators()) {
             return;
         }
+        if (!VERIFY_WORLDGEN.isEmpty() && !verifyWorldgen(mc)) {
+            return;
+        }
         if (VERIFY_DATAPACK && !verifyDatapack(mc)) {
             return;
         }
@@ -393,6 +406,47 @@ public final class AddCommandCheck {
         ModReloader.LOGGER.info("[AddCmdCheck] GUI layers RESULT: PASS "
                         + "(replayed, order preserved, {} ticks rendered with the new layers)",
                 ticks);
+        return true;
+    }
+
+    /**
+     * Asserts that the worldgen dimension of the hot-added mod is usable in the
+     * world that was created after the (title-screen) add.
+     *
+     * <p>Measured properties: the dimension id is in the running server's
+     * {@code Registries.DIMENSION} registry and {@code server.getLevel(key)}
+     * returns a level — i.e. the world can actually be entered by an
+     * {@code /execute in …} command, not merely "the JSON file exists".
+     */
+    private static boolean verifyWorldgen(Minecraft mc) {
+        MinecraftServer server = mc.getSingleplayerServer();
+        if (server == null) {
+            fail("worldgen check: the integrated server is gone");
+            return false;
+        }
+        ResourceLocation id = ResourceLocation.parse(VERIFY_WORLDGEN);
+        ResourceKey<net.minecraft.world.level.Level> key =
+                ResourceKey.create(Registries.DIMENSION, id);
+        boolean registered;
+        try {
+            registered = server.registryAccess()
+                    .registryOrThrow(Registries.DIMENSION).containsKey(key);
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn("[AddCmdCheck] cannot read the dimension registry", t);
+            registered = false;
+        }
+        net.minecraft.server.level.ServerLevel level = server.getLevel(key);
+        ModReloader.LOGGER.info("[AddCmdCheck] worldgen: dimension {} registered={} level={} "
+                        + "(reloaded packs={})", id, registered, level != null,
+                server.getPackRepository().getSelectedIds());
+        if (level == null || !registered) {
+            fail("worldgen: the hot-added dimension " + id + " is not usable in a world created "
+                    + "after the add (registered=" + registered + ", level=" + (level != null) + "); "
+                    + "the WORLDGEN boundary is still 'restart', not 'new world'");
+            return false;
+        }
+        ModReloader.LOGGER.info("[AddCmdCheck] worldgen RESULT: PASS "
+                + "(dimension {} is registered and has a level after a title-screen add)", id);
         return true;
     }
 

@@ -37,6 +37,9 @@
    - add-only，不删除/更新；
    - 只覆盖 `RegistryLayer.RELOADABLE`（战利品、附魔、伤害类型、纹饰、物品修饰器…）；
      维度/生物群系/结构等 **WORLDGEN 层不生效**，仍要重启或新世界；
+     （2026-11-16 补充实测：标题屏热加时把包预注册进 `modResourcePacks`，**下一个新世界**就能拿到维度
+     ——`-PverifyWorldgen` 里 `wgfixture:wgflat` `registered=true level=true`；已存在的世界仍需重启。
+     见 [t4-datapack-hotadd.md](../features/t4-datapack-hotadd.md) §10。）
    - 连接后热加的**注册表快照**同步仍未解决（与 datapack 无关，是登录配置阶段的问题）；
    - 存档会记录 `mod/<modId>` 这个 data pack。重启时 jar 在 `mods/` 里则它在 `mod_data`
      下也会出现一次；实测重复出现在资源管理器里无副作用（按 id 归并、计数不变、无报错）。

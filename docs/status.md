@@ -16,7 +16,8 @@
 **HUD 层（`RegisterGuiLayersEvent`）与物品装饰（`RegisterItemDecorationsEvent`）已重放**
 （AppleSkin 25→31 层 / 顺序不变 / 渲染 60 tick；新夹具 `experiments/client-fixture` 断言两者）；
 **「晚注入 AT」按 jar 逐条判死**（6 个真实 jar 在两个时机都是 0/6 可行，见 status 表尺）。
-**硬边界**：access transformer（6/9 真实模组）、世界生成注册表、一次性启动事件的**重放**（审计只能报告/拒绝）、删除/更新、软重启未开始。
+**硬边界**：access transformer（6/9 真实模组；晚注入已判死）、一次性启动事件的**重放**（审计只能报告/拒绝）、删除/更新、软重启未开始。
+世界生成注册表已收窄：**标题屏热加 + 新建世界**可用（维度实测可进），已存在的世界/专用服启动期仍要重启。
 失败回滚只覆盖 post-ModList / post-pack。按 [§6 契约](../AGENTS.md) 尚不算「完成」的项见文末「未验证」。
 
 ## 当前目标
@@ -62,6 +63,7 @@
 | **capability 重放（`RegisterCapabilitiesEvent`）** | 众星捧月热加后五项全部 present：桶 item/fluid、坩埚 fluid、机器 item/energy；A/B：`-PskipCapabilityReplay=true` 时五项全 MISSING（FAIL），重放后 PASS；provider 计数 `item 16/48、fluid 24/27、energy 4/4`（本模组/总数） | `-PverifyCapabilities=<jar>`；[dogfood-gameplay.md](features/dogfood-gameplay.md) §1.1 |
 | **AT「晚注入」逐 jar 判定（只读，**已关闭**）** | 6 个带 AT 的 jar 共 295 条规则 / 151 个目标类（排除 datagen 后 146 个运行期目标）；**晚 AT 可行：0/6**（标题屏与进世界各一次；一个已加载目标就足够否掉）；ExtremeReactors2 的 AT **只服务 datagen**（0 运行期目标）→ 拒绝文案现在写清组成 | `-PverifyAtSpike=<jars>`；[matrix](features/hotadd-compatibility-matrix.md) §8.1 |
 | **注册表 id 重建的线程**（修已知问题 28） | commit/abort 的「清 `BLOCKSTATE_TO_ID_MAP` + `freezeData`」投到服务器线程（日志 `registry freeze: hopping from the thread 'Render thread' to the server thread`），`RegisterEvent` 重放仍留调用线程；**连跑 3 次** `-PverifyAddCommand` + `-PverifyGameplay`：3/3 `AddCmdCheck`/`GameplayCheck RESULT: PASS`、capability 五项 present、`stoneId 1 -> 1 (stable)`、0 处 `No value with id`；专用服 guifei commit 在 `[Server thread]` 直跑（`RESULT: PLACED` + datapack PASS）、嫔级 add 回归 PASS | 2026-11-16 19:27–19:31：`-PverifyAddCommand=<dogfood> -PverifyAddCommandModId=exnihilosatellitium -PverifyGameplay=true` / `runServer -PautoAdd=<t4fixture> -Pt4fixtureSelftest=true` / `-PverifyAddCommand=<EasyLAN>`；[t4-registry-hotadd.md](features/t4-registry-hotadd.md) §11 |
+| **WORLDGEN 边界（维度）** | 标题屏热加 `wgfixture`（数据夹具：1 个超平坦维度）→ **新建世界** → `dimension wgfixture:wgflat registered=true level=true`、`worldgen RESULT: PASS`（修前同一路径 `registered=false level=false`）；机制：`server == null` 时把包预注册进 `ResourceLoader.modResourcePacks`，world load 时随 `mod_data` 一起加载；**已存在的世界仍需重启**，专用服启动期仍不行 | 2026-11-16 20:1x：`-PverifyAddCommand=/tmp/wgfixture/wgfixture-1.0.0.jar -PverifyAddCommandModId=wgfixture -PverifyDatapackAtTitle=true -PverifyWorldgen=wgfixture:wgflat`；[t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) §10 |
 | **工程底座** | `capabilities: module_injection … registry_sync … resource_packs` 全 ok（server `resource_packs=n/a`）；**无 `libs/` 可 `clean build`**；**21 个无游戏单测** | `./gradlew test`；[tech-debt.md](tech-debt.md) |
 | **JDK / JBR 21** | 编译用 Temurin 21 toolchain；**`runClient` 与 `runServer` 都**用 JBR 21.0.11 + `-XX:+AllowEnhancedClassRedefinition`（`enhancedRedefinition=true`） | 启动日志 `[ModReloader] JVM … enhancedRedefinition=` |
 
@@ -90,7 +92,7 @@
 - **`/modreloader gui` / `scan` 命令**：已注册，未自动验证（`/modreloader add`、世界内 toast、主菜单入口与忽略恢复已有 harness）。
 - **忽略/失败 JSON 跨重启持久化**：GUI 内 ignore → restore 已自动验证，重启客户端后是否仍记住未验证。
 - **已加载后删除 jar**：行为已知（mod 仍留在 ModList，没有卸载路径，不会再成为候选），但没有跑过专门检查。
-- **贵妃级（注册表内容）**：删除/更新未做、提交后不可回滚；**客户端不装 jar 的多人场景**不支持（见已知问题 18）；世界生成注册表（维度/生物群系/结构）未做。
+- **贵妃级（注册表内容）**：删除/更新未做、提交后不可回滚；**客户端不装 jar 的多人场景**不支持（见已知问题 18）；世界生成注册表：标题屏热加 + 新建世界已实测可用（见已知问题 16 与 [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) §10），已存在的世界/专用服启动期热加仍不行。
 - **datapack 热加载的极端组合**：标题屏热加 + 「世界加载前 pack 缓存已经建好」会走与世界内相同的注入路径，但没有单独 harness；实测的两个场景是「世界内注入」与「标题屏 + 已 live 短路」。
 - **机器 GUI 交互**：screen 工厂已注册、界面能开，但放取物品/按钮没有自动断言；桶/坩埚内部内容渲染已修（`beRenderers 6/6`），但没有逐项视觉断言。
 - **众星捧月手动玩法项**：桶 / 坩埚 / 堆肥 / 网耐久 / 机器界面只有清单，没有自动断言（见 [dogfood-gameplay.md](features/dogfood-gameplay.md) §3）。
@@ -120,7 +122,9 @@
 16. **Capabilities 只查名字，不查行为**：字段/方法/构造器存在且签名对上，不等于语义没变。价值是「框架漂移时立刻给人话失败而不是静默跳过」，不能代替游戏内 harness；锚点清单自己也会写错（第一版把 `createPackForMod(IModFileInfo)` 写成 `ModFileInfo`，被 harness 抓到）。
 17. **贵妃级的第一个坑：裸 unfreeze/freeze 会移动 BlockState id**（2026-11-15 实测）：`GameData.unfreezeData()` → `freezeData()` 之后 `stone` 的 state id 从 1 变成 26685，因为 `BlockCallbacks.onBake` 用 `IdMapper.add()` 重建而 `add()` 无条件分配新 id。适配路线必须先清空 `BlockCallbacks.BLOCKSTATE_TO_ID_MAP` 再 freeze。细节见 [research-t4-registry.md](research-t4-registry.md)。
 18. **贵妃级只到 add-only**：能热加方块/物品并保证存盘/重启可读，单人客户端资源包与创造栏、datapack、**多人连接后的 id 同步**都已验证（[t4-registry-hotadd.md](features/t4-registry-hotadd.md) §9）；但**客户端不装 jar 的多人场景**仍不行——而且比预想的硬：实测它会被 datapack 的配方同步直接踢下线，装回同一 jar 之前**连不回来**（§10）。jar / 资源 / payload channel 都无法从服务端同步，能同步的只有 id 映射。现在有告知层（[ADR-0011](decisions/0011-hotadd-must-inform-clients.md)）：通知 + 客户端 ack + 服务端 WARN；「有玩家在线时是否默认拒绝注册表内容热加」仍未决。实体类 post-register 事件未重放、删除/更新未做、提交后不可回滚。
-19. **datapack 热加载的边界**：只覆盖 `RegistryLayer.RELOADABLE`（战利品/附魔/伤害类型/纹饰/物品修饰器…）；维度/生物群系/结构属于 WORLDGEN 层，要世界加载才生效。存档会记录 `mod/<modId>` 这个 data pack，重启时若 jar 也在 `mods/` 里该包会出现两次（实测按 id 归并、计数不变、无报错，但不优雅）。失败文案必须强调「注册表已提交、运行时 dirty、请重启」。见 [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) §7。
+19. **datapack 热加载的边界**：只覆盖 `RegistryLayer.RELOADABLE`（战利品/附魔/伤害类型/纹饰/物品修饰器…）；维度/生物群系/结构属于 WORLDGEN 层，要世界加载才生效——
+**2026-11-16 实测**：标题屏热加时把包预注册进 `modResourcePacks`，**下一个新世界**确实能拿到维度（`-PverifyWorldgen`：`wgfixture:wgflat registered=true level=true`）；
+已存在的世界仍要重启，专用服启动期（`modResourcePacks` 还没初始化）热加仍不可用。存档会记录 `mod/<modId>` 这个 data pack，重启时若 jar 也在 `mods/` 里该包会出现两次（实测按 id 归并、计数不变、无报错，但不优雅）。失败文案必须强调「注册表已提交、运行时 dirty、请重启」。见 [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) §7。
 20. **创造页签排序非幂等（已修，留作坑）**：`CreativeModeTabRegistry.sortTabs()` 每次调用都往 `DEFAULT_TABS` 追加 HOTBAR/SEARCH/OP_BLOCKS/INVENTORY 且不清空，热加后再调一次 4→8，创造界面列 7/8 越界崩（`renderTabButton` 只有 7 张贴图）。修法：`afterRegistryContent()` 调 `sortTabs()` 前先清空 `DEFAULT_TABS`（失败只 warn）；回归 `-PverifyCreative`。
 21. **客户端启动期注册事件：仍然是一张手写清单（结构性问题）**：2026-11-16 实测 AppleSkin 悬停食物崩溃（`Unknown TooltipComponent`），根因是 `RegisterClientTooltipComponentFactoriesEvent` 没重放——第六次同类缺口。NeoForge 1.21.1 的 mod bus 上有一批一次性事件（sources 里 44 个顶层 `IModBusEvent` 实现 + 若干嵌套），我们只重放其中十几个，**漏一个就是一类 bug**，失败形态从静默到崩溃不等。已重放：`FMLClientSetupEvent` / `RegisterKeyMappingsEvent` / `RegisterMenuScreensEvent` / `EntityRenderersEvent.RegisterRenderers`（+ 重建两个 dispatcher）/ `RegisterColorHandlersEvent.Block/.Item` / `RegisterClientExtensionsEvent`（临时 map 合并）/ `RegisterClientReloadListenersEvent`（临时 manager + 按类名去重），并补齐 `ItemRenderer` 的 item→model 快照、`RegisterClientTooltipComponentFactoriesEvent`（tooltip 组件工厂）与 `RegisterGuiLayersEvent`（HUD 层，`GuiLayerReplay`）与 `RegisterItemDecorationsEvent`（物品装饰，`ItemDecoratorReplay`）。
 **仍未重放**：`RegisterLayerDefinitions`（模型层启动时已 bake，要重建 `EntityModelSet`）与 `ColorResolvers`（群系着色）——
@@ -173,15 +177,15 @@
 
 ## 下一步
 
-> 下一会话从 **P1-2** 开始。所有 harness 命令见 [AGENTS §2](../AGENTS.md)，细节在对应 feature 文档。
+> 下一会话从 **P2-4**（A1 产品化）或 **P3** 开始；P1-2/P1-3/P2-1/P2-2/P2-3 已完成或已收口。所有 harness 命令见 [AGENTS §2](../AGENTS.md)，细节在对应 feature 文档。
 > **热加类 harness 要求 `run/mods/` 里没有众星捧月 jar**（已加载就不能再热加）；备份在 `/tmp/dogfood-runmods-backup.jar`。
 
 | 优先 | 任务 | 关键点 / 落点 | 验收 |
 |---|---|---|---|
-| **P1-2** | WORLDGEN 边界实验 | 做一个带 dimension 的夹具：标题屏热加 → **新建世界** → 断言维度可进；决定「WORLDGEN 需重启」能否改写成「需新世界」 | 新 harness `-PverifyWorldgen` PASS + 文档 |
+| **P1-2** | ~~WORLDGEN 边界实验~~ **已完成 2026-11-16** | `experiments/worldgen-fixture`（只有数据：1 个维度）+ `-PverifyWorldgen`；**结论：「需重启」→「需新世界」**（标题屏热加 + 新建世界维度可进），已存在的世界仍要重启、专用服启动期仍不可用 | harness PASS + [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) §10 |
 | **P1-3** | Git 收尾（**部分完成 2026-11-16**） | `.github/workflows/ci.yml`（analyzer + `./gradlew build`）已加；6 张截图从 `run/screenshots/` 复制进 `docs/features/images/` 并把文档/README 链接改过去；tag 见下 | 剩：把 workflow 推上去跑绿（本机不 push，未证明）；tag 在本地 |
 | **P2-1** | 剩余一次性事件 | ~~`RegisterItemDecorationsEvent`~~ **已完成**（`ItemDecoratorReplay` + `client-fixture`）；剩下的是逐个判死的清单：`RegisterLayerDefinitions`（要重建 `EntityModelSet`）、`ColorResolvers`、`ModifyDefaultComponentsEvent` 等，结论已写进 [client-registration-audit.md](features/client-registration-audit.md) §7.1 | 已有 harness 的必须 PASS；其余在 §7.1 写明为什么不做 |
-| **P2-2** | 剩余 behavior 事件 | `ModifyDefaultComponentsEvent`、`NewRegistryEvent`、属性/刷怪/POI、`AddPackFindersEvent` 逐个评估（多数只能 warn） | 每个要么变 covered，要么在注册审计 §7 写清为什么不做 |
+| **P2-2** | ~~剩余 behavior 事件~~ **已完成 2026-11-16** | 11 个 behavior + 剩下的 silent 逐个给了结论：`RegisterItemDecorationsEvent`/`RegisterGuiLayersEvent` 变 covered；其余写进 [client-registration-audit.md](features/client-registration-audit.md) §7.1（框架启动后关闭、没有 subject、改已注册对象风险等） | 每个要么变 covered，要么在 §7.1 写清为什么不做（已满足） |
 | **P2-3** | 贵妃级下一层（**删除/更新结论已完成 2026-11-16**） | datapack 删除：**实测不可能**（deselect 后 id 从 selected 消失，但 required `mod_data` 聚合包把子包重新加回来，`selectedPacks` 仍有它、recipes 164 / loot 75 仍在）；更新：不做（聚合包 children 启动期固定 + `SecureJar` 已绑定，等价 managed relaunch）→ [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) §9 + 回归 `-PverifyDatapackRemove`。剩：WORLDGEN 与 P1-2 合并 | 结论已进 feature 文档；`-PverifyDatapackRemove` PASS |
 | **P2-4** | A1 产品化 | 构造后 listener 回滚 / 存档回读 / 第二个妃级模组 / 服务端+客户端同时妃级 | 每项 harness PASS + 文档 |
 | **P3** | GUI/watcher Phase 3/4、分析器校准（20–30 jar + AT/JiJ 维度）、`/modreload why`、B fallback、AT 文案、嵌套 mod 容器 | 见 [tech-debt.md](tech-debt.md) 与对应 feature 文档 | 各自文档的判据 |
@@ -202,7 +206,7 @@
 
 已知问题 27（1.4.2 创造栏缺失）仍需要那台机器的 `logs/latest.log` 才能继续，不阻塞上面任何一项。
 
-已完成（保留参考，细节见 history 与对应 feature 文档）：**客户端重放：HUD 层 + 物品装饰（含首个 client fixture）**；**AT 晚注入逐 jar 判死（0/6）**；**注册表 id 重建的线程（服务器线程 hop）**；**多人连接后注册表 id 同步**；**MixinRuntime 反射化（构建不再需要 `libs/`）**；
+已完成（保留参考，细节见 history 与对应 feature 文档）：**WORLDGEN 边界（标题屏热加 + 新世界可用维度）**；**datapack 删除/更新结论**；**客户端重放：HUD 层 + 物品装饰（含首个 client fixture）**；**AT 晚注入逐 jar 判死（0/6）**；**注册表 id 重建的线程（服务器线程 hop）**；**多人连接后注册表 id 同步**；**MixinRuntime 反射化（构建不再需要 `libs/`）**；
 **AT 晚注入量测（结论：不做，P1-1 复核）**；**JiJ 内嵌依赖抽取**；**datapack 热加载**；**dogfood 玩法验收 + 五个客户端 bug**；
 **兼容性矩阵首轮 + AT/缺依赖的变更前拒绝**；**注册审计**；**capability 重放**。
 
@@ -210,6 +214,15 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近几条。
 
+- **2026-11-16（WORLDGEN 边界：从「需重启」改写为「需新世界」）**：新增 `experiments/worldgen-fixture`（只有数据：一个超平坦维度
+  `wgfixture:wgflat`）与 `-PverifyWorldgen=<维度 id>`。**修前**标题屏热加 → 新建世界：`registered=false level=false`
+  （注入点在 `ServerStartedEvent`，世界已经加载完，WORLDGEN 层补不上）。**修法**：`DatapackStage` 在 `server == null` 时先把
+  `ResourcePackLoader.createPackForMod(fileInfo)` 放进 `modResourcePacks`（`preregister`），下一次 world load 的
+  `populatePackRepository` 就会把它作为 `mod_data` 的子包带上，维度随世界注册；`defer` 仍留作兜底。
+  **修后**：`dimension wgfixture:wgflat registered=true level=true`、`worldgen RESULT: PASS`。
+  附带效果：标题屏热加众星捧月现在在 world load 就 **already live**（recipes=164 / loot=75），省掉世界启动后那次多余的整包重载。
+  回归：标题屏 add + `-PverifyDatapack` PASS、进世界 `-PverifyGameplay` PASS。
+  边界：已存在的世界仍需重启；专用服启动期热加（`modResourcePacks` 未初始化）仍不可用。见 [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) §10。
 - **2026-11-16（datapack 删除/更新：实测把「大概不可行」变成「机制上不可能」）**：新增 `-PverifyDatapackRemove`
   （挂在 `AddCommandCheck`）：热加众星捧月 → recipes 164 / loot 75 → 从 `PackRepository` 的 selected 移除
   `mod/exnihilosatellitium` → `reloadResources` → 再读。结果：`selected ids=[vanilla, mod_data]` 但

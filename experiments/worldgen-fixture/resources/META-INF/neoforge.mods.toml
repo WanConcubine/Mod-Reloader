@@ -1,0 +1,26 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "MIT"
+
+[[mods]]
+modId = "wgfixture"
+version = "1.0.0"
+displayName = "Worldgen Fixture"
+description = '''
+Ships one custom dimension (wgfixture:wgflat) as a data pack. Used to measure
+whether a title-screen hot-add can make a dimension available in a NEW world.
+'''
+
+[[dependencies.wgfixture]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21.1,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.wgfixture]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1,1.22)"
+ordering = "NONE"
+side = "BOTH"

@@ -283,3 +283,47 @@ harness：`-PverifyDatapackRemove=true`（挂在 `AddCommandCheck` 上，跟在 
   -PverifyAddCommand=/Users/kaifengcrt/Projects/Ex-Nihilo-Satellitium/build/libs/exnihilosatellitium-1.21.1-1.5.0.jar \
   -PverifyAddCommandModId=exnihilosatellitium -PverifyDatapack=true -PverifyDatapackRemove=true
 ```
+
+## 10. WORLDGEN（维度）边界：从「需重启」改写成「需新世界」（2026-11-16 实测）
+
+§7 一直写「世界生成注册表（维度/生物群系/结构）仍需重启或新世界」——两个选项里到底是哪个？现在有答案。
+
+夹具：[experiments/worldgen-fixture](../../experiments/worldgen-fixture/)（只有数据：一个超平坦维度 `wgfixture:wgflat` +
+它的 `dimension_type`）。harness：`-PverifyWorldgen=<维度 id>`，配合标题屏热加
+（`-PverifyDatapackAtTitle=true`）→ 新建世界 → 断言维度是否**真的能进**
+（`Registries.DIMENSION` 里有 id + `server.getLevel(key) != null`）。
+
+### 10.1 修之前：维度不可用（"需重启"）
+
+```
+[ModReloader] datapack for [wgfixture] deferred: no server yet; it will be injected when a world starts (one extra data reload)
+[ModReloader] deferred datapack: pack mod/wgfixture selected; recipes 0 -> 0, loot tables 0 -> 0, …
+[AddCmdCheck] worldgen: dimension wgfixture:wgflat registered=false level=false (reloaded packs=[vanilla, mod_data, mod/wgfixture])
+[AddCmdCheck] FAILED: … the WORLDGEN boundary is still 'restart', not 'new world'
+```
+
+原因：标题屏热加走的是 `defer`，注入点是 `ServerStartedEvent`——**世界已经加载完**，而维度在 world load 时构建，
+晚一步就再也补不上（reload 只重建 RELOADABLE 层）。
+
+### 10.2 修法：标题屏热加时把包**预注册**进 NeoForge 的 mod 数据包表
+
+世界加载时 `ServerPacksSource.create` → `ResourcePackLoader.populatePackRepository` 会用
+`modResourcePacks`（`IModFile → ResourcesSupplier`）重建 `mod_data` 的子包列表。所以 `DatapackStage` 在
+`server == null` 分支里先把 `ResourcePackLoader.createPackForMod(fileInfo)` 放进那张表（`preregister`），再照旧 `defer`
+当兜底：下一次 world load 的仓库里就已经有它，维度随世界一起注册。
+
+```
+[ModReloader] datapack for [wgfixture] pre-registered for the next world load (mod data packs now 4)
+[AddCmdCheck] worldgen: dimension wgfixture:wgflat registered=true level=true
+[AddCmdCheck] worldgen RESULT: PASS (dimension wgfixture:wgflat is registered and has a level after a title-screen add)
+```
+
+### 10.3 结论与边界
+
+- **标题屏热加 + 新建世界**：`RegistryLayer.WORLDGEN` **可用**（维度实测可进）→ 文档措辞从「需重启」改成「**需新世界**」。
+- **已经存在的世界**：仍然不行（维度在它的 world load 时就定死了）——要进新维度就换新世界，或重启。
+- **专用服启动期热加**（世界还没加载过）：`modResourcePacks` 还没被 FML 初始化（`findResourcePacks` 在第一次
+  `populatePackRepository` 时才跑），`preregister` 只能 warn 并退回 `defer` → 这种情况下 WORLDGEN 仍不可用；
+  要覆盖它得在热加前触发一次 `findResourcePacks`，没做（先记录）。
+- 回归：标题屏热加众星捧月 + `-PverifyDatapack` 仍 PASS（预注册后它的 recipes 在 world load 就有了）；
+  进世界 `/modreloader add` 的 `-PverifyGameplay` 回归 PASS。
