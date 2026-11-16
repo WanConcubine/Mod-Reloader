@@ -24,6 +24,11 @@ public final class ServerDev {
             MpNoticeServerCheck.start(mpNoticeServer);
             ModReloader.LOGGER.info("[ServerDev] mpNoticeServer harness installed");
         }
+        String mpFeiServer = System.getProperty("modreloader.mpFeiServer", "").trim();
+        if (!mpFeiServer.isEmpty()) {
+            MpFeiServerCheck.start(mpFeiServer);
+            ModReloader.LOGGER.info("[ServerDev] mpFeiServer harness installed");
+        }
         String serverWhy = System.getProperty("modreloader.serverWhy", "").trim();
         if (!serverWhy.isEmpty()) {
             ServerWhyCheck.start(serverWhy);

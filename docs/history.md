@@ -379,3 +379,16 @@
   mixin 已经应用过一次），所以这条路径的承诺是「干净回滚 + 重启」，可重试的仍是 pre-construct 路径；
   `-PfailAfterModList` 回归仍 PASS 且重试成功（`retry result: hot-added [lanserverproperties] …`）、`-PfailAfterPack` PASS、
   `-PverifyAddCommand=<clientfixture>` PASS。文档：status 表尺/已知问题 7/P2-4、AGENTS §3.10、[tech-debt.md](tech-debt.md) §4b、本文件。
+
+- **（服务端+客户端同时妃级：P2-4 收口）**：P2-4 的最后一项。新增一对 MP harness：
+  `dev/MpFeiServerCheck`（`-PmpFeiServer="<jar>|<modId>"`：等客户端 `mp-fei-client-ready.txt` + 3 s 宽限，在服务器线程热加自己的副本，
+  再观察 10 s 玩家是否还在线，然后自己 halt）与 `dev/MpFeiClientCheck`（`-PverifyMpFei="<jar>|<modId>"`：标题屏 → ConnectScreen 连
+  `127.0.0.1:25565` → 进世界 → 本地热加 → 写标记 → 观察 16 s 是否仍连着）。握手用文件标记，和 `-PmpRegistry*` 一样的做法。
+  证据（2026-11-16 21:2x，两个进程）：服务端 `server hot-add zerocore: ok=true … redefined [net.minecraft.world.inventory.Slot]`；
+  客户端 `client hot-add zerocore: ok=true … redefined [Slot, GuiGraphics, ModelBakery]`；
+  服务端 `both sides hot-added zerocore (server isLoaded=true, players still connected=true)` → `RESULT: PASS`；
+  客户端 `after both adds: still connected=true client isLoaded=true` → `RESULT: PASS`。
+  覆盖：两侧各自热加同一个妃级 jar 时，mixin 重定义 + payload 注册 + 客户端资源重载不打断已有连接。
+  不覆盖：两侧 jar 不一致（客户端不装 → 仍不支持，见 status 已知问题 18）、贵妃级注册表内容的两侧同时热加（§9 的 id 同步是另一条路径）。
+  至此 **P2-4 四项全部有 harness PASS**：第二个妃级模组（同会话）、构造后游戏总线监听器回滚、服务端+客户端同时妃级、存档回读（专用服内容路径）。
+  文档：status 表尺/已验证/P2-4、AGENTS §2+§3.10、[a1-mixin-hotadd.md](features/a1-mixin-hotadd.md) §10.3。

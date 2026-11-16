@@ -79,6 +79,10 @@ public final class DevEntry {
         if (!verifyPayloadRemote.isEmpty()) {
             RemotePayloadCheck.start(Path.of(verifyPayloadRemote));
         }
+        String verifyMpFei = System.getProperty("modreloader.verifyMpFei", "").trim();
+        if (!verifyMpFei.isEmpty()) {
+            MpFeiClientCheck.start(verifyMpFei);
+        }
         String verifyPayload = System.getProperty("modreloader.verifyPayload", "").trim();
         if (!verifyPayload.isEmpty()) {
             PayloadCheck.start(Path.of(verifyPayload));

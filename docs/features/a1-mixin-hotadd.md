@@ -385,3 +385,34 @@ A1.2 之前只验证过"一个妃级模组"。现在 `AddCommandCheck` 支持第
   并在 status 记为已知问题 30；不宣称"客户端内保存→重开"已验证。
 - 想要覆盖同一件事、又不需要 GL 的做法：用专用服跑（无窗口），把块放好后 `stop`，再带 jar 重启读档——
   这正是 t4-fixture 已经做的；等有稳定的显示环境再考虑把客户端内的重开路径加回来。
+
+### 10.3 服务端+客户端同时妃级：PASS（2026-11-16）
+
+P2-4 的最后一项：同一时间、同一个妃级 jar（mixin），**服务端和客户端各自热加一遍**，连接必须活着。
+两个 harness 用文件标记握手：客户端先进世界 → 本地热加 → 写 `mp-fei-client-ready.txt`；服务端等标记 + 3 s，
+在服务器线程热加自己的副本；之后两侧各自观察一段时间。
+
+```bash
+# 终端 1
+./gradlew runServer -PmpFeiServer="/abs/ZeroCore2-1.21.1-2.4.9.jar|zerocore"
+# 终端 2
+./gradlew runClient -PverifyMpFei="/abs/ZeroCore2-1.21.1-2.4.9.jar|zerocore"
+```
+
+实测日志（2026-11-16 21:2x）：
+
+```
+[Server thread] [MpFei] client is ready and 1 player(s) connected; hot-adding the server-side copy
+[Server thread] [MpFei] server hot-add zerocore: ok=true … (mixins [zerocore.mixins.json], redefined [net.minecraft.world.inventory.Slot], …)
+[Render thread] [MpFei] joined; hot-adding the client-side copy
+[Render thread] [MpFei] client hot-add zerocore: ok=true … (mixins [zerocore.mixins.json],
+                redefined [net.minecraft.world.inventory.Slot, net.minecraft.client.gui.GuiGraphics,
+                net.minecraft.client.resources.model.ModelBakery], …)
+[Server thread] [MpFei] both sides hot-added zerocore (server isLoaded=true, players still connected=true)
+[Server thread] [MpFei] RESULT: PASS
+[Render thread] [MpFei] after both adds: still connected=true client isLoaded=true
+[Render thread] [MpFei] RESULT: PASS
+```
+
+覆盖的是「两侧各自热加同一个妃级 jar 时，mixin 重定义 + payload 注册 + 客户端资源重载不会打断已有连接」。
+**没有覆盖**：两侧不是同一个 jar（客户端不装 → 仍不支持）、贵妃级注册表内容的两侧同时热加（§9 的 id 同步是另一条路径）。

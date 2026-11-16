@@ -67,6 +67,7 @@
 | **构造后失败回滚（游戏总线监听器）** | 新增 `hotadd/EventBusSnapshot`：构造前快照 bus 的 `owner → 监听器实例`，回滚时**按实例**从所有 dispatch list 里摘掉（公开的 `ListenerList#unregister(EventListener)`）+ 修剪 owner 表；`Capabilities.EVENT_BUS_ROLLBACK` 锚点守卫（`event_bus_rollback=ok`）。实测 `-PfailAfterConstruct`：修前 38 → **41**（+3 泄漏），修后 **38 → 38，移除 2 个**（LSP 的两个 `ClientHandler` 监听器）；状态检查（ModList/module/mixin/class/pack）全过 | 2026-11-16 21:1x：`runClient -PautoAdd=<lsp> -PverifyRollback=true -PfailAfterConstruct=true` → `game-bus listener rollback: clean`、`RESULT: PASS`；[tech-debt.md](tech-debt.md)、[status](#) 已知问题 7 |
 | **注册表 id 重建的线程**（修已知问题 28） | commit/abort 的「清 `BLOCKSTATE_TO_ID_MAP` + `freezeData`」投到服务器线程（日志 `registry freeze: hopping from the thread 'Render thread' to the server thread`），`RegisterEvent` 重放仍留调用线程；**连跑 3 次** `-PverifyAddCommand` + `-PverifyGameplay`：3/3 `AddCmdCheck`/`GameplayCheck RESULT: PASS`、capability 五项 present、`stoneId 1 -> 1 (stable)`、0 处 `No value with id`；专用服 guifei commit 在 `[Server thread]` 直跑（`RESULT: PLACED` + datapack PASS）、嫔级 add 回归 PASS | 2026-11-16 19:27–19:31：`-PverifyAddCommand=<dogfood> -PverifyAddCommandModId=exnihilosatellitium -PverifyGameplay=true` / `runServer -PautoAdd=<t4fixture> -Pt4fixtureSelftest=true` / `-PverifyAddCommand=<EasyLAN>`；[t4-registry-hotadd.md](features/t4-registry-hotadd.md) §11 |
 | **WORLDGEN 边界（维度）** | 标题屏热加 `wgfixture`（数据夹具：1 个超平坦维度）→ **新建世界** → `dimension wgfixture:wgflat registered=true level=true`、`worldgen RESULT: PASS`（修前同一路径 `registered=false level=false`）；机制：`server == null` 时把包预注册进 `ResourceLoader.modResourcePacks`，world load 时随 `mod_data` 一起加载；**已存在的世界仍需重启**，专用服启动期仍不行 | 2026-11-16 20:1x：`-PverifyAddCommand=/tmp/wgfixture/wgfixture-1.0.0.jar -PverifyAddCommandModId=wgfixture -PverifyDatapackAtTitle=true -PverifyWorldgen=wgfixture:wgflat`；[t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) §10 |
+| **服务端+客户端同时妃级** | 专用服与独立客户端**各自**热加同一个妃级 jar（ZeroCore2：mixin `Slot`）：服务端 `redefined net.minecraft.world.inventory.Slot`、客户端 `redefined [Slot, GuiGraphics, ModelBakery]`，两边 `ok=true`、`players still connected=true` → 双方 `RESULT: PASS`（连接没被两侧的 mixin/payload 注册打断） | 2026-11-16 21:2x：`runServer -PmpFeiServer="<zerocore>\|zerocore"` + `runClient -PverifyMpFei="<zerocore>\|zerocore"`；[a1-mixin-hotadd.md](features/a1-mixin-hotadd.md) §10.3 |
 | **第二个妃级模组（同一会话）** | 先 in-world add 众星捧月（贵妃级），再 add `lanserverproperties`（妃级：4 mixin + 布局变更）：两边 `isLoaded=true`、第一个不受影响，`SECOND ADD RESULT: PASS` | 2026-11-16 20:2x：`-PverifyAddCommand=<dogfood> … -PverifyAddCommand2=<lsp> -PverifyAddCommand2ModId=lanserverproperties`；[a1-mixin-hotadd.md](features/a1-mixin-hotadd.md) §10 |
 | **`/modreloader why` 只读诊断** | `inspect/HotAddWhy` 按引擎 VALIDATE 的顺序汇总 tier/内容形状/AT 组成/依赖/注册审计/结论；控制台命令返回 1（诊断成功，不因「拒绝」返回 0）。实测三形态：Jade → `refused (access transformers …)` 57/39；t4fixture → `experimental add-only`；EasyLAN → `hot-add` + **warning: references client classes**（静态扫描不据此拒绝，兜底仍是 dist 门禁 + 回滚） | 2026-11-16 20:5x：`runServer -PserverWhy="<jade>\|access transformer,<t4>\|experimental add-only,<easylan>\|references client classes"` → `[ServerWhy] RESULT: PASS`；[server-hotadd.md](features/server-hotadd.md) §5 |
 | **工程底座** | `capabilities: module_injection … registry_sync … resource_packs … event_bus_rollback` 全 ok（server `resource_packs=n/a`）；**无 `libs/` 可 `clean build`**；**21 个无游戏单测** | `./gradlew test`；[tech-debt.md](tech-debt.md) |
@@ -88,6 +89,7 @@
 - **兼容性矩阵首轮 + 两个缺口的处理**：AT 变更前拒绝（含 UI 预检）、缺依赖前置拒绝、JiJ 内嵌库抽取、AT 晚注入量测与否定结论，见 [hotadd-compatibility-matrix.md](features/hotadd-compatibility-matrix.md)。
 - **注册审计**：纯规则 9 个单测；`-PverifyRegAudit` 扫 16 个真实 jar（129 处引用）+ 合成致命 jar 断言 `VALIDATE` 拒绝、零副作用；真实 `-PverifyCompat=<AppleSkin>` 仍 PASS。见 [client-registration-audit.md](features/client-registration-audit.md)。
 - **capability 重放**：`hotadd/CapabilityReplay` 在 registry commit 之后、common setup 之前只对新容器重放 `RegisterCapabilitiesEvent`；众星捧月五项 provider 在主菜单热加与进世界 add 两条路径都 present，`-PskipCapabilityReplay=true` 反证全 MISSING。见 [dogfood-gameplay.md](features/dogfood-gameplay.md) §1。
+- **A1 产品化四项**：第二个妃级模组（同会话）、构造后游戏总线监听器回滚（`38 → 38`）、服务端+客户端同时妃级（ZeroCore2 两侧 PASS）、存档回读（专用服内容路径 t4-fixture）。见 [a1-mixin-hotadd.md](features/a1-mixin-hotadd.md) §10。
 - **注册表 id 重建的线程**：`hotadd/ServerThreadHop` 把 commit/abort 的「清 `BLOCKSTATE_TO_ID_MAP` + `freezeData`」投到服务器线程（已在服务器线程时直跑，超时回退 + warn，原子 claim 防重复）；`-PverifyAddCommand + -PverifyGameplay` 连跑 3 次全 PASS、无 `No value with id -1`。见 [t4-registry-hotadd.md](features/t4-registry-hotadd.md) §11。
 
 ### 未验证
@@ -195,8 +197,8 @@
 
 ## 下一步
 
-> 下一会话从 **P2-4 剩余两项**（构造后 listener 回滚 / 服务端+客户端同时妃级）或 **P3** 开始；
-> P1-2/P1-3/P2-1/P2-2/P2-3 已完成或已收口。
+> 下一会话从 **P3** 开始（GUI/watcher Phase 3/4、B fallback、嵌套 mod 容器、分析器 Fabric 校准、tech-debt P1-5/P1-6）；
+> P1/P2 项已全部完成或已收口，P2-4 四项 2026-11-16 完成。
 > ⚠️ **本机 dev client 显示层不稳**（2026-11-16 20:2x 连续两次卡在 `glfwSwapBuffers`、一次 `GLFW: Failed to locate a primary monitor`）：
 > 在显示恢复前，优先做**不需要 GL 的活**（分析器校准、纯 Python/Java 单测、`runServer` 路径、文档），
 > 客户端 harness 跑之前先确认窗口能正常交换缓冲。所有 harness 命令见 [AGENTS §2](../AGENTS.md)，细节在对应 feature 文档。
@@ -209,7 +211,7 @@
 | **P2-1** | 剩余一次性事件 | ~~`RegisterItemDecorationsEvent`~~ **已完成**（`ItemDecoratorReplay` + `client-fixture`）；剩下的是逐个判死的清单：`RegisterLayerDefinitions`（要重建 `EntityModelSet`）、`ColorResolvers`、`ModifyDefaultComponentsEvent` 等，结论已写进 [client-registration-audit.md](features/client-registration-audit.md) §7.1 | 已有 harness 的必须 PASS；其余在 §7.1 写明为什么不做 |
 | **P2-2** | ~~剩余 behavior 事件~~ **已完成 2026-11-16** | 11 个 behavior + 剩下的 silent 逐个给了结论：`RegisterItemDecorationsEvent`/`RegisterGuiLayersEvent` 变 covered；其余写进 [client-registration-audit.md](features/client-registration-audit.md) §7.1（框架启动后关闭、没有 subject、改已注册对象风险等） | 每个要么变 covered，要么在 §7.1 写清为什么不做（已满足） |
 | **P2-3** | 贵妃级下一层（**删除/更新结论已完成 2026-11-16**） | datapack 删除：**实测不可能**（deselect 后 id 从 selected 消失，但 required `mod_data` 聚合包把子包重新加回来，`selectedPacks` 仍有它、recipes 164 / loot 75 仍在）；更新：不做（聚合包 children 启动期固定 + `SecureJar` 已绑定，等价 managed relaunch）→ [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) §9 + 回归 `-PverifyDatapackRemove`。剩：WORLDGEN 与 P1-2 合并 | 结论已进 feature 文档；`-PverifyDatapackRemove` PASS |
-| **P2-4** | A1 产品化（**大部分完成 2026-11-16**） | ✅ **第二个妃级模组**（`-PverifyAddCommand2`，PASS）；✅ **构造后 listener 回滚**（`EventBusSnapshot` + `-PfailAfterConstruct`，`38 → 38`，PASS；post-construct 重试经测量仍失败→语义写成「干净回滚 + 重启」）；存档回读：内容路径有 t4-fixture 专用服重启读档 PASS，客户端内「保存→重开」harness 两次卡死已移除（已知问题 30）；仍缺：**服务端+客户端同时妃级**、构造器其它副作用不可回滚 | 剩 1 项 + 已知边界 |
+| **P2-4** | ~~A1 产品化~~ **已完成 2026-11-16** | ✅ 第二个妃级模组（`-PverifyAddCommand2`）；✅ 构造后 listener 回滚（`EventBusSnapshot`，`38 → 38`）；✅ **服务端+客户端同时妃级**（`-PmpFeiServer` + `-PverifyMpFei`，两侧各热加 ZeroCore2，连接存活）；存档回读：内容路径有 t4-fixture 专用服重启读档 PASS（客户端内「保存→重开」harness 两次卡死已移除，已知问题 30）。**已知边界**：构造器其它副作用（静态状态/全局注册/线程）不可回滚；post-construct 之后重试仍失败（FML `ModLoadingException`） | 四项都有 harness PASS + 文档；边界写清 |
 | **P3** | GUI/watcher Phase 3/4、~~分析器校准~~（首轮已完成，见 [analyzer-calibration.md](features/analyzer-calibration.md)）、~~`/modreloader why`~~（已完成 2026-11-16，`-PserverWhy`）、B fallback、嵌套 mod 容器 | 见 [tech-debt.md](tech-debt.md) 与对应 feature 文档 | 各自文档的判据 |
 
 ### 验收清单（给自己/所有者）
@@ -236,6 +238,11 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近几条。
 
+- **2026-11-16（服务端+客户端同时妃级：P2-4 收口）**：新增一对 MP harness：`-PmpFeiServer="<jar>|<modId>"`（专用服等到客户端
+  `mp-fei-client-ready.txt` + 3 s 后在服务器线程热加）与 `-PverifyMpFei="<jar>|<modId>"`（客户端连服 → 进世界 → 本地热加 →
+  写标记 → 观察 16 s）。实测 ZeroCore2：服务端 `redefined net.minecraft.world.inventory.Slot`、客户端 `redefined [Slot, GuiGraphics, ModelBakery]`，
+  两边 `ok=true`、玩家一直在线 → 双方 `RESULT: PASS`。这条覆盖的是「两侧各自热加同一个妃级 jar，连接不被 mixin/payload 注册打断」。
+  至此 P2-4 四项全部有 harness：第二个妃级模组、构造后 listener 回滚、服务端+客户端同时妃级、存档回读（内容路径）。
 - **2026-11-16（构造后失败回滚：游戏总线监听器也能撤掉了）**：AP1.2 的「构造后事件监听器无法注销」是 §6「失败可回滚」的最后一块硬骨头之一。
   先量：加 `-PfailAfterConstruct` 注入点 + `dev/GlobalBusListeners` 读 `NeoForge.EVENT_BUS` 的 owner→listener 表，实测**一次构造后失败留下 +3 个监听器**（38 → 41）。
   再修：`hotadd/EventBusSnapshot` 构造前快照 `owner → 监听器实例`，回滚时**按实例**从所有 dispatch list 里摘除

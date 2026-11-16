@@ -239,6 +239,11 @@ neoForge {
                 systemProperty 'modreloader.verifyMixinLayoutTarget',
                         providers.gradleProperty('verifyMixinLayoutTarget').get()
             }
+            if (providers.gradleProperty('verifyMpFei').orNull) {
+                // Client half of the "both sides fei-tier" check: "<jar>|<modId>".
+                systemProperty 'modreloader.verifyMpFei',
+                        providers.gradleProperty('verifyMpFei').get()
+            }
             if (providers.gradleProperty('verifyMpNotice').orNull) {
                 // Client half: connect and assert the server's hot-add notice arrives
                 // even though this client does not have the mod.
@@ -343,6 +348,11 @@ neoForge {
                 // connected, then the unmodified client must still be told about it.
                 systemProperty 'modreloader.mpNoticeServer',
                         providers.gradleProperty('mpNoticeServer').get()
+            }
+            if (providers.gradleProperty('mpFeiServer').orNull) {
+                // Server half of the "both sides fei-tier" check: "<jar>|<modId>".
+                systemProperty 'modreloader.mpFeiServer',
+                        providers.gradleProperty('mpFeiServer').get()
             }
             if (providers.gradleProperty('serverWhy').orNull) {
                 // Dedicated-server check for /modreloader why: "<jar>|<expected verdict
