@@ -1,11 +1,11 @@
 # 项目状态
 
 > **唯一状态源。** 每次会话先读这里；改状态只改这里，不要在各处复制。过程记录见 [history.md](history.md)。
-> 最后更新：2026-11-15
+> 最后更新：2026-11-16
 
 ## 一句话
 
-只读分析器 v0 可用；**A0（嫔级热加）已验证**；**A1.2 主路径与失败回滚已在 NeoForge 1.21.1 dev client 验证**（`lanserverproperties`：4 mixin、布局变更、LAN 屏可用；post-ModList / post-pack 失败可恢复并重试）。仍差**构造后监听器无法注销、存档回读未验证**，按契约尚不算完成。**GUI/监听初版**（检测→预检→弹窗/toast→加载/失败屏）已验证 EasyLAN、坏 jar、Ex Nihilo 贵妃级三个场景。**双端化**：dedicated server 能加载并热加嫔级；命令通过重放 `RegisterCommandsEvent` 生效（93→94）；payload 适配 E1/E2/E3 全部通过（含跨进程）。**架构收口（2026-11-15）**：引擎不再依赖两端（`PlatformHooks`）、启动校验反射锚点（`Capabilities`）、`dev/` 移出发布包、3 个无游戏 Java 单测。**贵妃级注册表热加（实验性，add-only）已验证**：热加方块 + BlockItem、放置存盘、重启读档 PASS，单人客户端资源包/创造栏生效；**datapack 热加载也已验证**（众星捧月热加后配方 0→164、战利品表 0→75、标签 2+1，真实 3×3 合成与战利品掉落均 PASS，见 [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md)）。仍限 add-only、不可回滚、存档绑定该 mod；维度/生物群系等世界生成数据仍需重启。贵妃级软重启未开始；一次性启动事件与「连接后热加的注册表快照同步」仍不支持（[ADR-0007](decisions/0007-dual-side-server-hotadd.md)）。
+只读分析器 v0 可用；**A0（嫔级热加）已验证**；**A1.2 主路径与失败回滚已在 NeoForge 1.21.1 dev client 验证**（`lanserverproperties`：4 mixin、布局变更、LAN 屏可用；post-ModList / post-pack 失败可恢复并重试）。仍差**构造后监听器无法注销、存档回读未验证**，按契约尚不算完成。**GUI/监听初版**（检测→预检→弹窗/toast→加载/失败屏）已验证 EasyLAN、坏 jar、Ex Nihilo 贵妃级三个场景。**双端化**：dedicated server 能加载并热加嫔级；命令通过重放 `RegisterCommandsEvent` 生效（93→94）；payload 适配 E1/E2/E3 全部通过（含跨进程）。**架构收口（2026-11-15）**：引擎不再依赖两端（`PlatformHooks`）、启动校验反射锚点（`Capabilities`）、`dev/` 移出发布包、3 个无游戏 Java 单测。**贵妃级注册表热加（实验性，add-only）已验证**：热加方块 + BlockItem、放置存盘、重启读档 PASS，单人客户端资源包/创造栏生效；**datapack 热加载也已验证**（众星捧月热加后配方 0→164、战利品表 0→75、标签 2+1，真实 3×3 合成与战利品掉落均 PASS，见 [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md)）。仍限 add-only、不可回滚、存档绑定该 mod；维度/生物群系等世界生成数据仍需重启。**热加兼容性矩阵（首轮 9 个真实模组）**：只有 1 个干净通过、6 个带 access transformer 被变更前拒绝、1 个 jar-in-jar 内嵌依赖失败、1 个缺依赖——**AT 是硬边界**（见 [hotadd-compatibility-matrix.md](features/hotadd-compatibility-matrix.md)）。贵妃级软重启未开始；一次性启动事件与「连接后热加的注册表快照同步」仍不支持（[ADR-0007](decisions/0007-dual-side-server-hotadd.md)）。
 
 ## 当前目标
 
@@ -126,16 +126,34 @@
 
 > 结构性技术债与架构升级点见 [tech-debt.md](tech-debt.md)（P0 已完成；下一步 P1-4 → P1-5 → P1-6）。
 
-0. **Git 收尾**：加 CI（分析器单测 + `./gradlew test`/`build`）；证据截图从 `run/screenshots` 复制进 `docs/`；首个 tag `v0.1.0` 待功能稳定。**CI 会先撞上已知问题 12**：`libs/` 不随仓库分发，完整 `build` 在 CI 上无 jar 可用，加 CI 前必须决定 jar 从哪来（下载脚本 / 提交 jar / 先只跑分析器单测与 `test`）。
-1. **人工收尾**：点一次 EasyLAN 的 GUI 按钮（`/modreloader add` 已自动化，见表尺）；跑一遍众星捧月的桶/坩埚/堆肥手动清单（`-PverifyGameplayKeepOpen=true`，见 [dogfood-gameplay.md](features/dogfood-gameplay.md) §3）。
-2. **A1 产品化**：构造后 listener 回滚 / 存档回读；第二个妃级模组（如 `mcwifipnp`）；把 mr 的 5 个调用点反射化，去掉 `compileOnly` 依赖，让 fresh clone 能构建（已知问题 12）。
-3. **GUI / 文件夹监听完善**：Phase 3/4——忽略/重试持久化、批量/依赖排序、`-PverifyGui` 自动化；见 [gui-mod-watcher.md](features/gui-mod-watcher.md)。
-4. **分析器校准**：50 个 1.21.1 模组，人工标注 tier；算准确率；修 `mekanismgenerators` 类漏判。
-5. **游戏内 `/modreload why <mod>`**：NeoForge 1.21.1，只读。
-6. ~~**贵妃级 datapack 热加载 PoC**~~（2026-11-15 完成）：方案 A「注入 pack + 原版 `/reload`」已实现并验证（世界内 / 标题屏 / 专用服 + 重启，众星捧月与 t4fixture）。见 [features/t4-datapack-hotadd.md](features/t4-datapack-hotadd.md)、[ADR-0009](decisions/0009-datapack-hotadd.md)。
-7. **贵妃级下一段：连接后热加的注册表快照同步**（多人硬骨头）：现在要求「建连接前完成」，因为登录配置阶段的 `FrozenRegistryPayload` 是唯一同步机会；这一步决定多人服能不能用。之后才是 datapack 删除/更新语义与 WORLDGEN 层（维度/生物群系，大概率只能 managed relaunch）。
-8. **JiJ 内嵌依赖抽取**（矩阵发现的可补缺口）：把 `META-INF/jarjar/metadata.json` 里的嵌套 jar 注册成独立 `IModFile` + module layer，救回“库依赖”类模组（jecharacters/pinin）。之后可做 AT 应用可行性 spike（只对热加后加载的类）与 20–30 模组的矩阵扩样。见 [hotadd-compatibility-matrix.md](features/hotadd-compatibility-matrix.md)。
+0. **新会话从这里开始：JiJ 内嵌依赖抽取**（矩阵发现的可补缺口）。`jecharacters` 的
+   `META-INF/jarjar/PinIn-1.6.0.jar` 与 `JustEnoughCharacters.coremod-neoforge.jar` 由 `META-INF/jarjar/metadata.json`
+   描述，**两个都没有 `mods.toml`（纯库）**；热加后构造时 `NoClassDefFoundError: me/towdium/pinin/Keyboard`。
+   目标：把嵌套 jar 放进 game layer 的 module 路径，让外层 mod 的 automatic module 能读到（纯库分支）；
+   带 `mods.toml` 的嵌套 mod 再走 `JarModsDotTomlModFileReader` + `ModListInjector`。
+   锚点：[HotAddEngine.add](../src/main/java/dev/modreloader/hotadd/HotAddEngine.java) 在 `JarContents.of(jar)` 后读 metadata
+   （`jars[].path` 相对 jar；`isObfuscated` 先忽略）；[ModuleInjector.addToGameLayer](../src/main/java/dev/modreloader/hotadd/ModuleInjector.java)
+   目前只吃 `ModFileInfo`，需要接受"额外 SecureJar/路径"（或先建临时 `ModFile`）。
+   验收：`runClient -PverifyCompat=<jecharacters jar>` 从 `CONSTRUCT / NoClassDefFoundError` 变为通过（或进入下一阶段），
+   并更新 [hotadd-compatibility-matrix.md](features/hotadd-compatibility-matrix.md) 该行。风险：临时 jar 生命周期、automatic module 名冲突；
+   另外 `JustEnoughCharacters.coremod-neoforge.jar` 是 coremod（`FMLCorePlugin`），热加大概率不支持——先记录、不阻塞。
+1. **AT 应用可行性 spike**（可选，做完 0 再评估）：只对「热加后才加载」的类注入 AT 规则，量一下 Jade/Mekanism 里有多少 AT 目标是晚加载的；
+   已加载的原版类明确不做（会丢 NeoForge patch）。结论可能仍是"AT 只能重启"。
+2. **贵妃级多人：连接后热加的注册表快照同步**（多人硬骨头）：现在要求「建连接前完成」，因为登录配置阶段的 `FrozenRegistryPayload`
+   是唯一同步机会；这一步决定多人服能不能用。之后才是 datapack 删除/更新语义与 WORLDGEN 层。
+3. **Git 收尾**：CI（分析器单测 + `./gradlew test`/`build`）、截图入 `docs/`、首个 tag `v0.1.0`。
+   **CI 会先撞已知问题 12**：`libs/` 不随仓库分发，先决定 jar 从哪来。
+4. **人工收尾**：点一次 EasyLAN 的 GUI 按钮；跑众星捧月的桶/坩埚/堆肥手动清单（`-PverifyGameplayKeepOpen=true`）。
+5. **A1 产品化**：构造后 listener 回滚 / 存档回读；第二个妃级模组；把 mr 的调用点反射化，去掉 `compileOnly`。
+6. **GUI / 文件夹监听完善**：Phase 3/4（忽略/重试持久化、批量/依赖排序、`-PverifyGui`）。
+7. **分析器校准**：20–30 个 1.21.1 模组填矩阵；把 AT/JiJ/依赖纳入预测维度，修 `mekanismgenerators` 类漏判。
+8. **游戏内 `/modreload why <mod>`**：只读。
 9. **B fallback**：只在 A 失败时提供 offline/republish；不是主线。
+
+已完成（保留参考）：**datapack 热加载**（注入 pack + `/reload`，世界内/标题屏/专用服+重启，见
+[t4-datapack-hotadd.md](features/t4-datapack-hotadd.md)）；**狗粮玩法验收 + 五个客户端 bug 修复**（见
+[dogfood-gameplay.md](features/dogfood-gameplay.md)）；**兼容性矩阵首轮 + AT/缺依赖的变更前拒绝**（见
+[hotadd-compatibility-matrix.md](features/hotadd-compatibility-matrix.md)）。
 
 ## 最近变更
 

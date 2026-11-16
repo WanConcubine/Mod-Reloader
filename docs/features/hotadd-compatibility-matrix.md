@@ -53,7 +53,23 @@
   2. **AT 应用可行性 spike**：只对"热加后才加载"的类注入 AT 规则，已加载类明确不支持——先量一下 Jade/Mekanism 里有多少 AT 目标是晚加载的；
   3. 依赖预检已做；矩阵扩到 20–30 个模组，校准"预测 vs 实际"。
 
-## 5. 复现
+## 5. 交接：下一步从这里开始（2026-11-16）
+
+**JiJ 抽取**的具体落点（下一会话直接照做）：
+
+- 嵌套 jar 由 `META-INF/jarjar/metadata.json` 描述：`jars[].path` 是 jar 内路径（如
+  `META-INF/jarjar/PinIn-1.6.0.jar`），`isObfuscated` 先忽略。
+- 本次语料里的两个嵌套 jar **都没有 `mods.toml`**（纯库）→ 不需要 `IModFile`/container，
+  只要把它的类放进 game layer 的 module 路径，外层 mod 的 automatic module 就能读到。
+- 锚点：[HotAddEngine.add](../../src/main/java/dev/modreloader/hotadd/HotAddEngine.java)（`JarContents.of(jar)` 之后、module 注入之前）；
+  [ModuleInjector.addToGameLayer](../../src/main/java/dev/modreloader/hotadd/ModuleInjector.java)（当前只接受 `Collection<ModFileInfo>`，
+  需要支持额外 `SecureJar`/路径）。
+- 验收：`runClient -PverifyCompat=<jecharacters jar>` 从 `CONSTRUCT / NoClassDefFoundError: me/towdium/pinin/Keyboard`
+  变为通过或进入下一阶段；更新本文 §2 的矩阵行。
+- 风险：嵌套 jar 的临时文件生命周期（进程内可留 tmp）；automatic module 名冲突；
+  `JustEnoughCharacters.coremod-neoforge.jar` 是 `FMLCorePlugin` coremod，热加大概率不支持——记录，不阻塞。
+
+## 6. 复现
 
 ```bash
 ./gradlew runClient -PverifyCompat=/abs/a.jar[,/abs/b.jar]
