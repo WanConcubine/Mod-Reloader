@@ -363,3 +363,19 @@
   -PverifyGuiLayers=true -PverifyItemDecorators=true` → `[AddCmdCheck] dispatcher has /modreloader=true`
   （证明 `remember` 在客户端注册路径上被调用）、`GUI layers: 25 -> 26`、`item decorations: minecraft:diamond 0 -> 1`、
   `AddCmdCheck RESULT: PASS`。文档：[tech-debt.md](tech-debt.md) §4（P1-4 完成、动手顺序第 1 项划掉）、status 最近变更。
+
+- **（构造后失败回滚：游戏总线监听器按实例摘除 / P2-4 一项）**：先量后修。
+  **量**：给 `HotAddEngine` 加 `-PfailAfterConstruct`（构造完成、注册表提交之前的注入点），加 `dev/GlobalBusListeners`
+  （只读 `NeoForge.EVENT_BUS` 的 `listeners` 表求和）；用 `-PautoAdd=<lsp> -PverifyRollback=true -PfailAfterConstruct=true` 实测
+  **38 → 41（+3）**：一次构造后失败留下 3 个监听器，而回滚只能恢复 ModList/module/mixin/pack——§6「失败可回滚」的真实缺口。
+  **修**：新增 `hotadd/EventBusSnapshot`：构造前把 `owner → 监听器实例` 深拷贝一份；回滚时算出构造期间**新增的实例**，
+  对 bus 的每个 `ListenerList` 调公开的 `unregister(EventListener)`，再从 owner 表里删掉它们（空的 owner 键一并清掉）。
+  第一版按 **owner** 撤销（`IEventBus#unregister(owner)`），实测只回收了 2 个、还剩 1 个——那个监听器被追加到了一个
+  **已存在**的 owner 上，owner 级撤销碰不到；所以最终改成**按实例**。锚点加进 `Capabilities`（`event_bus_rollback=ok`，
+  两个反射名：`EventBus#listeners` / `EventBus#listenerLists`，移除动作本身是公开 API），`RestoreResult` 记 `added/before/after`。
+  **证据**（2026-11-16 21:1x）：`game-bus listeners 38 -> 38 (2 removed)`、`game-bus listener rollback: clean (baseline 38 -> 38)`、
+  状态检查（ModList/module/target 类字节/资源包）全过、`RollbackCheck RESULT: PASS`。
+  顺带量到一个边界并写进文档：**post-construct 之后重试仍失败**（FML `ModLoadingException: Loading errors encountered`，
+  mixin 已经应用过一次），所以这条路径的承诺是「干净回滚 + 重启」，可重试的仍是 pre-construct 路径；
+  `-PfailAfterModList` 回归仍 PASS 且重试成功（`retry result: hot-added [lanserverproperties] …`）、`-PfailAfterPack` PASS、
+  `-PverifyAddCommand=<clientfixture>` PASS。文档：status 表尺/已知问题 7/P2-4、AGENTS §3.10、[tech-debt.md](tech-debt.md) §4b、本文件。

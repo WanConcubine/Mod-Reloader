@@ -44,6 +44,13 @@
 
 `src/dev/java` + Gradle `dev` source set，作为同一个 mod 的第二个 source set 参与 dev run，但不进 `jar`。主源集与 dev 之间只剩一个**按名字反射**的入口 `DevEntry.install()`；`check` 依赖 `compileDevJava`，只坏 dev 也会让构建失败。**剩余**：`ServerBootstrap` 的 `autoAdd`/`probe` 触发还在主源集（它们调用的是命令也用的主 API，风险低）。
 
+### ✅ 4b. 构造后事件监听器无法回滚（2026-11-16 已修游戏总线那一半）
+
+`hotadd/EventBusSnapshot` 在构造前快照游戏总线（`NeoForge.EVENT_BUS`）的 owner → 监听器实例，失败回滚时**按实例**摘除
+（公开的 `ListenerList#unregister(EventListener)`）并修剪 owner 表；`Capabilities.EVENT_BUS_ROLLBACK` 守卫两个反射名。
+实测（`-PfailAfterConstruct`）：修前 38 → 41（+3 泄漏），修后 38 → 38（移除 2 个，LSP 的两个 `ClientHandler` 监听器）。
+**仍未解决**：构造器里的其它副作用（静态状态、全局注册、线程）、post-construct 之后的重试（FML `ModLoadingException`）。
+
 ### ✅ 4. 注册表 id 重建与 chunk 发送的竞态（已完成 2026-11-16）
 
 **症状**：进世界后热加众星捧月，客户端收到一个 chunk 包报 `IllegalArgumentException: No value with id -1`（`LinearPalette.read`），

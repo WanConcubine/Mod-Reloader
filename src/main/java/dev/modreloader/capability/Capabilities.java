@@ -55,7 +55,8 @@ public final class Capabilities {
         REGISTRY_SYNC("registry snapshot sync to connected clients", false),
         DATAPACK_RELOAD("data pack reload (guifei)", false),
         RESOURCE_PACKS("resource pack injection", false),
-        CAPABILITY_REPLAY("capability event replay", false);
+        CAPABILITY_REPLAY("capability event replay", false),
+        EVENT_BUS_ROLLBACK("game-bus listener rollback", false);
 
         private final String label;
         private final boolean essential;
@@ -104,6 +105,7 @@ public final class Capabilities {
         RESULTS.put(Capability.DATAPACK_RELOAD, checkDatapackReload());
         RESULTS.put(Capability.RESOURCE_PACKS, checkResourcePacks());
         RESULTS.put(Capability.CAPABILITY_REPLAY, checkCapabilityReplay());
+        RESULTS.put(Capability.EVENT_BUS_ROLLBACK, checkEventBusRollback());
 
         List<String> summary = new ArrayList<>();
         for (Capability capability : Capability.values()) {
@@ -239,6 +241,26 @@ public final class Capabilities {
             missing.add("capability event: " + t.getClass().getSimpleName());
         }
         return result(Capability.CAPABILITY_REPLAY, missing);
+    }
+
+    /**
+     * Rolling back the listeners a failed add registered needs the bus's owner map
+     * (read-only: {@code EventBus#listeners}) and the public
+     * {@code IEventBus#unregister(Object owner)}. Both are internal-ish names; if
+     * they drift the rollback degrades to "log that listeners stay registered".
+     */
+    private static Result checkEventBusRollback() {
+        List<String> missing = new ArrayList<>();
+        try {
+            Class<?> bus = Class.forName("net.neoforged.bus.EventBus", false,
+                    Capabilities.class.getClassLoader());
+            bus.getDeclaredField("listeners");
+            net.neoforged.neoforge.common.NeoForge.EVENT_BUS.getClass()
+                    .getMethod("unregister", Object.class);
+        } catch (Throwable t) {
+            missing.add("event bus: " + t.getClass().getSimpleName());
+        }
+        return result(Capability.EVENT_BUS_ROLLBACK, missing);
     }
 
     private static Result checkRegistryAdaptation() {

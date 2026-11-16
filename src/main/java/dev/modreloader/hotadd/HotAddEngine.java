@@ -333,8 +333,19 @@ public final class HotAddEngine {
             //    Registry.register directly in the constructor. For registry content the normal
             //    startup order is construct → RegisterEvent → freeze → common setup.
             stage = Stage.CONSTRUCT;
+            // Snapshot the game-bus owners before the mod is constructed: FML registers
+            // its @EventBusSubscriber methods during construct, and a later failure must
+            // take them off again (otherwise a retry registers them twice).
+            EventBusSnapshot.Snapshot busSnapshot = EventBusSnapshot.of();
             rollback.add("event listeners", () -> {
-                if (constructed[0]) {
+                if (!constructed[0]) {
+                    return;
+                }
+                int removed = EventBusSnapshot.restore(busSnapshot);
+                if (removed >= 0) {
+                    ModReloader.LOGGER.info("[ModReloader] rollback: unregistered {} game-bus "
+                            + "listener owner(s) registered by the failed construct", removed);
+                } else {
                     ModReloader.LOGGER.warn(
                             "[ModReloader] rollback: mod constructors/event listeners cannot be "
                                     + "unregistered; only ModList/module/mixin state is restored");
@@ -356,6 +367,10 @@ public final class HotAddEngine {
                 FmlEvents.construct(container);
                 constructed[0] = true;
                 loaded.add(container.getModId());
+            }
+            if (Boolean.getBoolean("modreloader.failAfterConstruct")) {
+                return fail(rollback, Stage.CONSTRUCT, FailureKind.UNKNOWN,
+                        "injected failure after construct (listeners are already registered)");
             }
             // Informing layer — deliberately BEFORE the registry commit and the data
             // pack reload. Measured: a connected client that lacks a content mod is

@@ -39,12 +39,16 @@ public final class RollbackCheck {
     private RollbackCheck() {
     }
 
-    public static void start(Path jar, HotAddEngine.Result first) {
+    private static int listenersBefore = -1;
+
+    public static void start(Path jar, HotAddEngine.Result first, int listenersBeforeCount) {
         if (started) {
             return;
         }
         started = true;
-        ModReloader.LOGGER.info("[RollbackCheck] first add result: {}", first.message());
+        listenersBefore = listenersBeforeCount;
+        ModReloader.LOGGER.info("[RollbackCheck] first add result: {} (global bus listeners before: {})",
+                first.message(), listenersBefore);
         NeoForge.EVENT_BUS.addListener(ClientTickEvent.Post.class, event -> {
             if (!started) {
                 return;
@@ -116,9 +120,44 @@ public final class RollbackCheck {
             return;
         }
 
-        if (Boolean.getBoolean("modreloader.failAfterPack")) {
-            ModReloader.LOGGER.info("[RollbackCheck] pack rollback state checks passed; "
-                    + "not retrying because the mod was already constructed (listeners remain)");
+        boolean afterPack = Boolean.getBoolean("modreloader.failAfterPack");
+        boolean afterConstruct = Boolean.getBoolean("modreloader.failAfterConstruct");
+        if (afterPack || afterConstruct) {
+            // The engine's own restore result is the precise measurement: the global
+            // count keeps drifting after the restore because the remaining rollback
+            // steps (class restore / mixin deactivation / pack reload) may register a
+            // listener of their own, which is not a leak of this add.
+            dev.modreloader.hotadd.EventBusSnapshot.RestoreResult restored =
+                    dev.modreloader.hotadd.EventBusSnapshot.lastRestore();
+            int after = GlobalBusListeners.count();
+            if (restored != null && !restored.clean()) {
+                ModReloader.LOGGER.error("[RollbackCheck] FAIL: EventBusSnapshot restored the game "
+                        + "bus incompletely ({} added, {} -> {})",
+                        restored.added(), restored.before(), restored.after());
+                ModReloader.LOGGER.error("[RollbackCheck] RESULT: FAIL");
+                return;
+            }
+            ModReloader.LOGGER.info("[RollbackCheck] game-bus listener rollback: {} "
+                            + "(baseline {} -> {} at the end of the rollback, bus total now {})",
+                    restored == null ? "not measurable" : "clean",
+                    listenersBefore, restored == null ? "?" : restored.after(), after);
+
+            if (!afterConstruct) {
+                // Pack failure: state checks are the point; the pack path has its own
+                // verified rollback and is not retried here.
+                ModReloader.LOGGER.info("[RollbackCheck] pack rollback state checks passed; "
+                        + "not retrying");
+                ModReloader.LOGGER.info("[RollbackCheck] RESULT: PASS");
+                return;
+            }
+
+            // Post-construct rollback promises "state restored", not "retry works":
+            // measured 2026-11-16, retrying a mixin mod after a post-construct failure
+            // ends in FML's `ModLoadingException: Loading errors encountered` (the
+            // mixin config was already applied once). The retry promise belongs to the
+            // pre-construct failure path (failAfterModList), which still passes.
+            ModReloader.LOGGER.info("[RollbackCheck] post-construct rollback restored state and "
+                    + "listeners; not retrying (measured: a mixin mod fails FML's load on retry)");
             ModReloader.LOGGER.info("[RollbackCheck] RESULT: PASS");
             return;
         }

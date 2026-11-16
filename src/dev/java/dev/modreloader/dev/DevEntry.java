@@ -52,10 +52,13 @@ public final class DevEntry {
                 return;
             }
             autoAddDone = true;
+            // Measured before the add: a post-construct failure leaves game-bus
+            // listeners behind (no unregister), so the delta is the evidence.
+            int listenersBefore = GlobalBusListeners.count();
             HotAddEngine.Result result = HotAddEngine.add(jar);
             ModReloader.LOGGER.info("[ModReloader] autoAdd result: {}", result.message());
             if (verifyRollback) {
-                RollbackCheck.start(jar, result);
+                RollbackCheck.start(jar, result, listenersBefore);
             } else if (verifyLan && result.ok()) {
                 LanScreenCheck.start();
             }
