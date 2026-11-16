@@ -165,7 +165,8 @@ Gradle 编译仍用 Temurin 21 toolchain，只有游戏运行用 JBR。
 10. **不要夸大 A1**：A1.2 只验证了 `lanserverproperties` + JBR + dev client；MixinRuntime 是**可选**依赖（缺它妃级被拦、嫔级照常，但构建仍需 `libs/` 的 jar）；失败回滚只覆盖 post-ModList/post-pack，构造后事件监听器和存档回读未解决；不等于通用妃级支持。
 11. **不要夸大 GUI/监听**：只验证了 EasyLAN、坏 jar、Ex Nihilo 贵妃级三个场景；`scan`/`gui` 命令、失败重试、忽略记录跨重启未自动验证（`add` 命令、世界内 toast、主菜单入口与忽略恢复已有 harness）；**皇后级只提示重启**；贵妃级走实验性 add-only 热加（UI 有警告，仅验证过 fixture）。
 12. **客户端启动期注册/快照：主要项已重放/补齐，还剩两项**：已重放 `FMLClientSetupEvent` / `RegisterKeyMappingsEvent` / `RegisterMenuScreensEvent` / `EntityRenderersEvent.RegisterRenderers`（并重建两个 dispatcher）/ `RegisterColorHandlersEvent.Block/.Item` / `RegisterClientExtensionsEvent`，`RegisterClientReloadListenersEvent`（临时 manager + 按类名去重），并补齐 `ItemRenderer` 的 item→model 快照（否则物品图标是紫黑方块）；**仍未重放** `RegisterLayerDefinitions`（模型层启动时已 bake）与 `ColorResolvers`。另外热加 mod 的 **config 不会自动加载**（`registerConfig` 只登记），已由 `hotadd/ModConfigs` 按容器调 `ConfigTracker.openConfig` 补上；`SERVER` config 仍跳过。别写「客户端完全正常」，见 [status.md](docs/status.md) 已知问题 21/22。
-13. **不要夸大 datapack**：只覆盖 `RegistryLayer.RELOADABLE`（配方/战利品/标签/附魔/伤害类型/纹饰/物品修饰器 + mod 自注册的 server reload listener）；**世界生成注册表**（维度/生物群系/结构）仍需重启或新世界。只能 add、不能删/改；提交后不可回滚；存档会绑定 `mod/<modId>` 这个 data pack。只验证过众星捧月 1.5.0 与 t4fixture，不要写成"支持任意 datapack"。
+13. **不要夸热火加覆盖面**：兼容性矩阵首轮（9 个真实模组）只有 1 个干净通过；6 个带 access transformer 的被变更前拒绝（AT 是硬边界），1 个 JiJ 内嵌依赖失败，1 个缺依赖。tier 只描述内容形状，不描述 AT/JiJ/依赖；别写“支持任意模组”，见 [hotadd-compatibility-matrix.md](docs/features/hotadd-compatibility-matrix.md)。
+14. **不要夸大 datapack**：只覆盖 `RegistryLayer.RELOADABLE`（配方/战利品/标签/附魔/伤害类型/纹饰/物品修饰器 + mod 自注册的 server reload listener）；**世界生成注册表**（维度/生物群系/结构）仍需重启或新世界。只能 add、不能删/改；提交后不可回滚；存档会绑定 `mod/<modId>` 这个 data pack。只验证过众星捧月 1.5.0 与 t4fixture，不要写成"支持任意 datapack"。
 
 ## 4. 目录
 
@@ -176,7 +177,7 @@ docs/
   design.md                # 架构、分层、不变量
   glossary.md              # 术语（嫔/妃/贵妃/皇后、软重启、sidecar、registry…）
   use-cases.md             # 真实场景：什么情况下无需重启最有价值
-  features/                # 功能规格与验证：a0-hot-add.md / a1-mixin-hotadd.md / gui-mod-watcher.md / server-hotadd.md / t4-registry-hotadd.md / t4-datapack-hotadd.md / dogfood-gameplay.md / lan-doctor.md
+  features/                # 功能规格与验证：a0-hot-add.md / a1-mixin-hotadd.md / gui-mod-watcher.md / server-hotadd.md / t4-registry-hotadd.md / t4-datapack-hotadd.md / dogfood-gameplay.md / hotadd-compatibility-matrix.md / lan-doctor.md
   decisions/               # ADR：为什么这样定
   research-hot-mod-reload.md  # 2026-11 调研报告；历史背景，结论以 status 为准
   research-t4-registry.md    # 贵妃级注册表适配调研（机制/边界/实验计划）

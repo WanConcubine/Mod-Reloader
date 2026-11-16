@@ -42,6 +42,7 @@ public final class FailureKeys {
             case EVENT -> "event";
             case RESOURCE_PACK -> "resource_pack";
             case DATAPACK -> "datapack";
+            case ACCESS_TRANSFORMER -> "access_transformer";
             case ROLLBACK_PARTIAL -> "rollback_partial";
             case NONE, UNKNOWN -> "unknown";
         };

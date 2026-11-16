@@ -140,6 +140,7 @@ public final class ModInspector {
 
             return new ModInspection(jar, jar.getFileName().toString(), List.copyOf(mods), tier,
                     mixins, scan.registry(), scan.nativeCode(), alreadyLoaded, clientSideOnly,
+                    scan.accessTransformers(),
                     List.copyOf(dependencies), List.copyOf(notes), null);
         } catch (UncheckedIOException e) {
             ModReloader.LOGGER.warn("[ModReloader] preflight failed for {}: not a valid zip/jar", jar);
@@ -152,17 +153,21 @@ public final class ModInspector {
 
     private static ModInspection failed(Path jar, String error) {
         return new ModInspection(jar, jar.getFileName().toString(), List.of(), ModInspection.Tier.PIN,
-                false, false, false, false, false, List.of(), List.of(), error);
+                false, false, false, false, false, false, List.of(), List.of(), error);
     }
 
     private static ScanResult scanJar(Path jar) {
         boolean registry = false;
         boolean nativeCode = false;
+        boolean accessTransformers = false;
         try (ZipFile zip = new ZipFile(jar.toFile())) {
             var entries = zip.entries();
             while (entries.hasMoreElements()) {
                 ZipEntry entry = entries.nextElement();
                 String name = entry.getName().toLowerCase(Locale.ROOT);
+                if (name.equals("meta-inf/accesstransformer.cfg")) {
+                    accessTransformers = true;
+                }
                 if (name.endsWith(".so") || name.endsWith(".dll") || name.endsWith(".dylib")
                         || name.startsWith("meta-inf/native-image/")
                         || name.equals("meta-inf/coremods.json")) {
@@ -184,10 +189,10 @@ public final class ModInspector {
         } catch (Throwable t) {
             ModReloader.LOGGER.warn("[ModReloader] cannot scan jar {}", jar, t);
         }
-        return new ScanResult(registry, nativeCode);
+        return new ScanResult(registry, nativeCode, accessTransformers);
     }
 
-    private record ScanResult(boolean registry, boolean nativeCode) {
+    private record ScanResult(boolean registry, boolean nativeCode, boolean accessTransformers) {
     }
 
     private static final class RegistryVisitor extends ClassVisitor {

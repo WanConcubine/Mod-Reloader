@@ -45,7 +45,7 @@ public final class HotAddEngine {
     public enum FailureKind {
         NONE, MISSING_FILE, NOT_A_MOD, INVALID_METADATA, ALREADY_LOADED, MISSING_DEPENDENCY, JBR_REQUIRED,
         MIXIN_RUNTIME, NETWORK_PAYLOAD, UNSUPPORTED_TIER, CAPABILITY, MIXIN_CONFIG, MIXIN_TARGET, REDEFINE, MODULE, MODLIST, REGISTRY,
-        CONSTRUCT, EVENT, RESOURCE_PACK, DATAPACK, ROLLBACK_PARTIAL, UNKNOWN
+        CONSTRUCT, EVENT, RESOURCE_PACK, DATAPACK, ACCESS_TRANSFORMER, ROLLBACK_PARTIAL, UNKNOWN
     }
 
     public record Result(boolean ok, String message, Stage stage, FailureKind kind,
@@ -75,6 +75,10 @@ public final class HotAddEngine {
         Rollback rollback = new Rollback();
         boolean[] constructed = {false};
         Stage stage = Stage.VALIDATE;
+        // Visible to the catch block: a failure after mixins were applied leaves
+        // injected handlers in already-loaded classes and needs a restart.
+        Set<String> ids = new LinkedHashSet<>();
+        boolean mixinsApplied = false;
         try {
             IModFile candidate = new JarModsDotTomlModFileReader()
                     .read(JarContents.of(jar), ModFileDiscoveryAttributes.DEFAULT);
@@ -94,7 +98,6 @@ public final class HotAddEngine {
                 return fail(rollback, Stage.VALIDATE, FailureKind.INVALID_METADATA, "jar declares no mods: " + jar.getFileName());
             }
 
-            Set<String> ids = new LinkedHashSet<>();
             for (IModInfo info : infos) {
                 if (ModList.get().isLoaded(info.getModId())) {
                     return fail(rollback, Stage.VALIDATE, FailureKind.ALREADY_LOADED, "already loaded: " + info.getModId());
@@ -141,6 +144,29 @@ public final class HotAddEngine {
             try {
                 ModInspection inspection = ModInspector.inspect(jar);
                 registryContent = inspection.ok() && inspection.registry();
+                if (inspection.ok()) {
+                    // A required dependency that is not loaded makes ModListInjector
+                    // build no container ("no ModContainer built"), which is a
+                    // confusing failure after the module was already injected.
+                    List<String> missingDeps = inspection.dependencies().stream()
+                            .filter(dep -> dep.required() && !dep.satisfied())
+                            .map(dep -> dep.modId() + " " + dep.versionRange())
+                            .toList();
+                    if (!missingDeps.isEmpty()) {
+                        return fail(rollback, Stage.VALIDATE, FailureKind.MISSING_DEPENDENCY,
+                                ids + " needs " + missingDeps + " first; hot-add it in that order");
+                    }
+                }
+                if (inspection.ok() && inspection.accessTransformers()) {
+                    // Access transformers are applied when the game layer loads
+                    // classes; a hot-added mod's ATs are not. Mods that widen a
+                    // private vanilla member fail with IllegalAccessError during
+                    // construction - which happens after mixins were applied and
+                    // cannot be undone. Refuse before touching anything.
+                    return fail(rollback, Stage.VALIDATE, FailureKind.ACCESS_TRANSFORMER,
+                            ids + " ships META-INF/accesstransformer.cfg; access transformers only "
+                                    + "apply at startup. Restart with the jar in mods/.");
+                }
             } catch (Throwable t) {
                 ModReloader.LOGGER.warn("[ModReloader] cannot predict registry content for {}", jar, t);
             }
@@ -196,6 +222,7 @@ public final class HotAddEngine {
                     return fail(rollback, Stage.MIXIN, FailureKind.CAPABILITY,
                             mixinCapability.describe());
                 }
+                mixinsApplied = true;
                 List<String> mixinLog = new ArrayList<>();
                 String mixinError = MixinStage.register(mixinConfigs, ids, primaryId, rollback,
                         mixinLog, mixinSummary);
@@ -338,6 +365,16 @@ public final class HotAddEngine {
             }
             if (stage == Stage.DATAPACK) {
                 message += " (registry content is already committed; the runtime is dirty)";
+            }
+            if (mixinsApplied && stage != Stage.MIXIN && stage != Stage.MODULE
+                    && stage != Stage.VALIDATE) {
+                // Mixin-injected code cannot be removed by class redefinition; a
+                // later failure leaves handlers referencing classes that the
+                // rollback just unloaded (NoClassDefFoundError at render time).
+                message += " (mixins were already applied and cannot be undone; restart the game)";
+                ModReloader.LOGGER.error(
+                        "[ModReloader] mixins of {} were applied before the failure; the client is "
+                                + "unstable until restarted", ids);
             }
             return fail(rollback, stage, kindFor(stage), message);
         }

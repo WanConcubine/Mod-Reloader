@@ -80,6 +80,7 @@ def verifyAddCommand = providers.gradleProperty('verifyAddCommand').orNull
 def verifyDatapack = providers.gradleProperty('verifyDatapack').orNull
 def verifyDatapackAtTitle = providers.gradleProperty('verifyDatapackAtTitle').orNull
 def verifyGameplay = providers.gradleProperty('verifyGameplay').orNull
+def verifyCompat = providers.gradleProperty('verifyCompat').orNull
 def verifyMenu = providers.gradleProperty('verifyMenu').orNull
 def verifyDelete = providers.gradleProperty('verifyDelete').orNull
 def verifyRegistryProbe = providers.gradleProperty('verifyRegistryProbe').orNull
@@ -174,6 +175,11 @@ neoForge {
             if (providers.gradleProperty('verifyGameplayModId').orNull) {
                 systemProperty 'modreloader.verifyGameplayModId',
                         providers.gradleProperty('verifyGameplayModId').get()
+            }
+            if (verifyCompat) {
+                // Compatibility matrix: hot-add real jars at the title screen, one
+                // at a time, and log a verdict per jar (comma-separated, deps first).
+                systemProperty 'modreloader.verifyCompat', verifyCompat
             }
             if (providers.gradleProperty('verifyCreative').orNull) {
                 // After the gameplay checks: switch to creative and render the

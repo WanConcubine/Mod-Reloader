@@ -12,6 +12,7 @@ import java.util.List;
 public record ModInspection(Path jar, String fileName, List<Mod> mods, Tier tier,
                             boolean mixins, boolean registry, boolean nativeCode,
                             boolean alreadyLoaded, boolean clientSideOnly,
+                            boolean accessTransformers,
                             List<Dependency> dependencies, List<String> notes, String error) {
 
     /**
@@ -59,7 +60,7 @@ public record ModInspection(Path jar, String fileName, List<Mod> mods, Tier tier
      *                             guifei content is still experimental and add-only.
      */
     public boolean canHotLoad(boolean allowRegistryContent) {
-        if (!ok() || alreadyLoaded || tier == Tier.HUANGHOU) {
+        if (!ok() || alreadyLoaded || accessTransformers || tier == Tier.HUANGHOU) {
             return false;
         }
         if (tier == Tier.GUIFEI && !allowRegistryContent) {

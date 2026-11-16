@@ -84,6 +84,10 @@ public final class DevEntry {
         if (!verifyAddCommand.isEmpty()) {
             AddCommandCheck.start(Path.of(verifyAddCommand));
         }
+        String verifyCompat = System.getProperty("modreloader.verifyCompat", "").trim();
+        if (!verifyCompat.isEmpty()) {
+            CompatCheck.start(verifyCompat);
+        }
         String watchJar = System.getProperty("modreloader.watchJar", "").trim();
         if (Boolean.getBoolean("modreloader.verifyWatch")) {
             if (watchJar.isEmpty()) {
