@@ -230,6 +230,11 @@
 
 已知问题 27（1.4.2 创造栏缺失）仍需要那台机器的 `logs/latest.log` 才能继续，不阻塞上面任何一项。
 
+**整条验收清单在 2026-11-16 21:3x 全跑过一遍**（这一轮改了 `EventBusSnapshot`/`ModInspector`/`DatapackStage` 预注册/资源重载跳过，
+所以把 status 的「表尺」从头回归一次，而不是只看单条）：build ✅ / test ✅（29）/ `-PverifyCapabilities` ✅ 五项 present /
+`-PskipCapabilityReplay=true` ❌（**反证正确**：五项 MISSING）/ `-PverifyAddCommand + -PverifyGameplay` ✅ /
+`-PverifyRegAudit=<16 jars>` ✅ / `-PverifyCreativeAtTitle` ✅。
+
 已完成（保留参考，细节见 history 与对应 feature 文档）：**第二个妃级模组（同一会话，in-world 连续两次 add）**；**WORLDGEN 边界（标题屏热加 + 新世界可用维度）**；**datapack 删除/更新结论**；**客户端重放：HUD 层 + 物品装饰（含首个 client fixture）**；**AT 晚注入逐 jar 判死（0/6）**；**注册表 id 重建的线程（服务器线程 hop）**；**多人连接后注册表 id 同步**；**MixinRuntime 反射化（构建不再需要 `libs/`）**；
 **AT 晚注入量测（结论：不做，P1-1 复核）**；**JiJ 内嵌依赖抽取**；**datapack 热加载**；**dogfood 玩法验收 + 五个客户端 bug**；
 **兼容性矩阵首轮 + AT/缺依赖的变更前拒绝**；**注册审计**；**capability 重放**。

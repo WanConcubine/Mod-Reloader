@@ -392,3 +392,12 @@
   不覆盖：两侧 jar 不一致（客户端不装 → 仍不支持，见 status 已知问题 18）、贵妃级注册表内容的两侧同时热加（§9 的 id 同步是另一条路径）。
   至此 **P2-4 四项全部有 harness PASS**：第二个妃级模组（同会话）、构造后游戏总线监听器回滚、服务端+客户端同时妃级、存档回读（专用服内容路径）。
   文档：status 表尺/已验证/P2-4、AGENTS §2+§3.10、[a1-mixin-hotadd.md](features/a1-mixin-hotadd.md) §10.3。
+
+- **（整条验收清单回归通过 / 收口）**：这一轮动过 `EventBusSnapshot`（每次 add 都拍快照）、`ModInspector`（客户端类扫描）、
+  `DatapackStage`（标题屏预注册）、`ClientResourcePacks`（无资源时跳过重载），所以把 status 的验收清单**整条**跑了一遍，
+  而不是只跑单条：`./gradlew build` ✅、`./gradlew test` ✅（29 passed）、
+  `-PverifyCapabilities=<dogfood>` ✅（五项 provider present，`item 16/48`）、
+  `-PverifyCapabilities=<dogfood> -PskipCapabilityReplay=true` ❌ **反证正确**（五项全 MISSING）、
+  `-PverifyAddCommand=<dogfood> -PverifyGameplay=true` ✅（`AddCmdCheck RESULT: PASS` + `GameplayCheck RESULT: PASS`）、
+  `-PverifyRegAudit=<16 jars>` ✅、`-PverifyCreativeAtTitle=<dogfood>` ✅。
+  结论：P1/P2 项在本轮改动之后没有回归；status 的验收清单保持「全绿（含一条故意为红的反证）」。
