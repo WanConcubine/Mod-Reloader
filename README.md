@@ -90,7 +90,7 @@ Missing or unsupported mandatory dependencies:
   -PverifyLan=true
 ```
 
-`-PverifyLan` 是 dev-only 自动检查：真实建世界、打开 LAN 屏、检查 `lsp_objects` / `getPort` / 端口输入框 / PlayerList mixin，截图到 `run/screenshots/a1-lan-screen.png`，然后停客户端。
+`-PverifyLan` 是 dev-only 自动检查：真实建世界、打开 LAN 屏、检查 `lsp_objects` / `getPort` / 端口输入框 / PlayerList mixin，截图到 [a1-lan-screen.png](docs/features/images/a1-lan-screen.png)，然后停客户端。
 
 关键坑（详见 [A1 文档](docs/features/a1-mixin-hotadd.md)）：只 `prepare` 不 `postInitialise` 会丢接口合并；已 mixed 的类不能再次 transform；config 的 `JAVA_17` 会降低 Mixin 全局级别；mod resource pack 需要显式选中并 `reloadResourcePacks()`。
 
@@ -183,7 +183,7 @@ Missing or unsupported mandatory dependencies:
   -PwatchJar=/tmp/lanmods/EasyLAN-neoforge-1.21.1-v1.6a.jar
 ```
 
-截图：`run/screenshots/watch-prompt.png`、`run/screenshots/watch-failure.png`。详见 [计划与实测](docs/features/gui-mod-watcher.md)。
+截图：[watch-prompt.png](docs/features/images/watch-prompt.png)、[watch-failure.png](docs/features/images/watch-failure.png)。详见 [计划与实测](docs/features/gui-mod-watcher.md)。
 
 ## 先做“只读”的那一半
 

@@ -179,10 +179,10 @@
 | 优先 | 任务 | 关键点 / 落点 | 验收 |
 |---|---|---|---|
 | **P1-2** | WORLDGEN 边界实验 | 做一个带 dimension 的夹具：标题屏热加 → **新建世界** → 断言维度可进；决定「WORLDGEN 需重启」能否改写成「需新世界」 | 新 harness `-PverifyWorldgen` PASS + 文档 |
-| **P1-3** | Git 收尾 | CI（analyzer unittest + `./gradlew test`/`build`）、截图入 `docs/`、首个 tag `v0.1.0` | CI 绿 + tag |
+| **P1-3** | Git 收尾（**部分完成 2026-11-16**） | `.github/workflows/ci.yml`（analyzer + `./gradlew build`）已加；6 张截图从 `run/screenshots/` 复制进 `docs/features/images/` 并把文档/README 链接改过去；tag 见下 | 剩：把 workflow 推上去跑绿（本机不 push，未证明）；tag 在本地 |
 | **P2-1** | 剩余一次性事件 | ~~`RegisterItemDecorationsEvent`~~ **已完成**（`ItemDecoratorReplay` + `client-fixture`）；剩下的是逐个判死的清单：`RegisterLayerDefinitions`（要重建 `EntityModelSet`）、`ColorResolvers`、`ModifyDefaultComponentsEvent` 等，结论已写进 [client-registration-audit.md](features/client-registration-audit.md) §7.1 | 已有 harness 的必须 PASS；其余在 §7.1 写明为什么不做 |
 | **P2-2** | 剩余 behavior 事件 | `ModifyDefaultComponentsEvent`、`NewRegistryEvent`、属性/刷怪/POI、`AddPackFindersEvent` 逐个评估（多数只能 warn） | 每个要么变 covered，要么在注册审计 §7 写清为什么不做 |
-| **P2-3** | 贵妃级下一层 | datapack 删除/更新语义（很可能不可行，先写结论）；WORLDGEN 与 P1-2 合并 | 结论进 ADR/feature 文档 |
+| **P2-3** | 贵妃级下一层（**删除/更新结论已完成 2026-11-16**） | datapack 删除：**实测不可能**（deselect 后 id 从 selected 消失，但 required `mod_data` 聚合包把子包重新加回来，`selectedPacks` 仍有它、recipes 164 / loot 75 仍在）；更新：不做（聚合包 children 启动期固定 + `SecureJar` 已绑定，等价 managed relaunch）→ [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) §9 + 回归 `-PverifyDatapackRemove`。剩：WORLDGEN 与 P1-2 合并 | 结论已进 feature 文档；`-PverifyDatapackRemove` PASS |
 | **P2-4** | A1 产品化 | 构造后 listener 回滚 / 存档回读 / 第二个妃级模组 / 服务端+客户端同时妃级 | 每项 harness PASS + 文档 |
 | **P3** | GUI/watcher Phase 3/4、分析器校准（20–30 jar + AT/JiJ 维度）、`/modreload why`、B fallback、AT 文案、嵌套 mod 容器 | 见 [tech-debt.md](tech-debt.md) 与对应 feature 文档 | 各自文档的判据 |
 
@@ -210,6 +210,20 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近几条。
 
+- **2026-11-16（datapack 删除/更新：实测把「大概不可行」变成「机制上不可能」）**：新增 `-PverifyDatapackRemove`
+  （挂在 `AddCommandCheck`）：热加众星捧月 → recipes 164 / loot 75 → 从 `PackRepository` 的 selected 移除
+  `mod/exnihilosatellitium` → `reloadResources` → 再读。结果：`selected ids=[vanilla, mod_data]` 但
+  `selected packs=[vanilla, mod_data, mod/mr, …, mod/exnihilosatellitium]`、**recipes 仍 164 / loot 仍 75**。
+  原因可引用：NeoForge 把所有 mod 数据包作为 **required** 聚合包 `mod_data` 的子包（`makePack` 的
+  `PackSelectionConfig(required=true…)` + `withChildren`），`PackRepository.rebuildSelected` 每次都把 required 包的
+  children 加回来。更新同样不做（children 启动期固定 + 包资源绑在 `SecureJar` 上，等于 managed relaunch）。
+  结论写进 [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) §9，harness 留作"边界仍然成立"的回归。
+- **2026-11-16（Git 收尾的一半：CI workflow + 截图入仓）**：新增 `.github/workflows/ci.yml`：`analyzer` job 跑
+  `python3 -m unittest discover -s tests -v`；`runtime` job 用 Temurin 21 + `gradle/actions/setup-gradle` 跑 `./gradlew build`
+  （AGENTS §6 的「完成」定义：单测 + dev harness 编译），60 分钟超时 + 上传测试报告。**没在远端跑过**（本机不 push），
+  所以「CI 绿」仍未验证，诚实记为未完成。截图：`a1-lan-screen.png` / `watch-prompt{,-en,-t4}.png` / `watch-failure.png` /
+  `pending-screen.png` 复制到 `docs/features/images/`，`a1-mixin-hotadd.md`、`gui-mod-watcher.md`、`README.md` 里
+  指向 `run/screenshots/` 的链接全部改过去（`run/` 是 gitignore 的，之前文档里的图在仓库里根本不存在）。
 - **2026-11-16（物品装饰重放 + 第一个客户端夹具：`RegisterItemDecorationsEvent`）**：新增 `client/ItemDecoratorReplay`
   （NeoForge 把事件烘成静态 `ItemDecoratorHandler.DECORATOR_LOOKUP`，所以读 live → 每个 item 的列表拷副本 → 追加 → 重建 handler → 换回；
   handler 的私有构造器走 trusted lookup）。同时补了**第一个客户端注册夹具** `experiments/client-fixture`

@@ -1,0 +1,53 @@
+# CI: the two halves that do not need a display.
+#
+# The analyzer half is pure Python. The runtime half needs the full NeoForge
+# decompile pipeline (Gradle downloads it), so it is the slow job; it runs the
+# same `./gradlew build` as the AGENTS §6 "done" definition (unit tests + dev
+# harness compilation). The in-game harnesses (`-Pverify*`) need a GL context and
+# are not run in CI.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyzer:
+    name: Analyzer (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Unit tests
+        working-directory: tools/analyzer
+        run: python3 -m unittest discover -s tests -v
+
+  runtime:
+    name: Runtime (Gradle)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build (main + dev harness) and unit tests
+        run: ./gradlew build
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: build/reports/tests/test
+          if-no-files-found: ignore

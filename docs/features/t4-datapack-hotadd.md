@@ -228,3 +228,58 @@ Loaded 1454 recipes
 - 连接后热加 + 注册表快照同步（真正的多人硬骨头）；
 - datapack 删除/更新语义（需要 pack 变更 + 存档修复，属于"不可回滚"范畴）；
 - 世界生成注册表（维度/生物群系）——大概率只能 managed relaunch。
+
+## 9. 删除 / 更新语义（2026-11-16 量测：删除机制上不可能，更新不做）
+
+§7/§8 一直把「删除/更新」列为未做。现在有实测答案，而不是"大概很难"。
+
+### 9.1 问题
+
+热加的 data pack 能不能在运行时**删掉**（deselect + reload）？能不能**换掉**（同一个 `mod/<modId>` 换成新内容）？
+
+### 9.2 删除：从 selected 里摘掉不等于不加载（实测）
+
+harness：`-PverifyDatapackRemove=true`（挂在 `AddCommandCheck` 上，跟在 `-PverifyDatapack` 之后）。流程是
+热加众星捧月 → 断言 recipes 164 / loot 75 → 把 `mod/exnihilosatellitium` 从 `PackRepository` 的 selected 里移除 →
+`server.reloadResources(...)` → 再读一次。2026-11-16 20:1x 的日志原文：
+
+```
+[AddCmdCheck] datapack removal attempt: mod/exnihilosatellitium was selected; deselecting it and reloading
+              (available=[bundle, trade_rebalance, vanilla, mod/exnihilosatellitium, mod_data])
+[AddCmdCheck] datapack removal: selected ids=[vanilla, mod_data]
+              selected packs=[vanilla, mod_data, mod/mr, mod/modreloader, mod/neoforge, mod/exnihilosatellitium]
+              recipes=164 loot tables=75
+[AddCmdCheck] datapack REMOVE RESULT: NOT POSSIBLE
+              (the id is deselected but the pack stays in selectedPacks as a child of the required
+               mod_data root; recipes 164 and loot 75 still live)
+```
+
+**为什么**：NeoForge 把所有 mod 数据包挂成**一个 required 聚合包 `mod_data` 的子包**
+（`ResourcePackLoader.makePack(...)` 用 `PackSelectionConfig(required=true, …)` + `withChildren(hiddenPacks)`），
+而 `PackRepository.rebuildSelected` 每次都把 required 包的 children 重新加回来
+（`expandAndRemoveRootChildren` 的注释："Remove all children of required packs -- as these will always be present"）。
+所以「从 selected 的 id 列表里去掉」只影响列表本身，不影响真正参与 reload 的 pack 集合：
+`getSelectedIds()` 里已经没有它，`getSelectedPacks()` 里还在。
+
+要真删就得动 `ResourcePackLoader.modResourcePacks` 并重建聚合包——那是改 NeoForge 的启动期数据结构；
+而且**注册表内容仍然在**（物品/方块没有删除接口），删完只会得到「mod 还在、数据没了」的半死状态，
+存档里已有的引用也照样有效。这不是产品想要的"删除"。
+
+### 9.3 更新：不做
+
+同一个聚合结构让"换一个同 id 的新包"也不成立：`mod_data` 的 children 在启动时固定，包资源 supplier 也绑在
+被热加的 `IModFile`（`SecureJar`）上，重新 reload 读到的仍是旧内容——要换就得先解决"重新读 jar"，
+而那属于 §8 的 managed relaunch。产品上更简单：**更新 = 重启**（把新 jar 放进 `mods/`）。
+
+### 9.4 结论与回归
+
+- datapack 阶段保持 **add-only**；`-PverifyDatapackRemove` 作为"这条边界仍然成立"的回归：
+  如果哪天 NeoForge 改了聚合结构、包真的能被摘掉，它会以 FAIL 提醒我们重写本章。
+- 用户撤销热加的唯一可靠路径仍是**重启且不放那个 jar**（存档里该 mod 的注册表条目会变成 missing entries）。
+
+```bash
+# 一次跑完「热加 → 数据生效 → 尝试删除 → 断言删除不可行」
+./gradlew runClient \
+  -PverifyAddCommand=/Users/kaifengcrt/Projects/Ex-Nihilo-Satellitium/build/libs/exnihilosatellitium-1.21.1-1.5.0.jar \
+  -PverifyAddCommandModId=exnihilosatellitium -PverifyDatapack=true -PverifyDatapackRemove=true
+```

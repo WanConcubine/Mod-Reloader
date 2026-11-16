@@ -382,12 +382,12 @@ LSP + 强制 add 失败（验证失败屏 + 回滚集成）：
 [WatchCheck] failure screen opened; RESULT: PASS
 ```
 
-截图：`run/screenshots/watch-prompt.png`（EasyLAN，中文）、`run/screenshots/watch-prompt-en.png`（EasyLAN，英文）、`run/screenshots/watch-prompt-t4.png`（贵妃级，不可加载）、`run/screenshots/watch-failure.png`（坏 jar，翻译后的失败屏）。
+截图：[watch-prompt.png](images/watch-prompt.png)（EasyLAN，中文）、[watch-prompt-en.png](images/watch-prompt-en.png)（EasyLAN，英文）、[watch-prompt-t4.png](images/watch-prompt-t4.png)（贵妃级，不可加载）、[watch-failure.png](images/watch-failure.png)（坏 jar，翻译后的失败屏）。
 
 ### i18n 实测
 
 - 中文：`run/options.txt` `lang:zh_cn` → `watch-prompt.png`；按钮/标题/toast 均为中文，无 key 泄漏。
-- 英文：切到 `lang:en_us` 后同样通过；截图 `watch-prompt-en.png`；测试后已恢复 `zh_cn`。
+- 英文：切到 `lang:en_us` 后同样通过；截图 [watch-prompt-en.png](images/watch-prompt-en.png)；测试后已恢复 `zh_cn`。
 - 键覆盖：`ModReloaderToasts`、`ModReloaderScreen`、`LoadFailureScreen`、`ReloaderCommands`、`ModReloaderI18n`、`FailureAnalyzer` 的可见文本均使用 `modreloader.*` key；语言文件各 134 key（键集与占位符由 `LangKeysTest` 核对）。
 - `FailureAnalyzer` 的 detail/剪贴板标签（jar/预检/依赖/阶段/分类/回滚/日志）也已 key 化；异常原始消息和枚举名保留英文，便于排查。
 - 技术值（异常消息、stage/kind 枚举、路径）保留原始英文；标签已本地化。

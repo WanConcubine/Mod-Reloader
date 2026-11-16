@@ -178,6 +178,11 @@ neoForge {
                 systemProperty 'modreloader.verifyItemDecoratorItem',
                         providers.gradleProperty('verifyItemDecoratorItem').get()
             }
+            if (providers.gradleProperty('verifyDatapackRemove').orNull) {
+                // With verifyAddCommand/verifyDatapack: deselect the hot-added data
+                // pack and reload, asserting recipes/loot return to the baseline.
+                systemProperty 'modreloader.verifyDatapackRemove', 'true'
+            }
             if (providers.gradleProperty('verifyGuiLayers').orNull) {
                 // With verifyAddCommand: the hot-added mod's RegisterGuiLayersEvent
                 // listener must have run (HUD layers present, order preserved,

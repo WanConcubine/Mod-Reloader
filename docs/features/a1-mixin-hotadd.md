@@ -253,7 +253,7 @@ ModList / constructMod / 客户端事件
 [LanCheck] RESULT: PASS
 ```
 
-截图：`run/screenshots/a1-lan-screen.png`（LAN 屏，端口 25565、在线模式、PvP、最大玩家数、保存/读取配置；翻译已加载）。
+截图：[a1-lan-screen.png](images/a1-lan-screen.png)（LAN 屏，端口 25565、在线模式、PvP、最大玩家数、保存/读取配置；翻译已加载）。
 
 截图也暴露了资源包问题：第一次 A1.2 运行（只 `repo.reload()`，不选中 pack）显示的是 `lanserverproperties.gui.port` 这类 raw key；选中 pack 并 `reloadResourcePacks()` 后才变成“监听端口”等中文。
 

@@ -257,3 +257,25 @@
      `RegisterLayerDefinitions`（要重建 `EntityModelSet`）、`ColorResolvers`、`ModifyDefaultComponentsEvent`、`NewRegistryEvent`
      /`ModifyRegistriesEvent`（框架启动后关闭）、实体属性/刷怪/POI 系列（没有实体 subject）、`AddPackFindersEvent`（我们已有等价注入路径）等，
      每个都给出「不做 / 等 subject」的理由，不留「以后再看看」。
+
+- **（datapack 删除/更新：从「大概不可行」到「机制上不可能」/ P2-3 一半）**：给 `AddCommandCheck` 加了
+  `-PverifyDatapackRemove=true`（跟在 `-PverifyDatapack` 后）：热加众星捧月 → 断言 recipes 164 / loot 75 / 真实合成与掉落 →
+  把 `mod/exnihilosatellitium` 从 `server.getPackRepository()` 的 selected 里移除 → 在服务器线程 `reloadResources` → 再读。
+  2026-11-16 20:1x 实测：`selected ids=[vanilla, mod_data]` 但
+  `selected packs=[vanilla, mod_data, mod/mr, mod/modreloader, mod/neoforge, mod/exnihilosatellitium]`，
+  **recipes 仍 164、loot 仍 75** → `datapack REMOVE RESULT: NOT POSSIBLE`（harness PASS：测到了预期结论）。
+  根因有代码依据：`ResourcePackLoader.makePack` 把全部 mod 数据包做成 **required** 聚合包 `mod_data` 的子包
+  （`PackSelectionConfig(true, TOP, false)` + `withChildren(hiddenPacks)`），而 `PackRepository.rebuildSelected` /
+  `expandAndRemoveRootChildren` 每次都把 required 包的 children 重新加进来（"these will always be present"）。
+  所以「deselect 一个子包」只改 id 列表，不改参与 reload 的 pack 集合。更新同样不做：children 在启动期固定、
+  包资源 supplier 绑在被热加的 `IModFile`（`SecureJar`）上，换内容读到的还是旧的，等价于 managed relaunch。
+  结论 + 日志原文进 [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) §9；harness 留作「这条边界仍然成立」的回归
+  （NeoForge 哪天改了聚合结构，它会 FAIL）。第一版这个 harness 把「删不掉」当失败（RESULT: FAIL）——改成测量语义后 PASS，
+  并打印 `selected ids` / `selected packs` 两个集合，避免以后又要重新推导。
+- **（Git 收尾的一半：CI workflow + 截图入仓 / P1-3）**：`.github/workflows/ci.yml`：`analyzer` job 跑
+  `python3 -m unittest discover -s tests -v`（`tools/analyzer`），`runtime` job 用 Temurin 21 + `gradle/actions/setup-gradle`
+  跑 `./gradlew build`（单测 + dev harness 编译，即 AGENTS §6 的完成定义），60 分钟超时、总是上传测试报告。
+  **注意：没有 push，所以「CI 绿」没有被证明**（status/tech-debt 都按未完成写）。
+  截图：`run/screenshots/` 里的 `a1-lan-screen.png`、`watch-prompt{,-en,-t4}.png`、`watch-failure.png`、`pending-screen.png`
+  复制进 `docs/features/images/`，并把 `a1-mixin-hotadd.md`、`gui-mod-watcher.md` 与 `README.md` 里指向 `run/screenshots/`
+  的链接改成 `images/…`（README 相对仓库根，用 `docs/features/images/…`）——`run/` 是 gitignore 的，之前那些图在仓库里根本不存在。

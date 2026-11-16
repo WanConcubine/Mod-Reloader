@@ -99,6 +99,16 @@ public final class AddCommandCheck {
     private static final boolean TITLE_ADD = Boolean.getBoolean("modreloader.verifyDatapackAtTitle");
 
     /**
+     * Optional removal phase ({@code -PverifyDatapackRemove=true}): after the data
+     * pack was applied, deselect it and reload again. Measures whether a data pack
+     * can be taken away at runtime (recipes/loot back to the baseline) — the
+     * registry content / classes of the mod stay, which is the product-level reason
+     * removal is not exposed (see docs/features/t4-datapack-hotadd.md §11).
+     */
+    private static final boolean VERIFY_DATAPACK_REMOVE =
+            Boolean.getBoolean("modreloader.verifyDatapackRemove");
+
+    /**
      * Optional HUD-layer phase ({@code -PverifyGuiLayers=true}): the hot-added mod
      * registers {@code RegisterGuiLayersEvent}, which fires once at startup. The
      * check asserts the live layer list grew, kept its order and renders without
@@ -509,6 +519,83 @@ public final class AddCommandCheck {
 
         ModReloader.LOGGER.info("[AddCmdCheck] datapack RESULT: PASS "
                 + "(recipes/loot tables/tags/crafting/drops)");
+        long afterAdd = recipesInNamespace(server, EXPECT_MOD_ID);
+        if (VERIFY_DATAPACK_REMOVE && !measureDatapackRemoval(server, afterAdd)) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Measures whether a hot-added data pack can be taken away again.
+     *
+     * <p>This is a <em>measurement</em>, not a feature check: the expected result
+     * (2026-11-16) is that the pack cannot be removed. Deselecting it works
+     * ({@code getSelectedIds} loses the id), but after the reload the pack is back
+     * in {@code getSelectedPacks()}: NeoForge aggregates mod data packs as
+     * <em>children</em> of the required {@code mod_data} root, and
+     * {@code PackRepository.rebuildSelected} always re-adds the children of a
+     * required pack. The recipes stay live, so the harness asserts exactly that
+     * and PASSes when the measurement is conclusive — see
+     * {@code docs/features/t4-datapack-hotadd.md} §11.
+     */
+    private static boolean measureDatapackRemoval(MinecraftServer server, long recipesAfterAdd) {
+        String packId = "mod/" + EXPECT_MOD_ID;
+        var repository = server.getPackRepository();
+        List<String> selected = new ArrayList<>(repository.getSelectedIds());
+        if (!selected.remove(packId)) {
+            fail("datapack removal: " + packId + " is not selected (selected="
+                    + repository.getSelectedIds() + ")");
+            return false;
+        }
+        ModReloader.LOGGER.info("[AddCmdCheck] datapack removal attempt: {} was selected; deselecting "
+                        + "it and reloading (available={})", packId, repository.getAvailableIds());
+        java.util.concurrent.CompletableFuture<Boolean> hop = new java.util.concurrent.CompletableFuture<>();
+        server.execute(() -> {
+            try {
+                repository.setSelected(selected);
+                server.reloadResources(selected).join();
+                hop.complete(true);
+            } catch (Throwable t) {
+                ModReloader.LOGGER.error("[AddCmdCheck] datapack removal reload failed", t);
+                hop.completeExceptionally(t);
+            }
+        });
+        try {
+            hop.get(180, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (Exception e) {
+            fail("datapack removal: the reload did not finish: " + e);
+            return false;
+        }
+        List<String> selectedIds = new ArrayList<>(repository.getSelectedIds());
+        List<String> selectedPacks = repository.getSelectedPacks().stream()
+                .map(pack -> pack.getId())
+                .toList();
+        long recipes = recipesInNamespace(server, EXPECT_MOD_ID);
+        long loot = server.reloadableRegistries().getKeys(Registries.LOOT_TABLE).stream()
+                .filter(key -> EXPECT_MOD_ID.equals(key.getNamespace()))
+                .count();
+        ModReloader.LOGGER.info(
+                "[AddCmdCheck] datapack removal: selected ids={} selected packs={} "
+                        + "recipes={} loot tables={}",
+                selectedIds, selectedPacks, recipes, loot);
+        if (selectedIds.contains(packId)) {
+            fail("datapack removal: " + packId + " is still a selected id (the deselect did not "
+                    + "take); the measurement is inconclusive");
+            return false;
+        }
+        if (!selectedPacks.contains(packId) || recipes < recipesAfterAdd || loot == 0) {
+            // The pack really went away. That contradicts the documented behaviour;
+            // report it instead of silently passing.
+            fail("datapack removal: the pack was actually removed (recipes=" + recipes
+                    + ", loot=" + loot + ", selected packs=" + selectedPacks
+                    + "); the documented 'cannot remove' conclusion no longer holds");
+            return false;
+        }
+        ModReloader.LOGGER.warn("[AddCmdCheck] datapack REMOVE RESULT: NOT POSSIBLE "
+                        + "(the id is deselected but the pack stays in selectedPacks as a child of "
+                        + "the required mod_data root; recipes {} and loot {} still live)",
+                recipes, loot);
         return true;
     }
 
