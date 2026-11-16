@@ -3,14 +3,14 @@
 > 只记录**结构性**问题与可升级点；实现进度见 [status.md](status.md)。
 > 原则：先修"会让我们说错话/悄悄坏掉"的，再修"好改但收益小"的；不为未来可能的需求预先抽象。
 
-## 事实盘点（2026-11-16，注册审计与创造栏回归之后）
+## 事实盘点（2026-11-16，P1/P2 收口之后）
 
 | 指标 | 现状 |
 |---|---|
-| Java 代码 | **14603 行 / 13 个包**（`main` 8579 + `dev` 5645 + `test` 379） |
-| `dev/` 夹具 | **23 文件 / 5645 行 ≈ 39%**，独立 `src/dev/java` source set；**不在发布 jar 里**（jar 内 0 条 `dev/modreloader/dev/`） |
-| 反射 / Unsafe 站点 | 14 个文件（mixin、ModList、module、网络、资源包、注册表同步、JVM 等） |
-| Java 单测 | **20**（`./gradlew test`，不需要游戏） |
+| Java 代码 | **17624 行 / 13 个包**（`main` 9966 / 65 文件 + `dev` 7118 / 30 文件 + `test` 540 / 5 文件） |
+| `dev/` 夹具 | **30 文件 / 7118 行 ≈ 40%**，独立 `src/dev/java` source set；**不在发布 jar 里**（jar 内 0 条 `dev/modreloader/dev/`） |
+| 反射 / Unsafe 站点 | **19 个文件**（mixin、ModList、module、网络、资源包、注册表同步、事件总线快照、JVM 等） |
+| Java 单测 | **29**（`./gradlew test`，不需要游戏；i18n 3 / 命令短名 6 / JiJ 3 / AT 规则 6 / 注册审计 11） |
 | 语言文件 | `en_us` / `zh_cn` 各 **150 key**，键集与 `%s` 占位符由单测核对 |
 | 包依赖 | `hotadd` **不再**依赖 `client` / `server`；`command ↔ client` 循环**已消除**（2026-11-16：client → command 单向）；剩 `client → server`（集成服务器的命令重放）、`diagnose → ui`（文案） |
 
@@ -18,7 +18,7 @@
 
 ### ✅ 1. 反射面兼容性守卫（已完成 2026-11-15）
 
-`capability/Capabilities` 在启动时**只读**探测八组锚点，打一行报告：
+`capability/Capabilities` 在启动时**只读**探测十组锚点（2026-11-16 新增 `event_bus_rollback`），打一行报告：
 
 ```
 [ModReloader] capabilities: module_injection=ok modlist_rebuild=ok network_adaptation=ok mixin_hotadd=ok registry_adaptation=ok datapack_reload=ok resource_packs=ok
@@ -92,7 +92,7 @@
    占位符一致；② 每个 `FailureKind` 都有 `.summary/.suggestion`（`FailureKeys` 把映射从
    `FailureAnalyzer` 抽出来，才能不加载游戏测试）；③ summary/suggestion 成对。`./gradlew test` 3 passed。
    2026-11-16 补了 3 个 JiJ 路径校验测试（`JarInJarTest`：绝对路径/`..`/非 jar 被拒、抽取文件名净化），
-   6 个命令短名测试（`JarPathResolverTest`），8 个注册审计分级测试（`RegistrationAuditTest`；纯规则，不需要 ASM/游戏），现在 **21 passed**。
+   6 个命令短名测试（`JarPathResolverTest`），11 个注册审计分级测试（`RegistrationAuditTest`；纯规则，不需要 ASM/游戏），6 个 AT 规则测试（`AccessTransformerRulesTest`），现在 **29 passed**。
 9. ✅ **`libs/` 编译依赖**（已完成 2026-11-16，已知问题 12）：新增 `hotadd/MixinRuntimeApi`（trusted lookup 调时解析 mr 的 10 个方法 + `probe()` 给能力守卫）与 `hotadd/ClassBytes`（自己做「读已加载类字节」，不再借 mr 的 `InstUtils`），删掉 `compileOnly files('libs/...')`。
    证据：移走 `libs/` 后 `./gradlew clean build` 通过（6 tests）；有 mr 的妃级热加/回滚/重试 PASS，无 mr 时妃级仍被拦。`libs/` 目录已无引用，可删。
 10. ⚠️ **CI 已写、还没在远端跑过**（2026-11-16）：`.github/workflows/ci.yml` 两个 job —— 分析器（`python3 -m unittest`）

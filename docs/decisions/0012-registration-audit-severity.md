@@ -35,6 +35,7 @@ Mekanism、ExtremeReactors2——包括我们的 dogfood。它们注册 capabili
 ## 后果
 
 - 16 个真实 jar、129 处引用：61 covered / 24 recurring / 6 datagen / 19 silent / **15 behavior** / **3 crash** / 1 base。
+  （2026-11-16 补 capability / HUD 层 / 物品装饰重放后为 69 covered / 16 silent，见 [client-registration-audit](../features/client-registration-audit.md) §5。）
   3 处 crash 全在 AE2 / Mekanism（本来就因 AT 被拒）→ **没有任何当前 PASS 的模组被新规则拒掉**，dogfood 仍可热加。
 - 审计立刻指出一个既有真实缺口：众星捧月的 `RegisterCapabilitiesEvent` 从未重放，桶/坩埚/机器的 capability 没有登记
   （status 已知问题 26）。它现在是 warn，不是拒绝——用户可能忽略，所以重放被列为下一步第一项。

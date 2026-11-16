@@ -171,7 +171,7 @@ Mekanism、MekanismGenerators、ExtremeReactors2），共 **129 处事件引用*
   给桶（item + fluid）、坩埚（fluid）、机器（item + energy）和流体容器物品注册 provider。
   我们从来没有重放这个事件 → 热加会话里这些 capability 没登记。2026-11-16 补了 `hotadd/CapabilityReplay`，
   `-PverifyCapabilities` 断言五项 provider 全 present，`-PskipCapabilityReplay=true` 反证全 MISSING（见 [dogfood-gameplay.md](dogfood-gameplay.md) §1.1）；
-  本表随之把该事件从 `behavior` 移入 `covered`（61→66 covered，15→10 behavior）。
+  本表随之把该事件从 `behavior` 移入 `covered`（当时 61→66 covered、15→10 behavior；之后 HUD 层与物品装饰再移入，现为 69 covered / 16 silent）。
 - 2026-11-16 已补 `RegisterGuiLayersEvent`（实测语料里 2/16 个 jar 引用：AppleSkin、Mekanism；HUD 静默）：
   `client/GuiLayerReplay` 对 live 层表副本重放再换入，harness `-PverifyAddCommand=<appleskin> -PverifyGuiLayers=true`
   断言 25 → 31 层、6 个 `appleskin:*` 层、原有层顺序不变、渲染 60 tick 不崩。
@@ -183,7 +183,7 @@ Mekanism、MekanismGenerators、ExtremeReactors2），共 **129 处事件引用*
 ## 6. 验证
 
 ```bash
-# 纯规则（无游戏、无 ASM）：9 个用例
+# 纯规则（无游戏、无 ASM）：11 个用例
 ./gradlew test --tests 'dev.modreloader.inspect.RegistrationAuditTest'
 
 # 真实语料 + 合成致命 jar（2026-11-16 15:20 = PASS）

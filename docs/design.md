@@ -94,9 +94,15 @@ mods/*.jar
               → 资源包选中 + reloadResourcePacks()
 ```
 
-失败回滚：`Rollback` LIFO undo；module / ModList / mixin config / target 原始字节 / 资源包各自注册 undo。post-ModList 与 post-pack 强制失败已验证；构造后的 `@Mod` 构造器/事件监听器不能注销，JVM 不能 undefine module（Module 对象缓存供重试，所以嵌套 jar 抽到按内容哈希命名的稳定路径，重试才能复用同一个 module）。
+失败回滚：`Rollback` LIFO undo；module / ModList / mixin config / target 原始字节 / 资源包 / **游戏总线监听器**各自注册 undo。
+post-ModList、post-pack 与 post-construct 都有 `-PfailAfter*` 强制失败验证；构造后监听器由 `hotadd/EventBusSnapshot`
+（构造前快照 owner→监听器实例，回滚时按实例从所有 dispatch list 摘除）恢复，`Capabilities.EVENT_BUS_ROLLBACK` 守卫两个反射名。
+**仍不可回滚**：构造器里的其它副作用（静态状态、全局注册、线程）；JVM 不能 undefine module（Module 对象缓存供重试，
+所以嵌套 jar 抽到按内容哈希命名的稳定路径，重试才能复用同一个 module）；被移除的 mixin config 保留但 inactive。
+**post-construct 之后重试经测量仍失败**（FML `ModLoadingException`），那条路径的语义是「干净回滚 + 重启」。
 
-限制：只验证了 `lanserverproperties`（1 个妃级模组）；需要 JBR + MixinRuntime（第三方前置、`mr` 为 optional）；构造后 listener 回滚、存档回读、依赖校验、注册表内容未做。详见 [features/a1-mixin-hotadd.md](features/a1-mixin-hotadd.md)。
+限制：妃级只系统验证过 `lanserverproperties` 与 ZeroCore2；需要 JBR + MixinRuntime（第三方前置、`mr` 为 optional）；
+第二个妃级模组、服务端+客户端同时妃级已验证；存档回读只有专用服内容路径；注册表内容走贵妃级 add-only。详见 [features/a1-mixin-hotadd.md](features/a1-mixin-hotadd.md) §10。
 
 ### 贵妃级（实验性 add-only：注册表 + datapack）
 
@@ -118,6 +124,9 @@ mods/*.jar
   那段清空到 bake 重建之间，`IdMapper` 对任何 BlockState 都给 -1，而区块序列化在服务器线程；
   在 render 线程上重建会写出带 `-1` 的 palette（status 已知问题 28）。`RegisterEvent` 重放不在这个约束里。
 - **幂等**：pack id = `mod/<modId>`；已有数据（标题屏热加 + 世界加载已发现）直接短路。
+- **WORLDGEN 需要“新世界”**：`server == null`（标题屏）时 `DatapackStage` 先把包预注册进
+  `ResourcePackLoader.modResourcePacks`，下一次 world load 的 `populatePackRepository` 会把它作为 `mod_data` 的子包带上，
+  维度/生物群系随世界注册；已存在的世界仍要重启（[features/t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) §10）。
 - **客户端注册重放**：`ClientRegistrationReplay` 重放 key mappings / menu screens / renderers（并重建两个 dispatcher）/颜色 / 客户端扩展；`DEFAULT_TABS` 先清空再 `sortTabs()`（该方法非幂等）。
 - **id 同步（多人）**：NeoForge 只在登录 configuration 阶段同步注册表，所以运行时自己开一条 play 通道（推 + 拉），
   客户端先用「两端条目集合一致」把关，再复用 `RegistryManager.applySnapshot`（登录期那段代码，含 blockstate bake）。
