@@ -4,6 +4,7 @@ import dev.modreloader.ModReloader;
 import dev.modreloader.hotadd.DatapackStage;
 import dev.modreloader.hotadd.PlatformHooks;
 import dev.modreloader.hotadd.Rollback;
+import dev.modreloader.hotadd.UnsafeAccess;
 import dev.modreloader.server.ServerCommands;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.item.CreativeModeTab;
@@ -72,6 +73,12 @@ public final class ClientPlatformHooks implements PlatformHooks {
             // the creative inventory; nothing is stale yet.
             return;
         }
+        // NeoForge's sortTabs() appends HOTBAR/SEARCH/OP_BLOCKS/INVENTORY to
+        // DEFAULT_TABS on every call without clearing it, so a second call (which
+        // a hot-add needs to page the new tab) duplicates them 4 -> 8. The creative
+        // screen maps the duplicates to columns 7/8 and overflows its 7 tab
+        // sprites: CreativeModeInventoryScreen.renderTabButton -> AIOOBE.
+        resetCreativeDefaultTabs();
         net.neoforged.neoforge.common.CreativeModeTabRegistry.sortTabs();
         CreativeModeTab.ItemDisplayParameters parameters =
                 new CreativeModeTab.ItemDisplayParameters(
@@ -85,6 +92,37 @@ public final class ClientPlatformHooks implements PlatformHooks {
         }
         ModReloader.LOGGER.info(
                 "[ModReloader] rebuilt {} creative tab(s) after registry content", rebuilt);
+        // The creative screen pages tabs 10 at a time and NeoForge maps the
+        // always-visible tabs with "+5"; >10 tabs is exactly where the screen
+        // has been seen to overflow its 7 tab sprites. Log the inputs.
+        ModReloader.LOGGER.info(
+                "[ModReloader] creative tabs: all={} defaults={} sorted={} ids={}",
+                CreativeModeTabs.allTabs().size(),
+                net.neoforged.neoforge.common.CreativeModeTabRegistry.getDefaultTabs().size(),
+                net.neoforged.neoforge.common.CreativeModeTabRegistry.getSortedCreativeModeTabs().size(),
+                CreativeModeTabs.allTabs().stream()
+                        .map(tab -> tab.getDisplayName().getString()
+                                + (tab.isAlignedRight() ? "/R" : "/L"))
+                        .toList());
+    }
+
+    /**
+     * Empties NeoForge's {@code DEFAULT_TABS} so {@code sortTabs()} is idempotent.
+     * Only the 4 tabs it re-adds itself should be in there; a previous call in the
+     * same session leaves duplicates that break the creative screen's tab paging.
+     */
+    private static void resetCreativeDefaultTabs() {
+        try {
+            Object defaults = UnsafeAccess.getStatic(
+                    net.neoforged.neoforge.common.CreativeModeTabRegistry.class, "DEFAULT_TABS");
+            UnsafeAccess.trusted()
+                    .findVirtual(defaults.getClass(), "clear",
+                            java.lang.invoke.MethodType.methodType(void.class))
+                    .invoke(defaults);
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn(
+                    "[ModReloader] cannot reset NeoForge's default creative tab list", t);
+        }
     }
 
     @Override

@@ -400,6 +400,13 @@ public final class AddCommandCheck {
 
     private static void advanceAfterVerify() {
         ticks = 0;
+        if (Boolean.getBoolean("modreloader.verifyGameplay")) {
+            // Hand the client over to the gameplay phase; it drives the server
+            // itself and stops the client when done.
+            GameplayCheck.start(EXPECT_MOD_ID);
+            started = false;
+            return;
+        }
         stage = WATCH_JAR.isEmpty() ? Stage.DONE : Stage.WATCH_COPY;
     }
 

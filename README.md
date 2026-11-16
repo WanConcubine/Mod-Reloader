@@ -240,6 +240,7 @@ sodium                     0.8.13+mc… fabric   HUANGHOU 0.85  needs full resta
 | [GUI / 文件夹监听](docs/features/gui-mod-watcher.md) | 检测新增 jar、预检 tier/依赖、toast/弹窗、失败原因分析（初版实测） |
 | [贵妃级注册表热加](docs/features/t4-registry-hotadd.md) | 方块/物品 add-only 热加：unfreeze/RegisterEvent 重放/BlockState id、证据与限制 |
 | [贵妃级 datapack 热加载](docs/features/t4-datapack-hotadd.md) | 注入 pack + 原版 `/reload`：配方/战利品/标签/机器数据、真实合成与掉落、边界 |
+| [众星捧月玩法验收](docs/features/dogfood-gameplay.md) | 热加后真实交互（锤/筛/合成/创造栏）；抓到并修掉创造页签崩溃 |
 | [LAN Doctor 规格](docs/features/lan-doctor.md) | B 路线 fallback：状态 / offline / republish / 地址 |
 | [决策记录](docs/decisions/README.md) | ADR-0001..0009：目标、分层、顺序、论文、双端、注册表与 datapack 适配 |
 | [调研报告](docs/research-hot-mod-reload.md) | 启动流水线、JVM/Mixin/注册表约束、Hotwire 与 NHMJ 解剖 |

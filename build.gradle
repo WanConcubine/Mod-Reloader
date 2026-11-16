@@ -79,6 +79,7 @@ def watchModId = providers.gradleProperty('watchModId').orNull
 def verifyAddCommand = providers.gradleProperty('verifyAddCommand').orNull
 def verifyDatapack = providers.gradleProperty('verifyDatapack').orNull
 def verifyDatapackAtTitle = providers.gradleProperty('verifyDatapackAtTitle').orNull
+def verifyGameplay = providers.gradleProperty('verifyGameplay').orNull
 def verifyMenu = providers.gradleProperty('verifyMenu').orNull
 def verifyDelete = providers.gradleProperty('verifyDelete').orNull
 def verifyRegistryProbe = providers.gradleProperty('verifyRegistryProbe').orNull
@@ -164,6 +165,25 @@ neoForge {
                 // Same check, but the mod is hot-added at the title screen first:
                 // the data pack has to be applied by the deferred world-start hook.
                 systemProperty 'modreloader.verifyDatapackAtTitle', 'true'
+            }
+            if (verifyGameplay) {
+                // With verifyAddCommand: after the add, drive real gameplay on
+                // the server (hammer/sieve/craft + the mod's own tables command).
+                systemProperty 'modreloader.verifyGameplay', 'true'
+            }
+            if (providers.gradleProperty('verifyGameplayModId').orNull) {
+                systemProperty 'modreloader.verifyGameplayModId',
+                        providers.gradleProperty('verifyGameplayModId').get()
+            }
+            if (providers.gradleProperty('verifyCreative').orNull) {
+                // After the gameplay checks: switch to creative and render the
+                // creative inventory (regression check for the tab-paging crash).
+                systemProperty 'modreloader.verifyCreative', 'true'
+            }
+            if (providers.gradleProperty('verifyGameplayKeepOpen').orNull) {
+                // Leave the world running after the automated gameplay checks so
+                // the manual items (barrel/crucible/compost) can be played.
+                systemProperty 'modreloader.verifyGameplayKeepOpen', 'true'
             }
             if (providers.gradleProperty('verifyAddCommandModId').orNull) {
                 systemProperty 'modreloader.verifyAddCommandModId',

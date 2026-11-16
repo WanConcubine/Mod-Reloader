@@ -46,6 +46,7 @@
 | **真实 dogfood（众星捧月 1.5.0）** | **标题屏 + 进世界 `/modreloader add` 均 PASS：blocks 1060→1140、items 1333→1514、states 26684→26818，stoneId 1→1；payload `set_machine_output` 适配；创造栏 15 个；当时 datapack 未加载（已由下方 datapack 行修复）** | 2026-11-15 23:14：`runClient -PautoAdd=/Users/kaifengcrt/Projects/Ex-Nihilo-Satellitium/build/libs/exnihilosatellitium-1.21.1-1.5.0.jar`；`-PverifyAddCommand=... -PverifyAddCommandModId=exnihilosatellitium` |
 | **datapack 热加载：世界内 / 标题屏（众星捧月）** | **世界内：`recipes 0→164`、`loot tables 0→75`、tags 0→1 / 0→2，`wooden_crucible` 真的能合成、战利品表真的掉落自身，mod 自己的 hammer/sieve/barrel/crucible/crook/compost 在同一次重载里加载，`datapack RESULT: PASS`（164 = 298 个 recipe 经 `neoforge:conditions` 过滤的期望值）。标题屏：先热加再建世界 → `already live (...); no reload needed`，同一套断言 PASS** | 2026-11-15 23:29–23:48（终版复跑）/ 23:42：`runClient -PverifyAddCommand=...exnihilosatellitium...jar -PverifyAddCommandModId=exnihilosatellitium -PverifyDatapack=true`（标题屏加 `-PverifyDatapackAtTitle=true`）；见 [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) |
 | **datapack 热加载：专用服 + 重启（fixture）** | **热加后 `recipes 0→1, loot 0→1, block tags 0→1`、`datapack (after hot-add) RESULT: PASS`；jar 放进 `run/mods` 重启后 `isT4Block=true`、`datapack (after restart) RESULT: PASS`；fixture 无 `pack.mcmeta` 也按 COMPATIBLE 加载** | 2026-11-15 23:49（终版复跑）：`runServer -PautoAdd=/tmp/t4fixture/t4fixture-1.0.0.jar -Pt4fixtureSelftest=true` → 复制进 `run/mods` → `runServer -Pt4fixtureSelftest=true -Pt4fixtureSelftestRead=true`；见 [experiments/t4-fixture](../experiments/t4-fixture/README.md) |
+| **玩法验收（众星捧月热加后）** | **`/exnihilo tables` 七张表全非空（sieve 7/119、hammer 55、crook 10、barrel 16、compost 67、crucible 39/9）；铁锤砸圆石→沙砾；筛泥土→5 种卵石+草籽；真实 3×3 合成出 `iron_hammer`；创造物品栏渲染 40 tick 不崩（`defaults=4`）** | 2026-11-16 08:47：`runClient -PverifyAddCommand=...exnihilosatellitium...jar -PverifyAddCommandModId=exnihilosatellitium -PverifyGameplay=true -PverifyCreative=true`；见 [dogfood-gameplay.md](features/dogfood-gameplay.md) |
 | **贵妃级客户端路径（实验性）** | **in-world `/modreloader add`：registry commit（stoneId 1→1）、`resource packs ... (new [mod/t4fixture])`、`rebuilt 14 creative tab(s)`、fixture 把物品加进 `minecraft:building_blocks`、AddCmdCheck PASS** | 2026-11-15 22:21：`runClient -PverifyAddCommand=/tmp/t4fixture/t4fixture-1.0.0.jar -PverifyAddCommandModId=t4fixture`；fixture 带 blockstate/model/lang |
 | **贵妃级 GUI 路径（实验性）** | **watcher 检测 → 提示屏显示 `[贵妃]` 与警告「实验性/仅新增/存档依赖/不可回滚」→ 加载 → registry 窗口（blocks 1060→1061、stoneId 1→1）→ `WatchCheck RESULT: PASS`** | 2026-11-15 22:51：`runClient -PverifyWatch=true -PwatchJar=/tmp/t4fixture-ui.jar -PwatchModId=t4fixture`；截图 [t4-registry-prompt.png](features/images/t4-registry-prompt.png) |
 | **贵妃级注册表热加（实验性）** | **blocks 1060→1061、items 1333→1334、states 26684→26685，stoneId 1→1 稳定；放置 `(0,100,0)` 存盘；重启读档 `isT4Block=true`、entryId/stateId 不变，RESULT: PASS** | 2026-11-15 21:48：`runServer -PautoAdd=/tmp/t4fixture/t4fixture-1.0.0.jar -Pt4fixtureSelftest=true` → fixture 放进 `run/mods` → `runServer -Pt4fixtureSelftest=true -Pt4fixtureSelftestRead=true`；见 [t4-registry-hotadd.md](features/t4-registry-hotadd.md) |
@@ -65,6 +66,7 @@
 - **双端化**：dedicated server 加载、热加嫔级夹具、命令重放（93→94）、tick 事件到达；payload 适配 E1/E2/E3（含跨进程）。机制与证据见 [server-hotadd.md](features/server-hotadd.md)；边界与副作用见已知问题 13/14。
 - **真实 dogfood（众星捧月 / Ex Nihilo 1.5.0）**：贵妃级注册层热加通过（80 方块 / 181 物品 / 134 个 BlockState；stoneId 稳定；创造栏 15 个；payload `set_machine_output` 适配），标题屏与进世界 `/modreloader add` 都 PASS；**datapack 随后补齐**（见下一条）。
 - **datapack 热加载（方案 A：注入 pack + 原版 `/reload`）**：`hotadd/DatapackStage` 把 jar 作为 `Pack` 加进服务器 `PackRepository`（`addPackFinder` + `reload()`），再调 `MinecraftServer.reloadResources(selectedIds)`；`PlatformHooks.reloadDataPacks` 负责端相关取服务器，非服务器线程时投递到服务器线程。世界内热加众星捧月：recipes 0→164、loot 0→75、tags 2+1，真实合成与战利品掉落 PASS；标题屏热加 + 建世界走 `already live` 短路（同一套断言 PASS）；专用服 fixture 热加 + 放进 `mods/` 重启后存档可读、数据仍加载。见 [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md)。
+- **dogfood 玩法验收（众星捧月热加后）**：`dev/GameplayCheck`（`-PverifyGameplay`）在服务器线程驱动真实交互：mod 自己的 `/exnihilo tables` 七表全非空；铁锤砸圆石被 `BlockDropsEvent` 换成沙砾；筛子装铁网后筛泥土，掉 5 种卵石+草籽；真实 3×3 合成命中 `iron_hammer`。手动验收还抓到并修掉一个真 bug：热加后再调 `CreativeModeTabRegistry.sortTabs()` 会把 `DEFAULT_TABS` 从 4 变 8（该方法非幂等），创造物品栏页签列 7/8 越界崩溃；现在先清空再排序，并用 `-PverifyCreative` 断言 `defaults=4` + 真渲染 40 tick。见 [dogfood-gameplay.md](features/dogfood-gameplay.md)。
 - **贵妃级注册表热加（实验性）**：`hotadd/RegistryStage` 在构造前 `unfreezeData()`、构造后按 `getRegistrationOrder()` 逐注册表按容器重放 `RegisterEvent`、清空 BlockState id 映射再 `freezeData()`；fixture 端到端 PASS（见表尺）。限制：add-only、不可回滚、删除/更新与多人登录同步未做；客户端资源包/创造栏已在单人验证；datapack 已由上一行补齐；UI 已放行（警告后直接提交）。见 [t4-registry-hotadd.md](features/t4-registry-hotadd.md)。
 - **贵妃级调研（只读探针 + 受控 re-freeze）**：注册表与同步机制见 [research-t4-registry.md](research-t4-registry.md)；结论是「机制可行，但只能 add-only、单向提交、存档绑定该 mod」，裸 re-freeze 会移动 BlockState id（必须先清空重建）。[ADR-0008](decisions/0008-t4-registry-adaptation-poc.md) 为 Accepted；datapack 条款由 [ADR-0009](decisions/0009-datapack-hotadd.md)（Proposed）取代。
 - **架构收口（2026-11-15）**：
@@ -82,6 +84,7 @@
 - **已加载后删除 jar**：行为已知（mod 仍留在 ModList，没有卸载路径，不会再成为候选），但没有跑过专门检查。
 - **贵妃级（注册表内容）**：已实现 add-only 的 built-in 注册表热加（服务端闭环 + GUI + 单人客户端资源包/创造栏 + datapack 配方/战利品/标签/机器数据）；删除/更新、多人登录同步、世界生成注册表（维度/生物群系/结构）未做。
 - **datapack 热加载的极端组合**：标题屏热加 + 「世界加载前 pack 缓存已经建好」会走与世界内相同的注入路径，但没有单独 harness；实测的两个场景是「世界内注入」与「标题屏 + 已 live 短路」。
+- **众星捧月手动玩法项**：桶 / 坩埚 / 堆肥 / 网耐久 / 机器界面只有清单，没有自动断言（见 [dogfood-gameplay.md](features/dogfood-gameplay.md) §3）。
 - **datapack 失败语义**：`Stage.DATAPACK` 失败返回 `FailureKind.DATAPACK` 并标注「注册表已提交、dirty」，但没有夹具触发过（需要 mod 的 reload listener 抛异常；坏 recipe/loot 只是逐条跳过）。成功路径与边界已验证。
 - **Tier 预测 vs 人工标注**：没有 ground truth，准确率未知。
 - **Fabric intermediary 映射**：`class_XXX` 目标识别仍退化。
@@ -110,12 +113,14 @@
 18. **贵妃级目前只到 add-only**（2026-11-15）：引擎能热加方块/物品并保证存盘/重启可读，UI 已放行（带警告），单人客户端的资源包与创造栏已验证，datapack（配方/战利品/标签/机器数据）已能热加载，真实 dogfood 众星捧月也能注册 + 出配方；但**多人登录同步**未做、实体类 post-register 事件未重放、删除/更新未做、提交后不可回滚。见 [features/t4-registry-hotadd.md](features/t4-registry-hotadd.md) §7。
 19. **datapack 热加载的边界**（2026-11-15）：只覆盖 `RegistryLayer.RELOADABLE`（战利品/附魔/伤害类型/纹饰/物品修饰器…）；维度/生物群系/结构属于 WORLDGEN 层，要世界加载才生效。存档会记录 `mod/<modId>` 这个 data pack，重启时若 jar 在 `mods/` 里该包会出现两次（实测按 id 归并、计数不变、无报错，但不优雅）。失败文案必须强调「注册表已提交、运行时 dirty、请重启」，不能宣传可回滚。见 [features/t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) §7。
 
+20. **创造页签排序非幂等：热加后会崩创造物品栏**（2026-11-16 实测+已修）：`CreativeModeTabRegistry.sortTabs()` 每次调用都往 `DEFAULT_TABS` 追加 HOTBAR/SEARCH/OP_BLOCKS/INVENTORY 且不清空；正常启动 4 个，热加后再调一次变成 8 个。创造界面把非当前页的默认页签映射到 `(index % (size/2)) + 5` 列，8 个时出现列 7/8，而 `CreativeModeInventoryScreen.renderTabButton` 只有 7 张页签贴图、`Mth.clamp` 上界又写成了 `length` → `ArrayIndexOutOfBoundsException: Index 7 out of bounds for length 7`。修法：`afterRegistryContent()` 调 `sortTabs()` 前先清空 `DEFAULT_TABS`（`UnsafeAccess`，失败只 warn）；回归检查 `-PverifyCreative`。
+
 ## 下一步
 
 > 结构性技术债与架构升级点见 [tech-debt.md](tech-debt.md)（P0 已完成；下一步 P1-4 → P1-5 → P1-6）。
 
 0. **Git 收尾**：加 CI（分析器单测 + `./gradlew test`/`build`）；证据截图从 `run/screenshots` 复制进 `docs/`；首个 tag `v0.1.0` 待功能稳定。**CI 会先撞上已知问题 12**：`libs/` 不随仓库分发，完整 `build` 在 CI 上无 jar 可用，加 CI 前必须决定 jar 从哪来（下载脚本 / 提交 jar / 先只跑分析器单测与 `test`）。
-1. **人工收尾**：点一次 EasyLAN 的 GUI 按钮（`/modreloader add` 已自动化，见表尺）。
+1. **人工收尾**：点一次 EasyLAN 的 GUI 按钮（`/modreloader add` 已自动化，见表尺）；跑一遍众星捧月的桶/坩埚/堆肥手动清单（`-PverifyGameplayKeepOpen=true`，见 [dogfood-gameplay.md](features/dogfood-gameplay.md) §3）。
 2. **A1 产品化**：构造后 listener 回滚 / 存档回读；第二个妃级模组（如 `mcwifipnp`）；把 mr 的 5 个调用点反射化，去掉 `compileOnly` 依赖，让 fresh clone 能构建（已知问题 12）。
 3. **GUI / 文件夹监听完善**：Phase 3/4——忽略/重试持久化、批量/依赖排序、`-PverifyGui` 自动化；见 [gui-mod-watcher.md](features/gui-mod-watcher.md)。
 4. **分析器校准**：50 个 1.21.1 模组，人工标注 tier；算准确率；修 `mekanismgenerators` 类漏判。
@@ -128,6 +133,7 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近几条。
 
+- **2026-11-16（玩法验收 + 创造页签崩溃修复）**：`-PverifyGameplay` 驱动真实交互（tables/锤/筛/合成）5 项 PASS；发现并修复热加后创造物品栏越界崩溃（`DEFAULT_TABS` 被 `sortTabs()` 重复追加），新增 `-PverifyCreative` 回归。见 [dogfood-gameplay.md](features/dogfood-gameplay.md)。
 - **2026-11-15（datapack 热加载打通）**：`DatapackStage` 注入 pack + `reloadResources`；世界内热加众星捧月 recipes 0→164 / loot 0→75 / tags 2+1、真实合成与掉落 PASS，标题屏走 `already live` 短路，专用服 fixture 热加 + 重启数据仍加载；见 [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md)、[ADR-0009](decisions/0009-datapack-hotadd.md)。
 - **2026-11-15（众星捧月贵妃级热加）**：真实 dogfood 注册层通过（80 方块/181 物品）；当时 datapack 配方/战利品/标签未加载，次日段已补齐。
 - **2026-11-15（贵妃级客户端路径）**：in-world 热加 fixture 后资源包 `mod/t4fixture` 选中、创造栏重建 14 个、物品进 building_blocks，AddCmdCheck PASS。

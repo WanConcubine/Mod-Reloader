@@ -94,6 +94,15 @@ python3 tools/analyzer/run.py scan ~/Projects/Ex-Nihilo-Satellitium/build/libs/e
   -PverifyAddCommand=/Users/kaifengcrt/Projects/Ex-Nihilo-Satellitium/build/libs/exnihilosatellitium-1.21.1-1.5.0.jar \
   -PverifyAddCommandModId=exnihilosatellitium -PverifyDatapack=true -PverifyDatapackAtTitle=true
 
+# 众星捧月玩法验收：热加后驱动真实交互（tables/锤/筛/合成）+ 创造物品栏渲染（详见 docs/features/dogfood-gameplay.md）
+./gradlew runClient \
+  -PverifyAddCommand=/Users/kaifengcrt/Projects/Ex-Nihilo-Satellitium/build/libs/exnihilosatellitium-1.21.1-1.5.0.jar \
+  -PverifyAddCommandModId=exnihilosatellitium -PverifyGameplay=true -PverifyCreative=true
+# 检查完把客户端留在世界里，手动玩桶/坩埚/堆肥
+./gradlew runClient \
+  -PverifyAddCommand=/Users/kaifengcrt/Projects/Ex-Nihilo-Satellitium/build/libs/exnihilosatellitium-1.21.1-1.5.0.jar \
+  -PverifyAddCommandModId=exnihilosatellitium -PverifyGameplay=true -PverifyCreative=true -PverifyGameplayKeepOpen=true
+
 # 贵妃级调研：只读注册表探针（加 -PverifyRegistryRefreeze=true 会做一次受控 unfreeze/freeze，仅一次性世界）
 ./gradlew runClient -PverifyAddCommand=/tmp/lanmods/EasyLAN-neoforge-1.21.1-v1.6a.jar -PverifyRegistryProbe=true
 
@@ -166,7 +175,7 @@ docs/
   design.md                # 架构、分层、不变量
   glossary.md              # 术语（嫔/妃/贵妃/皇后、软重启、sidecar、registry…）
   use-cases.md             # 真实场景：什么情况下无需重启最有价值
-  features/                # 功能规格与验证：a0-hot-add.md / a1-mixin-hotadd.md / gui-mod-watcher.md / server-hotadd.md / t4-registry-hotadd.md / t4-datapack-hotadd.md / lan-doctor.md
+  features/                # 功能规格与验证：a0-hot-add.md / a1-mixin-hotadd.md / gui-mod-watcher.md / server-hotadd.md / t4-registry-hotadd.md / t4-datapack-hotadd.md / dogfood-gameplay.md / lan-doctor.md
   decisions/               # ADR：为什么这样定
   research-hot-mod-reload.md  # 2026-11 调研报告；历史背景，结论以 status 为准
   research-t4-registry.md    # 贵妃级注册表适配调研（机制/边界/实验计划）
