@@ -20,7 +20,7 @@
 | 6 | 客户端注册：BE 渲染器 / 物品染色 / 流体扩展 / reload listener | `beRenderers 6/6 (missing=[])`、瓷桶染色已注册、`fluidExtensions=3`、`clientReloadListeners=6` |
 | 7 | 物品图标模型 | `181/181 resolved, missing=[]` |
 | 8 | 自动机器的 tick + 渲染（读配置值） | 机器 BE 存活、配置 `1/1 loaded` |
-| 9 | 创造物品栏渲染 40 tick + **模组自己的页签**（`-PverifyCreative`） | 不崩，`defaults=4`；页签 `exnihilosatellitium:main`（无中生有：众星捧月）在 **第 2/2 页**，**182 项**全部来自该 mod；选中后菜单 46 个非空 ItemStack，再渲染 40 tick 不崩，PASS |
+| 9 | 创造物品栏渲染 40 tick + **模组自己的页签**（`-PverifyCreative`） | 不崩，`defaults=4`；页签 `exnihilosatellitium:main`（无中生有：众星捧月）在 **第 2/2 页**，**182 项**全部来自该 mod；选中后菜单 45–46 个非空 ItemStack，再渲染 40 tick 不崩，PASS |
 
 ```bash
 ./gradlew runClient \

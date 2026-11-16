@@ -110,6 +110,7 @@ python3 tools/analyzer/run.py scan ~/Projects/Ex-Nihilo-Satellitium/build/libs/e
   -PverifyAddCommandModId=exnihilosatellitium -PverifyDatapack=true -PverifyDatapackAtTitle=true
 
 # 主菜单热加 → 建世界 → 创造栏：断言 mod 自己的页签（含真实 `>` 翻页按钮）
+# 加 -PverifyCreativeAtTitleWarm=true = 先开过创造栏再回主菜单热加；-PverifyCreativeAtTitleInstalled=true = 正常安装对照
 ./gradlew runClient -PverifyCreativeAtTitle=<dogfood.jar>
 
 # 众星捧月玩法验收：热加后驱动真实交互（tables/锤/筛/合成）+ 创造物品栏渲染（详见 docs/features/dogfood-gameplay.md）

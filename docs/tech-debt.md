@@ -3,15 +3,15 @@
 > 只记录**结构性**问题与可升级点；实现进度见 [status.md](status.md)。
 > 原则：先修"会让我们说错话/悄悄坏掉"的，再修"好改但收益小"的；不为未来可能的需求预先抽象。
 
-## 事实盘点（2026-11-15，架构收口后）
+## 事实盘点（2026-11-16，注册审计与创造栏回归之后）
 
 | 指标 | 现状 |
 |---|---|
-| Java 代码 | **6935 行 / 11 个包**（`main` 4834 + `dev` 2101 + `test` 105） |
-| `dev/` 夹具 | **9 文件 / 2101 行 ≈ 30%**，独立 `src/dev/java` source set；**不在发布 jar 里**（jar 内 0 条 `dev/modreloader/dev/`） |
-| 反射 / Unsafe 站点 | 8 个文件（mixin、ModList、module、网络、资源包、JVM） |
-| Java 单测 | **3**（`./gradlew test`，不需要游戏） |
-| 语言文件 | `en_us` / `zh_cn` 各 **134 key**，键集与 `%s` 占位符由单测核对 |
+| Java 代码 | **14603 行 / 13 个包**（`main` 8579 + `dev` 5645 + `test` 379） |
+| `dev/` 夹具 | **23 文件 / 5645 行 ≈ 39%**，独立 `src/dev/java` source set；**不在发布 jar 里**（jar 内 0 条 `dev/modreloader/dev/`） |
+| 反射 / Unsafe 站点 | 14 个文件（mixin、ModList、module、网络、资源包、注册表同步、JVM 等） |
+| Java 单测 | **20**（`./gradlew test`，不需要游戏） |
+| 语言文件 | `en_us` / `zh_cn` 各 **150 key**，键集与 `%s` 占位符由单测核对 |
 | 包依赖 | `hotadd` **不再**依赖 `client` / `server`；剩 `command ↔ client`、`client → server`（集成服务器的命令重放）、`diagnose → ui`（文案） |
 
 ## P0：会让我们「悄悄说错话」的
