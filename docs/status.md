@@ -186,7 +186,11 @@
 
 ## 下一步
 
-> 下一会话从 **P2-4**（A1 产品化）或 **P3** 开始；P1-2/P1-3/P2-1/P2-2/P2-3 已完成或已收口。所有 harness 命令见 [AGENTS §2](../AGENTS.md)，细节在对应 feature 文档。
+> 下一会话从 **P2-4 剩余两项**（构造后 listener 回滚 / 服务端+客户端同时妃级）或 **P3** 开始；
+> P1-2/P1-3/P2-1/P2-2/P2-3 已完成或已收口。
+> ⚠️ **本机 dev client 显示层不稳**（2026-11-16 20:2x 连续两次卡在 `glfwSwapBuffers`、一次 `GLFW: Failed to locate a primary monitor`）：
+> 在显示恢复前，优先做**不需要 GL 的活**（分析器校准、纯 Python/Java 单测、`runServer` 路径、文档），
+> 客户端 harness 跑之前先确认窗口能正常交换缓冲。所有 harness 命令见 [AGENTS §2](../AGENTS.md)，细节在对应 feature 文档。
 > **热加类 harness 要求 `run/mods/` 里没有众星捧月 jar**（已加载就不能再热加）；备份在 `/tmp/dogfood-runmods-backup.jar`。
 
 | 优先 | 任务 | 关键点 / 落点 | 验收 |
