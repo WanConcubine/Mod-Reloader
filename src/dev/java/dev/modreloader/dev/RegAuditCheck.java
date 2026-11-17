@@ -31,7 +31,7 @@ import java.util.zip.ZipOutputStream;
  *       startup-only event to replay next; it never hot-adds anything, so jars
  *       with access transformers or a broken dependency can be included.</li>
  *   <li><b>Fatal path</b>: a synthetic mod jar whose class references
- *       {@code RegisterParticleProvidersEvent} must be refused by
+ *       {@code RegisterRecipeBookCategoriesEvent} must be refused by
  *       {@link HotAddEngine} with {@link HotAddEngine.FailureKind#CLIENT_REGISTRATION}
  *       before anything is injected. A second jar references only an event we do
  *       not replay yet ({@code RegisterDimensionSpecialEffectsEvent}, a "silent" gap) and
@@ -44,8 +44,10 @@ import java.util.zip.ZipOutputStream;
  */
 public final class RegAuditCheck {
     private static final int TITLE_SETTLE_TICKS = 100;
+    // Particle providers moved to "covered" on 2026-11-16 (replay landed); the recipe
+    // book categories event is still a crash-level gap.
     private static final String CRASH_EVENT =
-            "net/neoforged/neoforge/client/event/RegisterParticleProvidersEvent";
+            "net/neoforged/neoforge/client/event/RegisterRecipeBookCategoriesEvent";
     private static final String SILENT_EVENT =
             "net/neoforged/neoforge/client/event/RegisterDimensionSpecialEffectsEvent";
 

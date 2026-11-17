@@ -44,8 +44,14 @@ jecharacters 原先因 JiJ 内嵌依赖在 CONSTRUCT 失败，修好抽取后转
    实测 jecharacters：`modules [jecharacters, PinIn, JustEnoughCharacters.coremod.neoforge]`，构造通过、资源包重载、`PASS`。
    **剩下的边界**：① 只恢复类路径——带 `mods.toml` 的嵌套 mod 会拿到 module，但**没有 `ModContainer`**，它的 `@Mod` 构造器不跑
    （语料里两个嵌套 jar 都是纯库，没有触发这条）；② `isObfuscated: true` 的嵌套 jar 需要 FML 构建期的反混淆，直接跳过并 warn；
-   ③ jecharacters 的 coremod（`FMLCorePlugin` / `ICoreMod`）**不会运行**——它的类能加载，但 `JeiTransformer` 之类的字节码变换不会应用，
-   所以「能热加」不等于「功能完整」，真正的拼音搜索要重启后和 JEI 一起验证（见 §7 边界）。
+   ③ jecharacters 的 coremod（`META-INF/services/net.neoforged.neoforgespi.coremod.ICoreMod`，藏在嵌套 jar 里）**2026-11-16 起会晚注入**：
+   `hotadd/LateCoremod` 扫外层 + `META-INF/jarjar` 里的服务文件，把 coremod jar 复制成带 `Automatic-Module-Name` 的副本、
+   在**先于 module 注入**创建的独立 `ModuleLayer` 里加载（否则同包模块解析冲突），再按目标应用：
+   已加载 → `redefineClasses`，未加载 → `ClassFileTransformer` 在 define 时变换，回滚可恢复。
+   实测 jecharacters：4 个目标变换（JEI 搜索/过滤器/前缀解析 + 原版 `SearchTree`）、80 个未安装目标 deferred，
+   `ElementSearchLowMem.matches("tieding","铁锭")` 变换前 false、变换后 true（`-PverifyPinyin`，JEI 需在 `run/mods`）。
+   **剩余边界**：只覆盖 class 级 `ITransformer`（`ClassNode`/`byte[]`）；method/field 级与「目标在别的 class loader」只报告 skipped；
+   真机只跑了 at-load 路径，redefine 路径未实测。
 3. **依赖顺序**：依赖方必须先热加被依赖方。原先会在 MODLIST 报含糊的 `no ModContainer built`，现在 VALIDATE 直接
    `MISSING_DEPENDENCY` 并给出需要的 id/版本（MekanismGenerators 实测）。
 4. **预测 tier 不足以决定成败**：矩阵首轮 jecharacters / mekanismgenerators 预测嫔级却失败（当时的 JiJ / 缺依赖，JiJ 已修）；ZeroCore 预测贵妃却通过。
@@ -55,7 +61,7 @@ jecharacters 原先因 JiJ 内嵌依赖在 CONSTRUCT 失败，修好抽取后转
 
 ## 4. 对产品的含义
 
-- 热加能覆盖的是「无 AT + 无 worldgen + 无 native / coremod」的模组；JiJ 内嵌**库**已不再是边界（嵌套 mod 仍是）。
+- 热加能覆盖的是「无 AT + 无 worldgen + 无 native」的模组；JiJ 内嵌**库**与 **coremod（class 级）** 已不再是边界（嵌套 mod、method/field 级 coremod 仍是）。
   在真实语料里可覆盖的仍是**少数**——6/9 卡在 AT。
   tier 表（嫔/妃/贵妃/皇后）描述的是内容形状，**不是**能否热加的完整判据。
 - managed relaunch / soft restart 仍是"大范围覆盖"的正解（[ADR-0006](../decisions/0006-t4-managed-relaunch.md)）；
@@ -105,8 +111,9 @@ jecharacters 原先因 JiJ 内嵌依赖在 CONSTRUCT 失败，修好抽取后转
 
 - 只测了标题屏热加；进世界后的 datapack/玩法另见 [dogfood-gameplay.md](dogfood-gameplay.md)。
 - 语料是作者本机 9 个模组，不是随机抽样；6/9 带 AT 这个比例不能直接外推，但足以说明 AT 不是边缘情况。
-- 「jecharacters PASS」= 引擎层通过（module/ModList/构造/客户端注册/资源包）。它的 coremod 变换不生效，
-  拼音搜索这类**功能**没有验证——别把它写成「jecharacters 能用」。
+- 「jecharacters PASS」现在包含 **coremod 晚注入**：`-PverifyPinyin` 断言 JEI 的搜索类被改写并返回拼音匹配。
+  但断言用的是 JEI 私有 `matches`（stub 元素），没有开 JEI 界面手动输入；其它 coremod 的**功能**仍要单独的断言，
+  不能从「引擎 PASS」推断（coremod 也可能依赖 method/field 级变换，那部分只报告 skipped）。
 - `CompatCheck` 一次热加一个 jar；某个 jar 把进程搞崩了，后面的 jar 就不会跑——崩溃只能从 exit code + 日志判断。
 
 ## 8. AT 应用可行性量测（2026-11-16，只读，不实装）

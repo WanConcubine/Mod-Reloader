@@ -10,6 +10,11 @@ base {
     archivesName = "${mod_id}-${minecraft_version}"
 }
 
+// `-PnoJbr=true`: start the game without -XX:+AllowEnhancedClassRedefinition, i.e.
+// the "no enhanced redefinition" path that a stock JVM also takes. Used to verify
+// that mixins into not-yet-loaded classes and layout-preserving changes still work.
+def noJbr = (providers.gradleProperty('noJbr').orNull ?: '').toBoolean()
+
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(21)
 }
@@ -229,6 +234,23 @@ neoForge {
                 // at a time, and log a verdict per jar (comma-separated, deps first).
                 systemProperty 'modreloader.verifyCompat', verifyCompat
             }
+            if (providers.gradleProperty('verifyRelaunchPlan').orNull) {
+                // Managed relaunch: build the real plan + prove the script/spawn path
+                // starts a JVM, without restarting the game.
+                systemProperty 'modreloader.verifyRelaunchPlan', 'true'
+            }
+            if (providers.gradleProperty('verifyMixinFixture').orNull) {
+                // Non-JBR mixin path: a mixin into a class that is not loaded yet must
+                // apply without enhanced redefinition.
+                systemProperty 'modreloader.verifyMixinFixture',
+                        providers.gradleProperty('verifyMixinFixture').get()
+            }
+            if (providers.gradleProperty('verifyPinyin').orNull) {
+                // Late-coremod functional check: hot-add jecharacters, then assert
+                // JEI's search class became pinyin-aware (needs JEI in run/mods).
+                systemProperty 'modreloader.verifyPinyin',
+                        providers.gradleProperty('verifyPinyin').get()
+            }
             if (providers.gradleProperty('verifyMixinLayout').orNull) {
                 // Boundary check: an interface mixin against an already-loaded class
                 // must be refused before anything is mutated.
@@ -397,6 +419,12 @@ tasks.withType(JavaCompile).configureEach {
 def jbrJava = file("${System.getProperty('user.home')}/Library/Java/JavaVirtualMachines/jbr-21.jdk/Contents/Home/bin/java")
 
 def useJbr = { JavaExec task ->
+    if (noJbr) {
+        // Still JBR if that is the resolved toolchain, but without the flag: the
+        // redefine behaviour we care about is the same as a stock JVM's.
+        task.logger.lifecycle('{} runs without -XX:+AllowEnhancedClassRedefinition (noJbr=true): layout changes on loaded classes will be refused', task.name)
+        return
+    }
     if (jbrJava.exists()) {
         task.doFirst {
             executable = jbrJava.absolutePath

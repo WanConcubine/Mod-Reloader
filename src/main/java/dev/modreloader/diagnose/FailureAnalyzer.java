@@ -20,7 +20,8 @@ import java.util.stream.Collectors;
  * shows the raw detail instead of inventing a reason.
  */
 public final class FailureAnalyzer {
-    public record Report(Component title, Component summary, Component suggestion, String detail) {
+    public record Report(Component title, Component summary, Component suggestion, String detail,
+                         boolean restartRecommended) {
         public String clipboardText() {
             return title.getString() + "\n\n" + summary.getString() + "\n\n"
                     + suggestion.getString() + "\n\n" + detail;
@@ -75,7 +76,8 @@ public final class FailureAnalyzer {
         lines.add(I18n.get("modreloader.detail.log",
                 Path.of("logs/latest.log").toAbsolutePath()));
 
-        return new Report(title, summary, suggestion, String.join("\n", lines));
+        return new Report(title, summary, suggestion, String.join("\n", lines),
+                restartIsTheFix(result));
     }
 
     public static Report preflight(ModInspection inspection) {
@@ -114,7 +116,22 @@ public final class FailureAnalyzer {
         }
         lines.add(I18n.get("modreloader.detail.jbr", JbrSupport.describe()));
         lines.add(I18n.get("modreloader.detail.mixinruntime", MixinRuntimeSupport.describe()));
-        return new Report(title, summary, suggestion, String.join("\n", lines));
+        return new Report(title, summary, suggestion, String.join("\n", lines),
+                inspection.alreadyLoaded() || inspection.tier() == ModInspection.Tier.HUANGHOU
+                        || (inspection.tier() == ModInspection.Tier.FEI && !JbrSupport.available()));
+    }
+
+    /**
+     * Failures whose documented fix is "put the jar in mods/ and restart" - the
+     * only ones where a managed relaunch makes sense. Unknown failures keep the
+     * game running instead of restarting into the same state.
+     */
+    private static boolean restartIsTheFix(HotAddEngine.Result result) {
+        return switch (result.kind()) {
+            case JBR_REQUIRED, ACCESS_TRANSFORMER, CLIENT_REGISTRATION, COREMOD,
+                    UNSUPPORTED_TIER, MIXIN_CONFIG, REDEFINE, ROLLBACK_PARTIAL -> true;
+            default -> false;
+        };
     }
 
     private static String dependencySummary(ModInspection inspection) {

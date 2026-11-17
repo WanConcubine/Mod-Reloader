@@ -20,6 +20,8 @@ import net.neoforged.neoforge.client.event.RegisterColorHandlersEvent;
 import net.neoforged.neoforge.client.extensions.common.ClientExtensionsManager;
 import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
 import net.neoforged.neoforge.client.event.RegisterClientTooltipComponentFactoriesEvent;
+import net.neoforged.neoforge.client.event.RegisterParticleProvidersEvent;
+import net.minecraft.client.particle.ParticleEngine;
 import net.neoforged.neoforge.client.gui.ClientTooltipComponentManager;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 
@@ -79,12 +81,60 @@ public final class ClientRegistrationReplay {
         registerItemModels(container);
         replayRenderers(container);
         replayColorHandlers(container);
+        replayParticleProviders(container);
         replayClientExtensions(container);
         int reloadListeners = replayClientReloadListeners(container);
         replayTooltipComponentFactories(container);
         GuiLayerReplay.replay(container);
         ItemDecoratorReplay.replay(container);
         return reloadListeners;
+    }
+
+    /**
+     * Particle providers ({@code RegisterParticleProvidersEvent}) are another
+     * startup-only registration: the event is fired once with the live
+     * {@link ParticleEngine}, and a mod that misses it crashes the moment its
+     * particle spawns ({@code IllegalStateException: ... no provider}).
+     *
+     * <p>Replayed <b>against the container</b>, not globally: providers are put into
+     * the engine's map, and a global re-post would run every loaded mod's handler
+     * again. The targeted dispatch is also what makes library-mediated
+     * registrations work - measured with Balm 21.0.67, where the listener is added
+     * to the <em>consuming</em> mod's bus (Balm itself registers nothing).
+     *
+     * <p>{@code registerSpriteSet} stores the factory now and the sprite set is built
+     * on the next resource reload; the resource-pack stage runs one when the jar has
+     * assets or reload listeners. A jar that registers sprite-set particles but ships
+     * no assets would keep the factory unbuilt.
+     */
+    private static void replayParticleProviders(ModContainer container) {
+        try {
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft == null || minecraft.particleEngine == null) {
+                ModReloader.LOGGER.warn(
+                        "[ModReloader] particle providers not replayed: no client particle engine");
+                return;
+            }
+            ParticleEngine engine = minecraft.particleEngine;
+            int before = particleProviderCount(engine);
+            container.acceptEvent(new RegisterParticleProvidersEvent(engine));
+            int after = particleProviderCount(engine);
+            ModReloader.LOGGER.info("[ModReloader] particle providers replayed: {} new, {} total",
+                    before < 0 || after < 0 ? "?" : String.valueOf(after - before),
+                    after < 0 ? "?" : after);
+        } catch (Throwable t) {
+            // Cosmetic for mods that register no particles; never fail the add here.
+            ModReloader.LOGGER.warn("[ModReloader] particle provider replay failed", t);
+        }
+    }
+
+    private static int particleProviderCount(ParticleEngine engine) {
+        try {
+            Object providers = UnsafeAccess.get(engine, ParticleEngine.class, "providers");
+            return providers instanceof Map<?, ?> map ? map.size() : -1;
+        } catch (Throwable t) {
+            return -1;
+        }
     }
 
     /**

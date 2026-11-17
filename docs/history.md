@@ -401,3 +401,155 @@
   `-PverifyAddCommand=<dogfood> -PverifyGameplay=true` ✅（`AddCmdCheck RESULT: PASS` + `GameplayCheck RESULT: PASS`）、
   `-PverifyRegAudit=<16 jars>` ✅、`-PverifyCreativeAtTitle=<dogfood>` ✅。
   结论：P1/P2 项在本轮改动之后没有回归；status 的验收清单保持「全绿（含一条故意为红的反证）」。
+
+## 2026-11-16（deepseek-flash）late coremod：让 hot-add 的 `ICoreMod` 变换真的跑起来；JBR 门禁收窄
+
+所有者实测反馈两件事：①「通用拼音搜索（jecharacters）可加载，但没有实际生效」；②「鼠标手势（Mouse Tweaks）无法加载，
+提示需要 JBR 21+」。前者是 status 已知问题 24 里写过的「coremod 不运行」，这次做了；后者调查后确认**提示本身没错**，
+但门禁位置过严，一并收窄。
+
+- **问题 1 根因**：jecharacters 的 `ICoreMod`（`JechCoreMod`）注册在**嵌套 jar** 的
+  `META-INF/services/net.neoforged.neoforgespi.coremod.ICoreMod` 里。FML 在类加载时跑它，热加 jar 完全没走这条路，
+  所以 mod 能加载、JEI 的搜索类却没被改写成 `Match.contains`。新增 `hotadd/LateCoremod`：
+  扫外层 + `META-INF/jarjar` 的服务文件 → 把 coremod jar 复制一份、写唯一 `Automatic-Module-Name` →
+  **先于 `ModuleInjector`** 在独立 `ModuleLayer`（父层 game layer）里加载 → 对每个 `ITransformer` 的 class 级目标：
+  已加载 `redefineClasses`、未加载用 `ClassFileTransformer` 在 define 时变换、回滚可恢复。
+  两处踩坑都写进 ADR-0013：① 嵌套 coremod jar 与外层 mod 共享 `me.towdium.jecharacters` 包 →
+  `JechClassTransformer.class.getClassLoader().getResourceAsStream("me/towdium/jecharacters/targets.json")` 返回 null，
+  `JechCoreMod` 构造抛 `RuntimeException: Could not find targets.json`；② 先把同一个 jar 注进 game layer 再解析子层 →
+  `ResolutionException: module ... contains package me.towdium.jecharacters.asm`。独立层 + 先建后注解决两者。
+- **问题 1 证据**（JEI 19.27.0.340 放进 `run/mods`；测完已移走）：
+  `./gradlew runClient -PverifyPinyin=/Users/…/jecharacters-neoforge-4.5.15.jar` →
+  `coremod setup: coremods [me.towdium.jecharacters.coremod.JechCoreMod], transformed-at-load
+  [mezz.jei.gui.search.ElementSearchLowMem, mezz.jei.gui.ingredients.IngredientFilter,
+  mezz.jei.gui.search.ElementPrefixParser, net.minecraft.client.searchtree.SearchTree], deferred 80 target(s) not loaded`；
+  `ElementSearchLowMem.matches("tieding", "铁锭", stub) = true`（**变换前同一调用是 `"铁锭".contains("tieding")` = false**，
+  所以是 A/B 断言），`[PinyinCheck] RESULT: PASS`。注意 `redefined []`：这次 4 个目标都是 on-load 路径，
+  redefine 路径只有代码路径，记在 status「未验证」。
+- **问题 2 根因**：Mouse Tweaks 2.26.1 的 accessor mixin 把 `AbstractContainerScreenAccessor` 接口合并进
+  `AbstractContainerScreen`（标题屏时该类已加载）→ 布局变更 → **确实需要 JBR**。实测：
+  `-PverifyCompat=<MouseTweaks>`（JBR + `-XX:+AllowEnhancedClassRedefinition`）→ `ok=true`、
+  `redefined net.minecraft.client.gui.screens.inventory.AbstractContainerScreen`；
+  `-PnoJbr=true` → `stage=MIXIN kind=JBR_REQUIRED`，消息点名
+  `AbstractContainerScreen adds interface(s) [yalter/mousetweaks/mixin/AbstractContainerScreenAccessor]`，
+  `isLoaded=false`、blocks/items 1060/1333 不变 → 拒绝发生在任何状态变更之前。
+- **门禁收窄**：删掉 `HotAddEngine` 里「有 mixin 就必须 JBR」的前置检查，改由 `MixinSupport` 逐目标判定布局
+  （与 coremod 同规则）；`ModInspection.canHotLoad`/`blockReason`、`ModReloaderI18n.preflightReason`、`HotAddWhy`
+  同步为「可以尝试，布局变更会被拒」；新增 `JbrSupport.hint()`，在拒绝消息里给出本机 JBR 安装路径
+  （macOS `~/Library/Java/JavaVirtualMachines`、Linux `/usr/lib/jvm`、Windows `%LOCALAPPDATA%/Programs` 等）。
+  新增 `build.gradle -PnoJbr=true`（不加 enhanced 标志，跑 stock 语义）。
+- **免 JBR 的正向验证**：新增夹具 `experiments/mixin-fixture`（`@Mod` + `@Inject` 进**本 jar 自己**、
+  热加时还没加载的 `Probe`，`value()` 1→2）。`./build.sh /tmp/mixinfixture` 后
+  `./gradlew runClient -PnoJbr=true -PverifyMixinFixture=/tmp/mixinfixture/mixinfixture-1.0.0.jar` →
+  `eager=[mixinfixture.Probe]`、`Probe.value() = 2`、`RESULT: PASS`（`enhancedRedefinition=false`）。
+  结论：**未加载目标的 mixin 本来就不需要 JBR**，旧门禁是过严；Mouse Tweaks 这类仍需要。
+- **coremod 回滚**：at-load 路径的变换也能回滚（之前只回滚 redefine 路径）。`onLoad` 记录变换前字节，
+  rollback 时逐个 `redefineClasses` 回去。证据：`-PautoAdd=<jecharacters> -PfailAfterModList=true`（JEI 在 run/mods）→
+  4 个类全部恢复（`ElementSearchLowMem 10569 -> 10509`、`IngredientFilter 20096 -> 20035`、
+  `ElementPrefixParser 11846 -> 11861`、`SearchTree 3430 -> 3385`），`rollback: restore coremod-transformed classes ok`、
+  `rollback: coremod load transformer ok`，失败发生在 MODLIST 注入点。边界：改布局的变换回滚不了（`redefineClasses` 会拒绝），
+  会作为 rollback error 报出来。
+- **工程**：新增 `Stage.COREMOD` / `FailureKind.COREMOD` + 中英文案（`LangKeysTest` 的全 FailureKind 覆盖自动生效）；
+  新增 `-PverifyPinyin` / `-PverifyMixinFixture` / `-PnoJbr`；`LateCoremod.transformedBytes()` 让 harness 断言
+  「引擎写进类里的字节」而不是再 retransform 读回（后者对非 retransformable transformer 会拿到变换前字节）。
+  回归：`./gradlew build` 通过（含 29 个无游戏单测 + dev harness 编译）。
+- **文档**：status 表尺新增两行、已知问题 24/25 改写、`a1-mixin-hotadd.md` §10.4、矩阵 §3.2/§7、AGENTS §2 命令与
+  规则 10/14、ADR-0013（Proposed）。
+
+## 2026-11-16（deepseek-flash）tier 注册信号修正：为什么"好多模组被列为贵妃"
+
+所有者问「好多模组被列为贵妃且需要 JBR」。查下来是两个独立信号叠在一起：
+
+- **贵妃（runtime）判定过宽**：`ModInspector.RegistryVisitor` 只要 jar 里**出现**注册表类名
+  （`net/minecraft/core/Registry`、`Registries`、`registries/BuiltInRegistries`、`.../DeferredRegister`、
+  `NeoForgeRegistries`、`.../event/RegisterEvent`）就置 `registry=true` → 贵妃。读取注册表（tooltip 查 `BuiltInRegistries.ITEM`、
+  GUI/配方展示）和注册内容完全分不开。实测 9 个真实 jar：
+  `Jade` 有 12 个类引用注册表类型、**0 次注册调用** → 仍被判贵妃（Python 分析器判妃）；
+  `MekanismGenerators` 走的是 `mekanism/common/registration/impl/BlockDeferredRegister#register`（不是 NeoForge 的
+  `DeferredRegister`），精确类名匹配抓不到 → 分析器判贵妃、runtime 判嫔。
+  另外，analyzer 的注册信号一直是「`register*` 调用 + `DeferredRegister` 引用」，两条实现从 2026-11 起就漂移
+  （status 已知问题 5），这就是「同一批 jar，UI 说贵妃、分析器说妃」的直接原因。
+- **"需要 JBR" 不是贵妃带来的**：preflight / `why` 里 `mixinTier = 妃级 || (贵妃 && 有 mixin)`，在没有 enhanced redefinition
+  的 JVM 上显示 JBR 提示。所以任何带 mixin 的模组都会显示它（贵妃只是其中一类）；它也不是逐模组的硬性要求——
+  2026-11-16 已收窄为「已加载类 + 布局变更」（见上一条 / a1 §10.4）。
+
+修正：新增 `inspect/RegistrySignal`（无游戏依赖、可单测），`ModInspector` 只按
+① `register*` 调用（owner 是 `net/minecraft/core/Registry`、`*BuiltInRegistries`、`*RegisterEvent`、任意 `*DeferredRegister`）
+② 任意 `DeferredRegister` 类型引用（含 `$Blocks`/`$Items` 子类、字段/方法描述符）判定；单纯读注册表不算。
+Java 侧语义与 `tools/analyzer` 的 `registration_refs` + `DeferredRegister` 标记对齐。
+
+证据（离线，ASM 扫 9 个真实 jar，按 runtime 规则算 tier）：
+
+```
+ExtremeReactors2  old=GUIFEI  new=GUIFEI
+Jade              old=GUIFEI  new=FEI      <-- 12 classes / 0 registration calls
+Mekanism          old=GUIFEI  new=GUIFEI
+MekanismGenerators old=PIN    new=GUIFEI   <-- own BlockDeferredRegister#register
+ZeroCore2         old=GUIFEI  new=GUIFEI
+ae2               old=GUIFEI  new=GUIFEI
+guideme           old=GUIFEI  new=GUIFEI
+jecharacters      old=PIN     new=PIN
+jei               old=GUIFEI  new=GUIFEI
+```
+
+`./gradlew test`：`RegistrySignalTest` 5 个断言全 PASS（`Registry.register`/`DeferredRegister#register`/`RegisterEvent#register` 算注册；
+`BuiltInRegistries#get`、`Screen#register`、`DeferredRegister#create`、只读 `Registries` 不算）。
+**没有起客户端**：这次只改 tier 预测/门禁的输入，注册表热加路径本身已有贵妃级 harness；`guideme` 这类
+「JNI native 方法」的 tier 仍只有 analyzer 判 HUANGHOU，runtime inspector 仍是贵妃（另一条 drift，未在本次范围）。
+
+## 2026-11-16（deepseek-flash）粒子 provider 重放：Balm 在 VALIDATE 被假拒绝
+
+用户报 `balm-neoforge-1.21.1-21.0.67.jar` 加载失败，分类 `CLIENT_REGISTRATION`：
+「registers [client.event.RegisterParticleProvidersEvent] ... 用到就会崩」。
+
+- **根因**：审计对「引用了一次性事件」是保守近似；Balm 是库（Blay 系抽象层），自己不注册粒子，
+  它把 `RegisterParticleProvidersEvent` 的 listener 挂到**消费方 mod 的 bus**（`initializeMod(...)` 里
+  `modBus.addListener(...)`），消费方调用 `registerParticleProviders` 时才真正注册。jar 里当然有事件引用，
+  审计分不出「库的胶水」和「真的注册了粒子」，于是按 crash 拒绝。**这不是 Balm 的问题，是审计粒度太粗。**
+- **修复**：`RegisterParticleProvidersEvent` 本来就可重放（`ParticleEngine` provider 表是 put 语义、事件构造器公开）。
+  新增 `ClientRegistrationReplay#replayParticleProviders`：构造事件、**定向投给新容器**（`container.acceptEvent`）——
+  实测 Balm 的 listener 就在消费方容器上，靶向重放正好命中，也不需要全局 post 把别人的 handler 再跑一遍；
+  日志用 `providers` 表前后大小报告新增数。`registerSpriteSet` 的 sprite set 由下一次资源重载建立（pack 阶段会重载）。
+- 审计分级同步：`RegisterParticleProvidersEvent` 从 `crash` 移入 `covered`，CRASH 由四类变三类；
+  单测 `particleProvidersAreCoveredByTheReplay` 钉住；`RegAuditCheck` 的合成 crash jar 改用
+  `RegisterRecipeBookCategoriesEvent`；语料计数 129 处引用 → **71 covered / 1 crash**（AE2 12 covered、
+  Mekanism 15 covered + 1 crash（shader））。
+- 证据（dev client，JBR，`-PverifyCompat=/tmp/balm.jar`）：
+  `registration audit [balm]: 24 mod-bus event(s); covered [... RegisterParticleProvidersEvent ...]`；
+  `mixin setup: redefined=[ModelBakery, Screen, AbstractContainerScreen, PlayerList, CropBlock, OptionsScreen, Slot,
+  MinecraftServer, Entity, MouseHandler, Minecraft, KeyMapping, ReloadableServerResources, StemBlock]`；
+  `particle providers replayed: 0 new, 109 total`（Balm 自己不注册粒子，符合预期）；
+  `RESULT balm.jar predicted=GUIFEI ok=true ... isLoaded=true`。
+- **对用户环境（`JBR=false`）的结论**：这次只修 `VALIDATE` 的假拒绝。Balm 的 mixin 是 accessor 型，
+  上面 14 个目标在标题屏已加载，所以在没有 enhanced redefinition 的 JVM 上接下来会停在 `MIXIN / JBR_REQUIRED`
+  （消息点名类与布局变更）。要么换 JBR 21 + `-XX:+AllowEnhancedClassRedefinition`，要么把 jar 放进 `mods/` 重启。
+- 边界：没有 assets 却用 `registerSpriteSet` 的 jar（跳过资源重载）sprite set 不会建，粒子仍可能异常；
+  库胶水型的其它一次性事件（如 Balm 的 renderers/screens 已经由现有重放覆盖）没有逐个复查。
+
+
+## 2026-11-16（deepseek-flash）托管重启 A′/B：保存世界 → 用同 JVM / JBR 重新拉起游戏
+
+所有者问「换 JBR 能不能由我们做」。结论：JVM 不能替换自己，只能起新进程；且**改 `mods/` 是玩家/启动器的事**，
+我们不该代劳。于是按「先 A′（同 JVM 重启）再 B（用 JBR 重启）」实现：
+
+- `client/RelaunchScripts`（纯，可单测）：生成 `<gamedir>/modreloader/relaunch/relaunch-<ts>.sh|.cmd` ——
+  `sleep 2 → cd <gamedir> → exec <java> <原 argv>`；POSIX 单引号（含 `'\''` 转义），Windows 双引号 + `%` 翻倍，
+  cmd.exe 无法表示的参数（含 `"`/换行）**拒绝**而不是拼坏命令。
+- `client/Relauncher`：
+  - `saveAndRestart`：保存 options + 单人 `IntegratedServer.saveEverything(true,true,true)` →
+    原 `ProcessHandle.arguments()` + `-Dmodreloader.relaunched=true` / `-Dmodreloader.relaunched.waitForPid=<pid>` →
+    写脚本 → `setsid /bin/sh`（有则用）/ `cmd /c start` 启动并重定向日志 →
+    **扫描命令行带标记的 JVM 确认替代进程出现**（最多 6s）；没出现就**不退出**，返回原因 + 子进程日志尾部；
+  - 子进程 `ClientBootstrap.install()` 调 `awaitPreviousProcess()`：轮询旧 PID 最多 15s，避免两个 JVM 同时写实例目录；
+  - B：`jbrRelaunchAvailable()`（本机有 JBR 21 且当前不是 JBR+flag）、`jbrFlags()`（缺则加
+    `-XX:+AllowEnhancedClassRedefinition`）、`saveAndRestart(mc, reason, java, extraArgs)` 重载。
+- UI：`LoadFailureScreen` 在 `FailureAnalyzer.Report.restartRecommended()`（JBR_REQUIRED / ACCESS_TRANSFORMER /
+  CLIENT_REGISTRATION / COREMOD / UNSUPPORTED_TIER / MIXIN_CONFIG / REDEFINE / ROLLBACK_PARTIAL）时显示
+  「保存并重启游戏」；B 额外显示「用 JBR 重启」→ `RelaunchConfirmScreen` 显式确认（文案写明只影响本次会话）。
+  不可自动重启时把 `Relauncher.blocker()` 的原因显示出来，不留死路。
+- 验证：`RelaunchScriptsTest` 4 个单测（引号/元字符/`%`/不可表示）；`-PverifyRelaunchPlan=true`（dev，macOS，JBR 21）：
+  `canRelaunch=true`、plan 12 args（16644 chars）、spawn `java -version` → exit 0 且输出 `openjdk version "21.0.11"`、
+  JBR + `-XX:+AllowEnhancedClassRedefinition` spawn → exit 0；`RESULT: PASS`。
+- **未验证**：真实“新窗口起来、旧进程退出”的端到端（会退出客户端，不适合自动 harness），Windows/PCL2 的进程树行为尤其未知；
+  B 只影响本次会话，长期要在启动器里选 JBR。A′ 只是自动化“重启”那一步，**不会替玩家把 jar 放进 `mods/`**——
+  所以它适用于“玩家已装好 jar、只差重启”以及“用 JBR 重启”两种场景。

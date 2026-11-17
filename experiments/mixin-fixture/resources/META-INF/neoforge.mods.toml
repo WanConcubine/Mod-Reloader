@@ -1,0 +1,16 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="MIT"
+
+[[mods]]
+modId="mixinfixture"
+version="1.0.0"
+displayName="Mixin Fixture"
+description='''
+Fixture for the non-JBR mixin path: one @Inject into a class that is NOT loaded
+when the mod is hot-added, so the mixin applies while the class is defined and no
+enhanced class redefinition is needed.
+'''
+
+[[mixins]]
+config="mixinfixture.mixins.json"

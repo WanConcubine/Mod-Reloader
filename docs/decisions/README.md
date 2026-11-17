@@ -17,6 +17,7 @@
 | [0010](0010-post-connect-registry-sync.md) | 连接后的注册表 id 同步走「运行时自有 play 通道 + 复用 `applySnapshot`」 | Proposed（已实现并跨进程验证） |
 | [0011](0011-hotadd-must-inform-clients.md) | 热加必须主动告知在线客户端（id/版本/jar/hash + 该怎么办） | Proposed（已实现并跨进程验证） |
 | [0012](0012-registration-audit-severity.md) | 注册审计分级：崩溃类变更前拒绝，行为类只 warn | Proposed（已实现并用 16 个真实 jar 校准） |
+| [0013](0013-late-coremod.md) | 热加 jar 的 coremod（`ICoreMod`）在独立 module layer 里晚注入；JBR 只在「已加载类 + 布局变更」时必需 | Proposed（jecharacters 拼音搜索功能验证通过） |
 
 ## 模板
 

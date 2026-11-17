@@ -72,7 +72,11 @@ public record ModInspection(Path jar, String fileName, List<Mod> mods, Tier tier
             }
         }
         if (tier == Tier.FEI || (tier == Tier.GUIFEI && mixins)) {
-            return JbrSupport.available() && MixinRuntimeSupport.available();
+            // JBR is not a gate any more: a mixin that keeps the class layout still
+            // applies on a stock JVM, and a target that is not loaded is transformed
+            // on load. Only a layout change on an already-loaded class needs JBR, and
+            // that is detected per target by MixinSupport while nothing is mutated.
+            return MixinRuntimeSupport.available();
         }
         return true;
     }
@@ -100,8 +104,9 @@ public record ModInspection(Path jar, String fileName, List<Mod> mods, Tier tier
                 return "missing dependency: " + dependency.modId() + " " + dependency.versionRange();
             }
         }
-        if (tier == Tier.FEI && !JbrSupport.available()) {
-            return "fei-tier layout changes require JBR 21 + -XX:+AllowEnhancedClassRedefinition";
+        if ((tier == Tier.FEI || (tier == Tier.GUIFEI && mixins)) && !JbrSupport.available()) {
+            return "fei-tier without JBR: layout-preserving mixins apply, layout-changing "
+                    + "targets are refused (" + JbrSupport.describe() + ")";
         }
         if (mixinRuntimeMissing()) {
             return "fei-tier mixins require " + MixinRuntimeSupport.name() + " to be installed";

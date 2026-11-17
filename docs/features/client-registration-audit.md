@@ -20,7 +20,7 @@ NeoForge 的 mod bus 上有一批**只在启动时 fire 一次**的注册事件�
 | 形态 | 例子 | 用户怎么看到 |
 |---|---|---|
 | 静默 | `RegisterGuiLayersEvent`（已补）、`RegisterItemDecorationsEvent` | 少了个 HUD 元素 / 装饰，没人知道 |
-| 点一下崩 | `RegisterClientTooltipComponentFactoriesEvent`、`RegisterRecipeBookCategoriesEvent`、`RegisterParticleProvidersEvent`、`RegisterShadersEvent` | 悬停/开配方书/粒子/自定义渲染时崩 |
+| 点一下崩 | `RegisterClientTooltipComponentFactoriesEvent`、`RegisterRecipeBookCategoriesEvent`、`RegisterShadersEvent` | 悬停/开配方书/自定义渲染时崩（粒子类 2026-11-16 已重放，见下） |
 | 行为变了 | `RegisterCapabilitiesEvent`、`ModifyDefaultComponentsEvent` | 机器不工作、组件缺失 |
 | 加载期崩 | `RegisterSpriteSourceTypesEvent`（资源重载） | 热加当次就崩 |
 
@@ -69,7 +69,7 @@ NeoForge 的 mod bus 上有一批**只在启动时 fire 一次**的注册事件�
 | `covered` | 我们已经重放/构造（`ClientRegistrationReplay` / `FmlEvents` / `NetworkAdaptation` / `RegistryStage`） | 无 |
 | `recurring` | 启动后还会再 fire（`ModelEvent.*`、`TextureAtlasStitchedEvent`、`BuildCreativeModeTabContentsEvent`、`SoundEngineLoadEvent`、`RegisterConfigurationTasksEvent`、`RenderLevelStageEvent`） | 无 |
 | `datagen` | `GatherDataEvent` / `RegisterGameTestsEvent` | 无 |
-| `crash` | 用到就崩：`RegisterParticleProvidersEvent`、`RegisterRecipeBookCategoriesEvent`、`RegisterShadersEvent`、`RegisterSpriteSourceTypesEvent` | **变更前拒绝**（`FailureKind.CLIENT_REGISTRATION`） |
+| `crash` | 用到就崩：`RegisterRecipeBookCategoriesEvent`、`RegisterShadersEvent`、`RegisterSpriteSourceTypesEvent`（粒子类 2026-11-16 移入 `covered`） | **变更前拒绝**（`FailureKind.CLIENT_REGISTRATION`） |
 | `behavior` | 能跑但功能变了：默认组件、自注册 registry、属性/刷怪/POI、模型层（已 bake） | 大声 warn，**不拒绝** |
 | `silent` | 没有已知症状（物品装饰、维度特效、地图装饰…；HUD 层已移出，见下） | warn |
 | `base` | 抽象事件基类（`EntityRenderersEvent`、`RegisterColorHandlersEvent`、`DataPackRegistryEvent`）；真正 fire 的是具体子类 | 仅记录 |
@@ -79,7 +79,7 @@ NeoForge 的 mod bus 上有一批**只在启动时 fire 一次**的注册事件�
 **5/16 个模组**（众星捧月、ZeroCore2、AE2、Mekanism、ExtremeReactors2）都注册 capabilities，
 其中众星捧月是我们的 dogfood——直接拒绝会让内容模组全线不可热加，而它们的方块/物品/配方仍然能用。
 当时先把它归到 `behavior`（warn）并列为下一优先级；**2026-11-16 已补上重放**（`hotadd/CapabilityReplay`），
-现在归 `covered`。拒绝仍然只留给「一用就崩」的四类。决策记录见 [ADR-0012](../decisions/0012-registration-audit-severity.md)。
+现在归 `covered`。拒绝仍然只留给「一用就崩」的三类。决策记录见 [ADR-0012](../decisions/0012-registration-audit-severity.md)。
 
 ### 3.3 接进引擎
 
@@ -90,6 +90,7 @@ registration audit <ids>: N mod-bus event(s); covered [...]; crash [...]; behavi
 ```
 
 - `crash` 非空 → `FailureKind.CLIENT_REGISTRATION`，文案「该模组会注册 X，本运行时还没有重放它；用到就会崩，带 jar 重启」；
+  （粒子类事件已不在 `crash`：`ClientRegistrationReplay#replayParticleProviders` 用容器定向重放，见 §3.4 的 Balm 实物）
 - `behavior` / `silent` → 只记日志（`behavior` 的文案里点名事件，方便判断「机器为什么不动」）；
 - 审计自身抛异常只 warn，不影响热加。
 
@@ -104,8 +105,8 @@ registration audit <ids>: N mod-bus event(s); covered [...]; crash [...]; behavi
 
 它做两件只读的事：① 扫描给定 jar 并逐条打印分级（**不热加**，所以 AT/缺依赖的 jar 也能进语料）；
 ② 现造两个最小 mod jar（`neoforge.mods.toml` + 一个字段引用事件），
-一个引用 `RegisterParticleProvidersEvent`（必须被 `HotAddEngine` 以 `CLIENT_REGISTRATION` 拒绝在 `VALIDATE`），
-一个只引用仍然没有重放的 `RegisterItemDecorationsEvent`（必须**不**被判致命）。
+一个引用 `RegisterRecipeBookCategoriesEvent`（必须被 `HotAddEngine` 以 `CLIENT_REGISTRATION` 拒绝在 `VALIDATE`），
+一个只引用仍然没有重放的 `RegisterDimensionSpecialEffectsEvent`（必须**不**被判致命）。
 
 ## 4. 事件清单
 
@@ -118,9 +119,10 @@ registration audit <ids>: N mod-bus event(s); covered [...]; crash [...]; behavi
 `RegisterColorHandlersEvent.Block/.Item`、`RegisterClientExtensionsEvent`、`RegisterClientReloadListenersEvent`、
 `RegisterClientTooltipComponentFactoriesEvent`、`RegisterPayloadHandlersEvent`、`RegisterEvent`、
 `RegisterCapabilitiesEvent`（`CapabilityReplay`，2026-11-16）、`RegisterGuiLayersEvent`（`client/GuiLayerReplay`，2026-11-16）、
-`RegisterItemDecorationsEvent`（`client/ItemDecoratorReplay`，2026-11-16）。
+`RegisterItemDecorationsEvent`（`client/ItemDecoratorReplay`，2026-11-16）、
+`RegisterParticleProvidersEvent`（`ClientRegistrationReplay#replayParticleProviders`，2026-11-16：容器定向重放，put-only）。
 
-**已知崩溃（拒绝）**：`RegisterParticleProvidersEvent`、`RegisterRecipeBookCategoriesEvent`、`RegisterShadersEvent`、`RegisterSpriteSourceTypesEvent`。
+**已知崩溃（拒绝）**：`RegisterRecipeBookCategoriesEvent`、`RegisterShadersEvent`、`RegisterSpriteSourceTypesEvent`。
 
 **行为类（warn）**：`ModifyDefaultComponentsEvent`、`NewRegistryEvent`、`DataPackRegistryEvent.*`、
 `ModifyRegistriesEvent`、`EntityAttributeCreationEvent`、`EntityAttributeModificationEvent`、`RegisterSpawnPlacementsEvent`、
@@ -140,10 +142,12 @@ Mekanism、MekanismGenerators、ExtremeReactors2），共 **129 处事件引用*
 
 | 计数 | covered | recurring | datagen | silent | behavior | crash | base |
 |---|---|---|---|---|---|---|---|
-| 129 | **69** | 24 | 6 | **16** | 10 | **3** | 1 |
+| 129 | **71** | 24 | 6 | **16** | 10 | **1** | 1 |
 
 （2026-11-16 19:48 / 20:0x 两次复跑：`RegisterGuiLayersEvent` 从 `silent` 移入 `covered`（2 处引用：AppleSkin、Mekanism），
-随后 `RegisterItemDecorationsEvent` 也移入 `covered`（1 处引用：Mekanism）；总数仍是 129，没有任何当前 PASS 的模组变拒绝。）
+随后 `RegisterItemDecorationsEvent` 也移入 `covered`（1 处引用：Mekanism）；**2026-11-16 深夜第三轮**：
+`RegisterParticleProvidersEvent` 从 `crash` 移入 `covered`（2 处引用：AE2、Mekanism）→ 71 covered / 1 crash；
+总数仍是 129，没有任何当前 PASS 的模组变拒绝。）
 
 逐 jar（只列非空项）：
 
@@ -156,15 +160,15 @@ Mekanism、MekanismGenerators、ExtremeReactors2），共 **129 处事件引用*
 | ZeroCore2 2.4.9 | 7 | 2 covered（含 capabilities）+ 4 recurring + datagen |
 | Jade 15.10.6 / JEI 19.27.0 | 4 / 4 | 全 covered |
 | jecharacters 4.5.15 | 3 | 1 covered + silent `ModConfigEvent.Loading/.Reloading`（config 已由 `ModConfigs` 直接加载，事件本身不 fire） |
-| AE2 19.2.18 | 24 | 11 covered + 1 **crash**（粒子）+ 2 behavior + 5 silent + 3 recurring + 2 datagen |
+| AE2 19.2.18 | 24 | 12 covered（含粒子）+ 2 behavior + 5 silent + 3 recurring + 2 datagen |
 | guideme 21.1.22 | 10 | 5 covered + 4 recurring + datagen |
-| Mekanism 10.7.19 | 38 | 14 covered（含 HUD 层、物品装饰）+ **2 crash**（粒子、shader）+ 7 behavior + **6 silent** + 8 recurring + 1 base |
+| Mekanism 10.7.19 | 38 | 15 covered（含 HUD 层、物品装饰、粒子）+ **1 crash**（shader）+ 7 behavior + **6 silent** + 8 recurring + 1 base |
 | MekanismGenerators | 13 | 7 covered + behavior 模型层 + 2 silent + 3 recurring |
 | ExtremeReactors2 2.4.9 | 11 | 7 covered（含 capabilities）+ 1 silent + 2 recurring + datagen |
 
 结论：
 
-- **审计没有改变任何当前 PASS 的结论**：3 处 `crash` 全在 AE2 / Mekanism，而这两个模组本来就因 access transformer 在 VALIDATE 被拒。
+- **审计没有改变任何当前 PASS 的结论**：剩下的 1 处 `crash`（Mekanism shader）本来也因 access transformer 在 VALIDATE 被拒；粒子转 covered 后，Balm 21.0.67 实物从 `CLIENT_REGISTRATION` 变成可热加（dev client `ok=true`，见 §7.2）。
   AppleSkin、ZeroCore2、jecharacters、Jade、guideme、众星捧月仍然可热加。
 - **审计第一次把 dogfood 的一个真实缺口变成可报告，并且已经补上**：众星捧月有
   `@EventBusSubscriber @SubscribeEvent registerCapabilities(RegisterCapabilitiesEvent)`（javap 验证），
@@ -266,3 +270,37 @@ registration audit [appleskin]: 4 mod-bus event(s); covered [fml.event.lifecycle
 | `RegisterDimensionSpecialEffectsEvent` / `RegisterDimensionTransitionScreenEvent` 等其余 silent | silent | **不做（没有 symptom）**：语料里没有引用；等审计数据出现真实引用再排期 |
 
 原则：**要么有真实 subject 的 harness，要么写清为什么不做**——不留"也许以后"的中间态。
+
+### 7.2 粒子 provider：Balm 的「假拒绝」（2026-11-16）
+
+用户报告 `balm-neoforge-1.21.1-21.0.67.jar` 在 `VALIDATE` 被 `CLIENT_REGISTRATION` 拒绝，
+理由 `registers [client.event.RegisterParticleProvidersEvent]`。查下来是**审计的保守近似撞上了库模组**：
+
+- Balm 是 Blay 系模组的抽象层。它自己**不注册任何粒子**：`NeoForgeBalmClientRuntime` 把
+  `RegisterParticleProvidersEvent` 的 listener 加到**消费方 mod 的 mod bus** 上（`initializeMod(...)` 里
+  `modBus.addListener(event -> new NeoForgeBalmParticleProviderRegistrar(event).accept(consumer))`），
+  消费方在 `registerParticleProviders(registrar -> registrar.register(...))` 时才真正注册。
+  jar 里有对事件类的引用，审计无法区分「库的胶水」和「注册了粒子」，于是按 crash 拒绝。
+- 而这个事件是**可以重放的**：`ParticleEngine` 的 provider 表就是 put 语义，事件构造器公开。
+  靶向重放（`container.acceptEvent`）正好命中「listener 在消费方 bus 上」这个形状——不需要全局 post，
+  也就不会把其它模组的 handler 再跑一遍。
+
+实现：`ClientRegistrationReplay#replayParticleProviders`（构造 `RegisterParticleProvidersEvent(particleEngine)`
+投给新容器，日志打印 `providers` 表的前后大小）。`registerSpriteSet` 只存工厂，sprite set 在**下一次资源重载**时才建，
+而热加的 pack 阶段会重载（jar 有 assets / reload listener 时）；没有 assets 的 sprite-set 粒子仍是边界。
+
+证据（dev client，`-PverifyCompat=/tmp/balm.jar`）：
+
+```
+[ModReloader] registration audit [balm]: 24 mod-bus event(s); covered [... , RegisterParticleProvidersEvent, ...]
+[ModReloader] mixin setup: redefined=[ModelBakery, Screen, AbstractContainerScreen, PlayerList, CropBlock,
+                                      OptionsScreen, Slot, MinecraftServer, Entity, MouseHandler, Minecraft,
+                                      KeyMapping, ReloadableServerResources, StemBlock], eager=[ChunkMap,
+                                      ChunkMap$TrackedEntity, ImageButton, Checkbox]
+[ModReloader] particle providers replayed: 0 new, 109 total
+[CompatCheck] RESULT balm.jar predicted=GUIFEI ok=true ... isLoaded=true
+```
+
+**对没有 JBR 的实例**：这次修复只解决 `VALIDATE` 的假拒绝；Balm 的 mixin 是 accessor 型，
+上面 14 个目标在标题屏**已经加载**，所以在 `JBR=false` 的 JVM 上会停在 `MIXIN / JBR_REQUIRED`
+（消息点名具体类与布局变更）。要么用 JBR 21 + `-XX:+AllowEnhancedClassRedefinition`，要么把 jar 放进 `mods/` 重启。

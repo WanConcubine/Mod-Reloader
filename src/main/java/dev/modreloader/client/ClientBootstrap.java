@@ -37,6 +37,8 @@ public final class ClientBootstrap {
             return;
         }
         installed = true;
+        // Relaunched process: wait for the old JVM before writing the instance dir.
+        Relauncher.awaitPreviousProcess();
         PlatformHooks.install(new ClientPlatformHooks());
         // The integrated server fires RegisterCommandsEvent too, so capture it on
         // a client as well; otherwise a hot-added mod's commands never exist in

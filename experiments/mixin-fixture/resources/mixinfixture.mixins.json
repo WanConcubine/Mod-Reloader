@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "mixinfixture.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [],
+  "client": [
+    "ProbeMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

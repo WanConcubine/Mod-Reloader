@@ -343,7 +343,8 @@ public final class MixinSupport {
                     errors.add("layout: " + dotted + " " + layout
                             + " (target is already loaded and this JVM cannot do enhanced "
                             + "redefinition; " + dev.modreloader.inspect.JbrSupport.describe()
-                            + " - restart the game to load this mod)");
+                            + " - restart the game to load this mod)."
+                            + dev.modreloader.inspect.JbrSupport.hint());
                     continue;
                 }
                 ModReloader.LOGGER.warn(

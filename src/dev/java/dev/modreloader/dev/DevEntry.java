@@ -66,6 +66,9 @@ public final class DevEntry {
     }
 
     private static void installChecks() {
+        if (Boolean.getBoolean("modreloader.verifyRelaunchPlan")) {
+            RelaunchCheck.start();
+        }
         if (Boolean.getBoolean("modreloader.verifyMenu")) {
             MenuEntryCheck.start();
         }
@@ -94,6 +97,14 @@ public final class DevEntry {
         String verifyCompat = System.getProperty("modreloader.verifyCompat", "").trim();
         if (!verifyCompat.isEmpty()) {
             CompatCheck.start(verifyCompat);
+        }
+        String verifyPinyin = System.getProperty("modreloader.verifyPinyin", "").trim();
+        if (!verifyPinyin.isEmpty()) {
+            PinyinCheck.start(Path.of(verifyPinyin));
+        }
+        String verifyMixinFixture = System.getProperty("modreloader.verifyMixinFixture", "").trim();
+        if (!verifyMixinFixture.isEmpty()) {
+            MixinFixtureCheck.start(Path.of(verifyMixinFixture));
         }
         String verifyAtSpike = System.getProperty("modreloader.verifyAtSpike", "").trim();
         if (!verifyAtSpike.isEmpty()) {

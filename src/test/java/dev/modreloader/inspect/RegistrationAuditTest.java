@@ -40,7 +40,6 @@ class RegistrationAuditTest {
     @Test
     void eventsThatCrashWhenUsedAreFatal() {
         for (String event : List.of(
-                "net.neoforged.neoforge.client.event.RegisterParticleProvidersEvent",
                 "net.neoforged.neoforge.client.event.RegisterRecipeBookCategoriesEvent",
                 "net.neoforged.neoforge.client.event.RegisterShadersEvent",
                 "net.neoforged.neoforge.client.event.RegisterSpriteSourceTypesEvent")) {
@@ -51,6 +50,17 @@ class RegistrationAuditTest {
             assertTrue(report.shortNames(RegistrationAudit.Severity.CRASH).contains(
                     event.substring(event.lastIndexOf('.') + 1)), event);
         }
+    }
+
+    @Test
+    void particleProvidersAreCoveredByTheReplay() {
+        // 2026-11-16: ClientRegistrationReplay#replayParticleProviders put-only replay.
+        // Measured with Balm 21.0.67, which adds the listener to the consuming mod's bus.
+        RegistrationAudit.Report report = classify(true,
+                "net.neoforged.neoforge.client.event.RegisterParticleProvidersEvent");
+        assertEquals(RegistrationAudit.Severity.COVERED,
+                report.entries().get(0).severity());
+        assertFalse(report.fatal());
     }
 
     @Test

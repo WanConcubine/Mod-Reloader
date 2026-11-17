@@ -42,14 +42,14 @@ import java.util.Set;
  */
 public final class HotAddEngine {
     public enum Stage {
-        NONE, VALIDATE, MODULE, MIXIN, MODLIST, CONSTRUCT, REGISTRY, EVENT, PACK, DATAPACK
+        NONE, VALIDATE, MODULE, MIXIN, COREMOD, MODLIST, CONSTRUCT, REGISTRY, EVENT, PACK, DATAPACK
     }
 
     public enum FailureKind {
         NONE, MISSING_FILE, NOT_A_MOD, INVALID_METADATA, ALREADY_LOADED, MISSING_DEPENDENCY, JBR_REQUIRED,
         MIXIN_RUNTIME, NETWORK_PAYLOAD, UNSUPPORTED_TIER, CAPABILITY, MIXIN_CONFIG, MIXIN_TARGET, REDEFINE, MODULE, MODLIST, REGISTRY,
         CONSTRUCT, EVENT, RESOURCE_PACK, DATAPACK, ACCESS_TRANSFORMER, CLIENT_REGISTRATION, JAR_IN_JAR,
-        ROLLBACK_PARTIAL, UNKNOWN
+        COREMOD, ROLLBACK_PARTIAL, UNKNOWN
     }
 
     public record Result(boolean ok, String message, Stage stage, FailureKind kind,
@@ -269,6 +269,19 @@ public final class HotAddEngine {
                 }
             }
 
+            // Coremod jars get their own module layer, and it has to exist before the
+            // same jar is injected into the game layer: two modules with the same
+            // packages cannot be resolved against each other. Preparing it here also
+            // fails the add before any state is mutated if the coremod is unusable.
+            List<Path> coremodJars = new ArrayList<>();
+            coremodJars.add(jar);
+            nested.nested().forEach(inner -> coremodJars.add(inner.file()));
+            List<String> coremodPrepare = LateCoremod.prepare(coremodJars);
+            if (!coremodPrepare.isEmpty()) {
+                return fail(rollback, Stage.COREMOD, FailureKind.COREMOD,
+                        ids + ": " + coremodPrepare);
+            }
+
             ModuleInjector.Snapshot moduleSnapshot = ModuleInjector.snapshot();
             rollback.add("module layer", () -> ModuleInjector.restore(moduleSnapshot));
             Set<String> moduleNames = ModuleInjector.addToGameLayer(
@@ -280,18 +293,13 @@ public final class HotAddEngine {
             stage = Stage.MIXIN;
             List<String> mixinSummary = new ArrayList<>();
             if (!mixinConfigs.isEmpty()) {
-                // A mixin that adds members or interfaces needs JBR's enhanced
-                // redefinition; a stock JVM answers `redefineClasses` with
-                // "attempted to change superclass or interfaces" *after* the configs
-                // are active. Refuse before touching anything, with the real reason
-                // (the UI already blocks this, the console path did not).
-                if (!dev.modreloader.inspect.JbrSupport.available()) {
-                    return fail(rollback, Stage.MIXIN, FailureKind.JBR_REQUIRED,
-                            ids + " declares mixins, which need JBR 21 with "
-                                    + "-XX:+AllowEnhancedClassRedefinition ("
-                                    + dev.modreloader.inspect.JbrSupport.describe()
-                                    + "). Restart on a JBR launcher.");
-                }
+                // JBR is not required for every mixin mod: a mixin that keeps the
+                // class layout still applies on a stock JVM (method bodies only), and
+                // a target that is not loaded yet is simply transformed on load.
+                // Only a layout change on an already-loaded class needs enhanced
+                // redefinition, so that check lives per target in MixinSupport -
+                // measured 2026-11-16: a blanket gate refused Mouse Tweaks-style
+                // mods even when nothing in them needed JBR.
                 if (!MixinRuntimeSupport.available()) {
                     return fail(rollback, Stage.MIXIN, FailureKind.MIXIN_RUNTIME,
                             ids + " declares mixins but " + MixinRuntimeSupport.name()
@@ -309,10 +317,40 @@ public final class HotAddEngine {
                         mixinLog, mixinSummary);
                 mixinLog.forEach(ModReloader.LOGGER::info);
                 if (mixinError != null) {
-                    return fail(rollback, Stage.MIXIN, FailureKind.MIXIN_CONFIG, "mixin setup failed for " + ids + ": " + mixinError);
+                    // A refused layout change is the JBR case; say so instead of the
+                    // generic "mixin setup failed".
+                    boolean needsJbr = !dev.modreloader.inspect.JbrSupport.available()
+                            && (mixinError.contains("layout") || mixinError.contains("enhanced"));
+                    return fail(rollback, Stage.MIXIN,
+                            needsJbr ? FailureKind.JBR_REQUIRED : FailureKind.MIXIN_CONFIG,
+                            "mixin setup failed for " + ids + ": " + mixinError);
                 }
             } else {
                 ModReloader.LOGGER.info("[ModReloader] no mixin configs declared by {}", ids);
+            }
+
+            // 2b. coremods: ModLauncher ran the mod's ICoreMod transformers while
+            //     loading classes, which a hot-added jar missed entirely - the mod
+            //     loads and its coremod feature is silently dead (jecharacters ->
+            //     pinyin search). Apply the same transformers late.
+            stage = Stage.COREMOD;
+            List<String> coremodSummary = new ArrayList<>();
+            LateCoremod.Report coremods = LateCoremod.apply(coremodJars, rollback);
+            if (!coremods.ok()) {
+                return fail(rollback, Stage.COREMOD, FailureKind.COREMOD,
+                        "coremod setup failed for " + ids + ": " + coremods.errors());
+            }
+            coremods.redefined().forEach(target ->
+                    ModReloader.LOGGER.info("[ModReloader] coremod redefined target {}", target));
+            if (!coremods.coremods().isEmpty() && !coremods.applied()) {
+                ModReloader.LOGGER.warn(
+                        "[ModReloader] coremod of {} found no applicable target ({}); the feature it "
+                                + "implements will not work until restart",
+                        ids, coremods.summary());
+            }
+            if (coremods.applied()) {
+                coremodSummary.add(" (coremods " + coremods.coremods() + ", redefined "
+                        + coremods.redefined() + ", transformed-at-load " + coremods.eager() + ")");
             }
 
             // 3. ModList: FML now knows about the mod.
@@ -506,6 +544,9 @@ public final class HotAddEngine {
             if (!mixinSummary.isEmpty()) {
                 message += mixinSummary.get(0);
             }
+            if (!coremodSummary.isEmpty()) {
+                message += coremodSummary.get(0);
+            }
             ModReloader.LOGGER.info("[ModReloader] {}", message);
             return new Result(true, message);
         } catch (Throwable t) {
@@ -544,6 +585,7 @@ public final class HotAddEngine {
     private static FailureKind kindFor(Stage stage) {
         return switch (stage) {
             case MIXIN -> FailureKind.MIXIN_CONFIG;
+            case COREMOD -> FailureKind.COREMOD;
             case MODULE -> FailureKind.MODULE;
             case MODLIST -> FailureKind.MODLIST;
             case CONSTRUCT -> FailureKind.CONSTRUCT;

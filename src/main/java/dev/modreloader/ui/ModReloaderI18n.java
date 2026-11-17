@@ -58,12 +58,13 @@ public final class ModReloaderI18n {
         }
         boolean mixinTier = inspection.tier() == ModInspection.Tier.FEI
                 || (inspection.tier() == ModInspection.Tier.GUIFEI && inspection.mixins());
-        if (mixinTier && !JbrSupport.available()) {
-            return Component.translatable("modreloader.preflight.jbr");
-        }
         if (mixinTier && !MixinRuntimeSupport.available()) {
             return Component.translatable("modreloader.preflight.mixin_runtime",
                     MixinRuntimeSupport.name());
+        }
+        if (mixinTier && !JbrSupport.available()) {
+            // Still loadable: only layout-changing targets on loaded classes need JBR.
+            return Component.translatable("modreloader.preflight.mixin_no_jbr");
         }
         if (inspection.tier() == ModInspection.Tier.GUIFEI) {
             return Component.translatable("modreloader.preflight.guifei_loadable");

@@ -84,7 +84,7 @@ mods/*.jar
 
 ```
 [ModReloader] → 读 jar / identifyMods（含 [[mixins]]）
-              → VALIDATE：AT / 缺依赖 / 注册审计（未重放的启动期事件；已知崩溃四类拒绝）
+              → VALIDATE：AT / 缺依赖 / 注册审计（未重放的启动期事件；已知崩溃三类拒绝）
               → 抽取 META-INF/jarjar 嵌套 jar（JarInJar）
               → Module 注入 game layer（mod 的 module + 嵌套库的 module）
               → MixinSupport：addConfiguration → onSelect → prepare → postInitialise
@@ -165,7 +165,7 @@ post-ModList、post-pack 与 post-construct 都有 `-PfailAfter*` 强制失败�
 
 - **依赖方向单向**：引擎不认识两端，端把实现注册进来；`ActiveConnections` 只枚举两端共有的服务端玩家连接，客户端连接由 hook 追加。
 - **注册审计（`VALIDATE`）**：`inspect/RegistrationAuditScanner` 只读扫 jar 的类引用，`Class.forName(...,false)` 判 `IModBusEvent`，
-  按 covered / recurring / datagen / crash / behavior / silent / base 分级；`crash` 四类（粒子/配方书/shader/sprite source）在注入 module 之前拒绝
+  按 covered / recurring / datagen / crash / behavior / silent / base 分级；`crash` 三类（配方书/shader/sprite source；粒子 provider 已于 2026-11-16 重放）在注入 module 之前拒绝
   （`FailureKind.CLIENT_REGISTRATION`），capabilities 等只 warn。分级规则本身是纯函数（`RegistrationAudit`），可无游戏单测。
   见 [features/client-registration-audit.md](features/client-registration-audit.md)。
 - **Capabilities 先声明后使用**：启动时只读探测 module / modlist / network / mixin / registry / datapack / resource pack 的反射锚点，缺失时对应阶段 fail-fast（带 `data/` 的 jar 在变更前就检查 datapack 锚点），资源包只 warn + 跳过。

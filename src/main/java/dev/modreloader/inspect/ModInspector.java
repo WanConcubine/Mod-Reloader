@@ -14,6 +14,7 @@ import net.neoforged.neoforgespi.locating.IModFile;
 import net.neoforged.neoforgespi.locating.ModFileDiscoveryAttributes;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
+import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 
@@ -38,13 +39,6 @@ import java.util.zip.ZipFile;
  * classes and never mutates ModList.
  */
 public final class ModInspector {
-    private static final Set<String> REGISTRY_OWNERS = Set.of(
-            "net/minecraft/core/Registry",
-            "net/minecraft/core/Registries",
-            "net/minecraft/core/registries/BuiltInRegistries",
-            "net/neoforged/neoforge/registries/DeferredRegister",
-            "net/neoforged/neoforge/registries/NeoForgeRegistries",
-            "net/neoforged/neoforge/event/RegisterEvent");
     private static final int MAX_CLASS_BYTES = 4 * 1024 * 1024;
 
     private ModInspector() {
@@ -238,25 +232,41 @@ public final class ModInspector {
         }
 
         @Override
+        public FieldVisitor visitField(int access, String name, String descriptor,
+                                       String signature, Object value) {
+            // A DeferredRegister held in a field is a registration intent even when the
+            // register() call itself lives in another class.
+            registry |= RegistrySignal.referencesDeferredRegister(descriptor);
+            return null;
+        }
+
+        @Override
         public MethodVisitor visitMethod(int access, String name, String descriptor,
                                          String signature, String[] exceptions) {
+            registry |= RegistrySignal.referencesDeferredRegister(descriptor);
             return new MethodVisitor(Opcodes.ASM9) {
                 @Override
                 public void visitMethodInsn(int opcode, String owner, String methodName,
                                             String methodDescriptor, boolean isInterface) {
-                    registry |= REGISTRY_OWNERS.contains(owner);
+                    // Registration only: a lookup like BuiltInRegistries.ITEM.get(...) is
+                    // not registry content (see RegistrySignal).
+                    registry |= RegistrySignal.isRegistrationCall(owner, methodName);
+                    registry |= RegistrySignal.referencesDeferredRegister(owner);
+                    registry |= RegistrySignal.referencesDeferredRegister(methodDescriptor);
                     noteClientClass(owner);
                 }
 
                 @Override
                 public void visitFieldInsn(int opcode, String owner, String fieldName,
                                            String fieldDescriptor) {
-                    registry |= REGISTRY_OWNERS.contains(owner);
+                    registry |= RegistrySignal.referencesDeferredRegister(owner);
+                    registry |= RegistrySignal.referencesDeferredRegister(fieldDescriptor);
                     noteClientClass(owner);
                 }
 
                 @Override
                 public void visitTypeInsn(int opcode, String type) {
+                    registry |= RegistrySignal.referencesDeferredRegister(type);
                     noteClientClass(type);
                 }
             };

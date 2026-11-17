@@ -167,8 +167,11 @@ public final class HotAddWhy {
         }
         if (inspection.tier() == ModInspection.Tier.FEI) {
             String caveat = mixinCaveat(inspection, lines);
-            lines.add("verdict: hot-add with mixins (JBR redefinition)" + caveat);
-            return caveat.isEmpty();
+            lines.add("verdict: hot-add with mixins" + caveat);
+            // Without JBR the add is still attempted: layout-preserving mixins apply,
+            // layout-changing targets are refused per target. Only a missing
+            // MixinRuntime actually blocks it.
+            return !inspection.mixinRuntimeMissing();
         }
         lines.add("verdict: hot-add (no mixins, no registry content)");
         return true;
@@ -180,7 +183,9 @@ public final class HotAddWhy {
             return "";
         }
         if (!JbrSupport.available()) {
-            return "; JBR is missing (" + JbrSupport.describe() + ")";
+            return "; no JBR enhanced redefinition (" + JbrSupport.describe() + "): mixins that "
+                    + "change the layout of an already-loaded class will be refused, the add is "
+                    + "still attempted" + JbrSupport.hint();
         }
         if (!MixinRuntimeSupport.available()) {
             return "; " + MixinRuntimeSupport.name() + " is not installed";

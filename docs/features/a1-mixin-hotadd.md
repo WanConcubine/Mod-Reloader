@@ -259,7 +259,8 @@ ModList / constructMod / 客户端事件
 
 ### 6.3 还没验证 / 限制（按 AGENTS §6，A1.2 尚不算契约完成）
 
-- **JBR only**：需要 `-XX:+AllowEnhancedClassRedefinition`；stock JVM 的 sidecar 路线未做。
+- **JBR 只对已加载类的布局变更必需**（2026-11-16 收窄）：未加载 target 的 mixin 在 define 时织入，不需要 JBR；sidecar 路线仍未做，
+  见 §10.4。
 - **MixinRuntime 是第三方前置**：`run/mods` 里的 1.0.2-mc1.21；`mr` 在 mods.toml 里已改为 `type="optional"`（缺它嫔级照常、妃级被拦），产品化要 vendor 或自己实现。
 - **失败回滚（部分）**：已覆盖 post-ModList 和 post-pack 失败（见 6.4）；构造后的 `@Mod` 构造器/事件监听器无法注销，存档回读未验证，因此仍不是契约意义的“完成”。
 - **存档回读**：测试世界已创建并保存，但没有重新启动并打开它；存档可读性未独立验证。
@@ -416,3 +417,27 @@ P2-4 的最后一项：同一时间、同一个妃级 jar（mixin），**服务�
 
 覆盖的是「两侧各自热加同一个妃级 jar 时，mixin 重定义 + payload 注册 + 客户端资源重载不会打断已有连接」。
 **没有覆盖**：两侧不是同一个 jar（客户端不装 → 仍不支持）、贵妃级注册表内容的两侧同时热加（§9 的 id 同步是另一条路径）。
+
+
+### 10.4 JBR 边界收窄：不是"有 mixin 就要 JBR"（2026-11-16）
+
+原先 `HotAddEngine` 在 MIXIN 阶段前置检查：只要 jar 声明了 mixin 而 JVM 没有 enhanced redefinition，就整包拒绝
+（`FailureKind.JBR_REQUIRED`，UI 预检同样拦）。这条比实际需要更严：
+
+- **未加载的 target**：Mixin 在类首次 define 时织入，根本不需要重定义 → 免 JBR；
+- **已加载的 target**：只有**改布局**（superclass/接口/字段/方法）才需要 enhanced redefinition；方法体变化普通 hotswap 就够；
+- 真正需要 JBR 的只剩「已加载类 + 布局变更」。
+
+现在 JBR 检查放在 `MixinSupport` 的逐目标 pass 里（`layoutChange` 判定），并在没有 JBR 时给出**点名**的拒绝，
+而不是在入口一刀切；`ModInspection.canHotLoad` / 预检 / `HotAddWhy` 同步改为"可以尝试，布局变更会被拒"。
+
+实测（2026-11-16，dev client）：
+
+| 场景 | 命令 | 结果 |
+|---|---|---|
+| Mouse Tweaks 2.26.1（accessor 给 `AbstractContainerScreen` 加接口） | `-PverifyCompat=/tmp/MouseTweaks-neoforge-mc1.21-2.26.1.jar` | `ok=true`、`redefined AbstractContainerScreen`；JBR + `-XX:+AllowEnhancedClassRedefinition` |
+| 同上，关掉增强重定义 | 加 `-PnoJbr=true` | `stage=MIXIN kind=JBR_REQUIRED`；消息点名 `AbstractContainerScreen adds interface(s) [yalter/mousetweaks/mixin/AbstractContainerScreenAccessor]`；`isLoaded=false`、blocks/items 不变 |
+| `@Inject` 打进**未加载**类（fixture `experiments/mixin-fixture`） | `-PnoJbr=true -PverifyMixinFixture=/tmp/mixinfixture/mixinfixture-1.0.0.jar` | `eager=[mixinfixture.Probe]`、`Probe.value()` 1→2、`RESULT: PASS`（`enhancedRedefinition=false`） |
+
+结论：Mouse Tweaks 这类**确实需要** JBR（用户看到的提示没错），但提示现在会给出目标与具体布局变更，并在本机找得到 JBR 安装时给出路径
+（`JbrSupport.hint()`）；不需要 JBR 的 mixin 不再被误拦。**产品缺口仍是"JBR 不是默认运行时"**（managed relaunch / B fallback，见 status 下一步 P3-2）。

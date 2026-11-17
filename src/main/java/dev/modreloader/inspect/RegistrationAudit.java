@@ -129,6 +129,10 @@ public final class RegistrationAudit {
             "net.neoforged.neoforge.client.event.RegisterGuiLayersEvent",
             // client/ItemDecoratorReplay (copy of the live DECORATOR_LOOKUP, then swap)
             "net.neoforged.neoforge.client.event.RegisterItemDecorationsEvent",
+            // ClientRegistrationReplay: put-only into the live ParticleEngine's map,
+            // replayed against the new container (Balm puts the listener on the
+            // consuming mod's bus, so a targeted replay is what makes it work)
+            "net.neoforged.neoforge.client.event.RegisterParticleProvidersEvent",
             // NetworkAdaptation / RegistryStage / CapabilityReplay
             "net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent",
             "net.neoforged.neoforge.registries.RegisterEvent",
@@ -153,12 +157,15 @@ public final class RegistrationAudit {
             "net.neoforged.neoforge.event.RegisterGameTestsEvent");
 
     /**
-     * Absence throws as soon as the mod's content is used (particles spawn,
-     * recipe book opens, a shader/sprite source is requested). Refused before
-     * the module is injected, like an access transformer.
+     * Absence throws as soon as the mod's content is used (recipe book opens,
+     * a shader/sprite source is requested). Refused before the module is injected,
+     * like an access transformer.
+     *
+     * <p>Particle providers used to be on this list; they moved to {@link #COVERED}
+     * on 2026-11-16 when the replay landed (measured with Balm 21.0.67, whose
+     * listener lives on the consuming mod's bus).
      */
     private static final Set<String> CRASH = Set.of(
-            "net.neoforged.neoforge.client.event.RegisterParticleProvidersEvent",
             "net.neoforged.neoforge.client.event.RegisterRecipeBookCategoriesEvent",
             "net.neoforged.neoforge.client.event.RegisterShadersEvent",
             "net.neoforged.neoforge.client.event.RegisterSpriteSourceTypesEvent");
