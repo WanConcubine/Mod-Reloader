@@ -485,14 +485,6 @@ public final class HotAddEngine {
                 constructed[0] = true;
                 loaded.add(container.getModId());
             }
-            try {
-                // Layer definitions for every container, then the renderer rebuild:
-                // nested containers would otherwise bake layers the outer mod has
-                // not registered yet.
-                hooks.afterClientLifecycles(containers);
-            } catch (Throwable t) {
-                ModReloader.LOGGER.warn("[ModReloader] staged client replay failed", t);
-            }
             if (registryContent) {
                 try {
                     CustomRegistries.replay(containers);
@@ -574,6 +566,19 @@ public final class HotAddEngine {
             }
             stage = Stage.EVENT;
             FmlEvents.finishAll(containers);
+            try {
+                // Startup order: registries frozen -> common setup -> client setup ->
+                // renderers. A mod's RegisterRenderers may resolve its own registry
+                // entries (Mekanism's `mekanism:robit` is a DeferredHolder), so this
+                // must run after the registry commit above; before it, the holder is
+                // unbound and the event throws (measured: client crashed on the title
+                // screen right after a "successful" hot-add). Layer definitions for
+                // every container still run before any renderer rebuild, so nested
+                // containers keep their outer layers.
+                hooks.afterClientLifecycles(containers);
+            } catch (Throwable t) {
+                ModReloader.LOGGER.warn("[ModReloader] staged client replay failed", t);
+            }
             int keysAfter = hooks.keyMappingCount();
 
             // 4a. payloads: NeoForge closes its network registry after start-up, so
