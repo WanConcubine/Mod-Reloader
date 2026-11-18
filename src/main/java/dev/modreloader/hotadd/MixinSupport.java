@@ -399,6 +399,19 @@ public final class MixinSupport {
                         "[ModReloader] mixins change the layout of the already-loaded {}: {}; "
                                 + "attempting it because enhanced redefinition is available",
                         dotted, layout);
+                if (layout.contains("adds field(s)")) {
+                    // New fields exist in the class, but instances created before the
+                    // redefine never run the mixed constructor: they keep the JVM
+                    // defaults (0/null/false) instead of the field initializers.
+                    // Measured with Jade's FontMixin: glint read as 0f instead of NaN
+                    // and the "no glint" check passed, dimming all text to ~65%.
+                    ModReloader.LOGGER.warn(
+                            "[ModReloader] {} gains instance field(s) while already loaded; "
+                                    + "existing instances keep JVM defaults instead of the "
+                                    + "constructor values, so features reading them can be wrong "
+                                    + "until the game restarts",
+                            dotted);
+                }
             }
             mixedBytes.put(dotted, mixed);
         }
@@ -461,8 +474,8 @@ public final class MixinSupport {
     }
 
     /**
-     * @return {@code null} when the mixed class keeps its superclass and interfaces,
-     *         otherwise a human-readable description of what changed
+     * @return {@code null} when the mixed class keeps its superclass, interfaces and
+     *         fields, otherwise a human-readable description of what changed
      */
     private static String layoutChange(byte[] original, byte[] mixed) {
         if (original == null) {
@@ -476,8 +489,13 @@ public final class MixinSupport {
             addedInterfaces.removeAll(List.of(before.getInterfaces()));
             List<String> removedInterfaces = new ArrayList<>(List.of(before.getInterfaces()));
             removedInterfaces.removeAll(List.of(after.getInterfaces()));
+            List<String> addedFields = new ArrayList<>(declaredFields(mixed));
+            addedFields.removeAll(declaredFields(original));
+            List<String> removedFields = new ArrayList<>(declaredFields(original));
+            removedFields.removeAll(declaredFields(mixed));
             boolean superChanged = !java.util.Objects.equals(before.getSuperName(), after.getSuperName());
-            if (!superChanged && addedInterfaces.isEmpty() && removedInterfaces.isEmpty()) {
+            if (!superChanged && addedInterfaces.isEmpty() && removedInterfaces.isEmpty()
+                    && addedFields.isEmpty() && removedFields.isEmpty()) {
                 return null;
             }
             StringBuilder builder = new StringBuilder();
@@ -497,10 +515,43 @@ public final class MixinSupport {
                 }
                 builder.append("removes interface(s) ").append(removedInterfaces);
             }
+            if (!addedFields.isEmpty()) {
+                if (!builder.isEmpty()) {
+                    builder.append("; ");
+                }
+                builder.append("adds field(s) ").append(addedFields);
+            }
+            if (!removedFields.isEmpty()) {
+                if (!builder.isEmpty()) {
+                    builder.append("; ");
+                }
+                builder.append("removes field(s) ").append(removedFields);
+            }
             return builder.toString();
         } catch (Throwable t) {
             return null;
         }
+    }
+
+    /** Non-synthetic fields as {@code name:descriptor}, ignoring method bodies. */
+    private static java.util.Set<String> declaredFields(byte[] classBytes) {
+        java.util.Set<String> fields = new java.util.HashSet<>();
+        new org.objectweb.asm.ClassReader(classBytes).accept(
+                new org.objectweb.asm.ClassVisitor(org.objectweb.asm.Opcodes.ASM9) {
+                    @Override
+                    public org.objectweb.asm.FieldVisitor visitField(
+                            int access, String name, String descriptor, String signature,
+                            Object value) {
+                        if ((access & org.objectweb.asm.Opcodes.ACC_SYNTHETIC) == 0) {
+                            fields.add(name + ":" + descriptor);
+                        }
+                        return null;
+                    }
+                },
+                org.objectweb.asm.ClassReader.SKIP_CODE
+                        | org.objectweb.asm.ClassReader.SKIP_DEBUG
+                        | org.objectweb.asm.ClassReader.SKIP_FRAMES);
+        return fields;
     }
 
     private static void redefine(Instrumentation instrumentation, Class<?> type, byte[] mixed,
