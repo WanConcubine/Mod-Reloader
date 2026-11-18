@@ -121,28 +121,26 @@ public final class LateAccessTransformers {
                 messages.add("skip " + target + ": not modifiable");
                 continue;
             }
-            // Prefer what this runtime last installed (late AT / mixin redefine):
-            // retransforming a mixed class makes Mixin's agent apply the same
-            // config a second time (MixinExtras then throws InjectionError and the
-            // capture fails — measured with Moonlight's FireBlock). When there is
-            // no cached copy, suspend the agent for this class during the capture
-            // so the bytes we get are the live ones, not a second transform.
+            // Prefer what this runtime last installed (late AT / mixin redefine).
+            // Otherwise capture the live bytes: the JVM starts a retransformation
+            // from the bytes passed to the last defineClass/redefineClasses, and
+            // with every transformer suppressed the recorder sees exactly that
+            // definition. The class-file resource cannot be used here — it is the
+            // pre-transform original, so redefining it from there silently drops
+            // FML's load-time AT (measured with RenderStateShard$TextureStateShard:
+            // NeoForge's `blur` field went back to private and rendering crashed
+            // with IllegalAccessError right after architectury's late AT).
             byte[] original = ClassBytesCache.get(target);
             if (original == null) {
-                // Never retransform a class that may already carry mixins from an
-                // earlier hot-add: the Mixin agent would see those bytes and apply
-                // the config a second time (MixinExtras InjectionError), and the
-                // class is also left in a half-transformed state. The class-file
-                // resource is the untransformed original, which is what FML's
-                // load-time AT also starts from.
-                original = readClassResource(target);
-            }
-            if (original == null) {
-                try {
+                try (AutoCloseable blanket = MixinAgentGuard.blanket()) {
                     original = ClassBytes.of(instrumentation, type);
                 } catch (Throwable t) {
-                    return fail("cannot capture bytes of " + target + ": " + t);
+                    messages.add("note " + target + ": live byte capture failed ("
+                            + t.getMessage() + "); falling back to the class resource");
                 }
+            }
+            if (original == null) {
+                original = readClassResource(target);
             }
             if (original == null) {
                 skipped++;
