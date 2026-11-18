@@ -131,8 +131,8 @@ public final class ModsFolderWatcher {
                     continue;
                 }
                 ModInspection inspection = ModInspector.inspect(jar);
-                if (inspection.ok() && inspection.mods().stream()
-                        .anyMatch(mod -> net.neoforged.fml.ModList.get().isLoaded(mod.modId()))) {
+                if (inspection.alreadyLoaded() || (inspection.ok() && inspection.mods().stream()
+                        .anyMatch(mod -> net.neoforged.fml.ModList.get().isLoaded(mod.modId())))) {
                     skip(jar, "already loaded in ModList");
                     continue;
                 }
@@ -226,6 +226,23 @@ public final class ModsFolderWatcher {
                 ModInspection inspection = ModInspector.inspect(jar);
                 seen.put(jar, fingerprint);
                 stable.remove(jar);
+                // A jar whose modId is already loaded is an update/replacement, not a
+                // new mod. Updates are not supported (the old classes cannot be
+                // unloaded) and replacing a jar under a running SecureJarHandler
+                // breaks its class lookup, so this must never reach the toast/prompt.
+                // The manual scanNow() path already filters this; polling did not
+                // (measured: overwriting modreloader's own jar while the game was
+                // running made it a candidate and crashed with NoClassDefFoundError
+                // for a class that is present in the replacement jar).
+                boolean alreadyLoaded = inspection.alreadyLoaded()
+                        || (inspection.mods().stream().anyMatch(
+                                mod -> net.neoforged.fml.ModList.get() != null
+                                        && net.neoforged.fml.ModList.get().isLoaded(mod.modId())));
+                if (alreadyLoaded) {
+                    skip(jar, "already loaded in ModList (replacing/updating a loaded jar "
+                            + "needs a restart)");
+                    continue;
+                }
                 candidates.add(new Candidate(jar, fingerprint.size(), fingerprint.mtime(), inspection));
                 ModReloader.LOGGER.info("[ModReloader] new mod candidate {}: {}", jar.getFileName(),
                         inspection.summary());
