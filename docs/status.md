@@ -99,6 +99,11 @@
 - **三档热加 + 双端 + dogfood**：嫔/妃/贵妃 add-only（资源包、创造栏、capability、datapack、WORLDGEN）；专用服命令/payload；
   众星捧月注册层 + datapack + 玩法全 PASS（细节见 [history.md](history.md)）。
 - **注册审计 + capability + 回滚**：各有 harness；整条验收清单 2026-11-16 全跑过一次。
+- **late AT 保 AT + Jade 真机（2026-11-18，Windows/PCL2/JBR）**：architectury 真机热加 311 规则/150 类后，
+  `RenderStateShard$TextureStateShard` 重定义不再丢 FML 启动期 AT（`blur` 保持 public），未再出现
+  `IllegalAccessError`；Jade 15.10.6 热加成功（Font/Font$StringRenderOutput 等 5 类 redefine）。
+  同一会话暴露两类边界：Jade 的 `FontMixin` 给已加载 `Font` 新增 4 个实例字段，旧实例字段为 0 而非构造器里的
+  `NaN`，文字被压到约 65% 亮度（问题 56）；ftb-library 因类级 `-f`（`TextColor`）被前置拒绝，符合设计。
 
 ### 未验证
 
@@ -172,6 +177,12 @@
 52. **服务端一次性事件定向重放：已实现，未验证（2026-11-18）**：新增 `hotadd/ServerLifecycleReplay`，用 `EventBusSnapshot.addedSince` 取出本次 add 新增的 game-bus 监听器，只对这些监听器调用 `ServerStartingEvent`/`ServerStartedEvent`（`ListenerList` 不保证与 owner map 同一实例，故有“逐个试调用、类型不符即跳过”的兜底）；服务端实例先取 `ServerLifecycleHooks.getCurrentServer()`，为空再反射 `Minecraft#getSingleplayerServer`。**未验证**：进入世界复跑时，客户端两次卡在 xaerolib mixin 阶段（见 54），没走到重放日志。
 53. **client setup 的 deferred task 早于热加资源包注入（2026-11-18）**：World Map 的 `loadLater` 在 `FMLClientSetupEvent` 的 deferred queue 里读自己的 `vanillaStatesResource`（`Minecraft.getResourceManager()`），此时热加包还没注入 → `Optional.get()` 抛 `NoSuchElementException`。启动期该顺序成立是因为包在 setup 前已注册；运行期需要“包先可用”或把这类 deferred task 放到 资源重载之后重跑。
 54. **xaerolib mixin 阶段挂起（2026-11-18，待查）**：两次 `-PverifyAddCommand=<xaeroworldmap>` 都停在 `Mixin compatibility level set to JAVA_21 after xaerolib.neoforge.mixins.json` 之后，10 分钟无日志；两个客户端 JVM 都需 `kill -9`。之前同一场景能跑到 add 返回 1，所以是间歇/时序问题；下次先 `jstack` 留线程栈（重点看 Mixin/transform 锁与我们的 guard），再决定修法。
+56. **Mixin 新增实例字段不初始化旧实例（2026-11-18 真机确认）**：Jade 的 `FontMixin` 给已加载的 `Font` 增加
+    `glint1/glint2/glint1Strength/glint2Strength`（构造器里 `glint1/2 = NaN` 表示“无闪烁”）。热加只 redefine 类、
+    不会重跑构造器，旧 `Font` 实例拿到的字段是 `0.0f`，闪烁分支常开，所有文字约 65% 亮度（真机截图：字体变暗）。
+    这是问题 45（新增字段不初始化）的第二个实例；`layoutChange` 现在把字段增减也算作布局变更：无 JBR 前置拒绝，
+    JBR 下照常尝试并额外打印“旧实例保持 JVM 默认值，需重启才完全正确”的警告。Jade 的变暗不是崩溃，
+    实测重启并让 Jade 正常加载即可恢复；是否把 Jade 记为“需重启才正确渲染”由所有者按白名单规则决定。
 
 ## 玩家侧原则（ADR-0015，2026-11-18 最终）
 
@@ -221,9 +232,10 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近三条。
 
+- **2026-11-18（late AT 保 AT，真机 PASS）**：late AT 改为优先抓活类字节（抑制 transformer 后 retransform），
+  architectury 真机热加 311 规则/150 类不再触发 `TextureStateShard.blur` 的 `IllegalAccessError`；
+  同批 Jade 暴露“新增字段不初始化旧实例”的变暗问题（问题 56，已加警告）。
 - **2026-11-18（统一「准备热加载环境」动作）**：JBR 入口收口为一个按钮：复用已装/运行中的 JBR，缺失才下载解压到
   `gameDir/jbr-21.0.11`，重启带齐 enhanced + lateAt；菜单未就绪时常驻入口，失败屏同文案。菜单截图验证。
 - **2026-11-18（JBR 识别三态 + 菜单标识）**：修“启动器已选 JBR 却被要求用 JBR 重启”；菜单左上角彩色标识，
   文案按状态区分，`installation()` 优先复用运行中的 JBR。截图与 relaunch plan 验证。
-- **2026-11-18（服务端事件重放，未验证）**：`ServerLifecycleReplay` 定向调用新增 game-bus 监听器；世界里复跑卡在
-  xaerolib mixin 阶段（问题 54），status 如实标注；问题 53（loadLater 资源顺序）记录在案。

@@ -1683,3 +1683,29 @@ Xaero 的 “config channel too late” 不在 NeoForge，而在 **XaeroLib 自�
 - 诚实边界（status 问题 55）：参数只能启动时给；启动器每次不带参数则每会话最多一次自动重启；
   跨会话永久生效需要启动器/整合包预设（不默认改玩家配置）或结构方案（classloader 隔离/软重启）。
 验证：`./gradlew build`（93 单测）、菜单截图（README/状态）。
+
+## 2026-11-18（late AT 保启动期 AT；Windows 真机 architectury/Jade）
+
+所有者用 PCL2 + JBR 21 真机热加 architectury 13.0.12 与 Jade 15.10.6。上一次（22:54）在 architectury 的
+late AT 之后 7 秒崩溃：`IllegalAccessError ... RenderStateShard$TextureStateShard.blur`。根因是无缓存时
+late AT 从 class 资源（AT/mixin 之前的原始字节）重写已加载类，把 FML 启动期 AT 一并抹掉。
+
+改动：
+- `LateAccessTransformers`：无缓存时先在 `MixinAgentGuard.blanket()` 窗口内用 `ClassBytes.of` 抓活类字节
+  （JVM 规范：retransform 以最后一次 defineClass/redefineClasses 的字节为起点），失败才回退 class 资源。
+- `MixinSupport.layoutChange`：把字段增减也算布局变更（原只看父类/接口）；JBR 下额外警告
+  “旧实例保持 JVM 默认值而不是构造器值，需重启才完全正确”。
+- `RelaunchScriptsTest`：两处硬编码 POSIX 路径的断言改为从同一 Path 取 toString，Windows 也 93/93。
+
+验证（Windows 11，PCL2 forced JBR 21.0.11，NeoForge 21.1.266，`-XX:+AllowEnhancedClassRedefinition` +
+`-Dmodreloader.lateAt=true`）：
+- architectury：23:36:02 开始 → 23:37:05 late AT 311 规则/150 类 → 23:37:11 `hot-added` + `verify isLoaded=true`，
+  全程无 `IllegalAccessError`；`TextureStateShard` 等被 late AT 的类渲染正常。整段约 69 秒（UI 阻塞）。
+- Jade：23:40:31 → 23:40:58 `hot-added`，redefine `Font`/`Font$StringRenderOutput`/`Entity` 等 5 类，
+  keyMappings 34→39，资源包 `mod/jade` 选中并重载；无崩溃。
+- 现象 1：Jade 的 `FontMixin` 新增 `glint1/glint2/...` 字段，旧 `Font` 实例字段为 0（应 NaN），文字被压到约 65%
+  亮度；重启并正常加载 Jade 即恢复（问题 56）。现象 2：ftb-library 因类级 `-f`（`TextColor`）被前置拒绝，
+  符合“类级 AT 需启动期”边界。
+- 现象 3（待确认 UI 来源）：热加 architectury（无资源包、无屏幕重建）后左下角计数仍为 4；热加 Jade 触发
+  资源重载/标题屏重建后变为 6。ModList 本身在两次 add 后都正确增长；若计数来自启动时缓存的界面文本，
+  这是显示层缓存，不是 ModList 未更新。
