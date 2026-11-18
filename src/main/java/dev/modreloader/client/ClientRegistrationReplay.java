@@ -107,7 +107,6 @@ public final class ClientRegistrationReplay {
      */
     public static int replay(ModContainer container) {
         registerItemModels(container);
-        replayRenderers(container);
         replayColorHandlers(container);
         replayParticleProviders(container);
         replayClientExtensions(container);
@@ -117,6 +116,65 @@ public final class ClientRegistrationReplay {
         GuiLayerReplay.replay(container);
         ItemDecoratorReplay.replay(container);
         return reloadListeners;
+    }
+
+    /**
+     * Replays {@code EntityRenderersEvent.RegisterLayerDefinitions}.
+     *
+     * <p>{@link net.minecraft.client.model.geom.EntityModelSet#bakeLayer} reads a
+     * map that is rebuilt from {@code LayerDefinitions.createRoots()} on every
+     * resource reload, and NeoForge merges the mod-registered suppliers into that
+     * map ({@code ClientHooks.loadLayerDefinitions}). So a hot-added mod's layers
+     * only need two things: its listeners must run (this replay) and the live
+     * {@code EntityModelSet} must rebuild its roots. Calling
+     * {@code onResourceManagerReload} does both without touching baked model parts
+     * of existing renderers.
+     */
+    public static void replayLayerDefinitions(ModContainer container) {
+        try {
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft == null || minecraft.getEntityModels() == null) {
+                return;
+            }
+            java.util.Map<?, ?> before = UnsafeAccess.get(
+                    minecraft.getEntityModels(),
+                    net.minecraft.client.model.geom.EntityModelSet.class, "roots");
+            int beforeSize = before == null ? -1 : before.size();
+            container.acceptEvent(
+                    new net.neoforged.neoforge.client.event.EntityRenderersEvent.RegisterLayerDefinitions());
+            minecraft.getEntityModels().onResourceManagerReload(minecraft.getResourceManager());
+            java.util.Map<?, ?> after = UnsafeAccess.get(
+                    minecraft.getEntityModels(),
+                    net.minecraft.client.model.geom.EntityModelSet.class, "roots");
+            int afterSize = after == null ? -1 : after.size();
+            ModReloader.LOGGER.info(
+                    "[ModReloader] layer definitions replayed for {}: {} -> {}",
+                    container.getModId(), beforeSize, afterSize);
+        } catch (Throwable t) {
+            // A missing model layer is reported later with a clear message
+            // ("No model for layer ..."); never fail the add for this.
+            ModReloader.LOGGER.warn("[ModReloader] layer definition replay failed", t);
+        }
+    }
+
+    /**
+     * Client-side startup events that must run in a fixed order across <em>all</em>
+     * containers of one add: every container's layer definitions first, then the
+     * renderer rebuild.
+     *
+     * <p>Rebuilding block-entity renderers constructs {@code SkullBlockRenderer},
+     * which fires {@code CreateSkullModels} for every container. If a nested mod's
+     * container is replayed before the outer mod's layer definitions, that listener
+     * bakes a layer that is not registered yet ("No model for layer ..."), and the
+     * renderer rebuild fails even though the add itself succeeds.
+     */
+    public static void replayStaged(List<ModContainer> containers) {
+        for (ModContainer container : containers) {
+            replayLayerDefinitions(container);
+        }
+        for (ModContainer container : containers) {
+            replayRenderers(container);
+        }
     }
 
     /**
@@ -292,7 +350,7 @@ public final class ClientRegistrationReplay {
         }
     }
 
-    private static void replayRenderers(ModContainer container) {
+    public static void replayRenderers(ModContainer container) {
         try {
             Minecraft minecraft = Minecraft.getInstance();
             container.acceptEvent(new EntityRenderersEvent.RegisterRenderers());

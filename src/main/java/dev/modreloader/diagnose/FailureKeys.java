@@ -46,6 +46,7 @@ public final class FailureKeys {
             case ACCESS_TRANSFORMER -> "access_transformer";
             case CLIENT_REGISTRATION -> "client_registration";
             case JAR_IN_JAR -> "jar_in_jar";
+            case CUSTOM_REGISTRY -> "custom_registry";
             case COREMOD -> "coremod";
             case ROLLBACK_PARTIAL -> "rollback_partial";
             case NONE, UNKNOWN -> "unknown";

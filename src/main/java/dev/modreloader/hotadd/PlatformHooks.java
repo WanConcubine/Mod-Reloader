@@ -37,9 +37,14 @@ public interface PlatformHooks {
     /**
      * Client: adds and selects the packs of the outer mod and its nested mods in
      * one reload. Server: logs that it is skipped.
+     *
+     * @return client: whether a resource reload was requested. A reload also runs
+     *         {@code GameRenderer.reloadShaders}, which fires
+     *         {@code RegisterShadersEvent} for every loaded container, so the
+     *         caller does not need its own shader replay on that path
      */
-    void injectResourcePacks(java.util.List<ModFileInfo> fileInfos, Set<String> modIds,
-                             Rollback rollback);
+    boolean injectResourcePacks(java.util.List<ModFileInfo> fileInfos, Set<String> modIds,
+                                Rollback rollback);
 
     /**
      * Re-fires {@code RegisterCommandsEvent} so a hot-added mod's commands exist.
@@ -56,6 +61,14 @@ public interface PlatformHooks {
      * a dedicated server has nothing to do.
      */
     void afterRegistryContent();
+
+    /**
+     * Client: startup-only registrations that need the whole add's containers, in
+     * a fixed order (layer definitions for every container, then the renderer
+     * rebuild). Called once after all containers are constructed. Server: no-op.
+     */
+    default void afterClientLifecycles(List<ModContainer> containers) {
+    }
 
     /**
      * The add completed. The client queues shader replay until its resource reload

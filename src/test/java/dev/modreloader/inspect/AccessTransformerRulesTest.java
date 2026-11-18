@@ -123,12 +123,76 @@ class AccessTransformerRulesTest {
         assertEquals(0, AccessTransformerRules.read(withoutAt).ruleCount());
     }
 
+    @Test
+    void emptyAtFileHasNoRules(@TempDir Path dir) throws IOException {
+        Path empty = dir.resolve("empty-at.jar");
+        writeJar(empty, AccessTransformerRules.ENTRY, "");
+        assertTrue(AccessTransformerRules.entries(empty).contains(AccessTransformerRules.ENTRY));
+        assertEquals(0, AccessTransformerRules.read(empty).ruleCount());
+        try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(empty.toFile())) {
+            assertFalse(AccessTransformerRules.hasRules(zip), "an empty AT file is not an AT");
+        }
+    }
+
+    @Test
+    void commentOnlyAtFileHasNoRules(@TempDir Path dir) throws IOException {
+        Path jar = dir.resolve("comment-at.jar");
+        writeJar(jar, AccessTransformerRules.ENTRY, "# nothing to transform\n\n");
+        try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(jar.toFile())) {
+            assertFalse(AccessTransformerRules.hasRules(zip));
+        }
+    }
+
+    @Test
+    void declaredAtFilesReplaceTheDefault(@TempDir Path dir) throws IOException {
+        Path jar = dir.resolve("declared.jar");
+        writeJar(jar, java.util.Map.of(
+                "META-INF/neoforge.mods.toml", """
+                        modLoader = "javafml"
+                        [[mods]]
+                        modId = "demo"
+                        [[accessTransformers]]
+                        file = "META-INF/at/custom.cfg"
+                        """,
+                "META-INF/at/custom.cfg",
+                "public net/minecraft/world/level/block/Block blockState\n",
+                AccessTransformerRules.ENTRY,
+                "public net/minecraft/client/Minecraft fps\n"));
+
+        assertEquals(java.util.List.of("META-INF/at/custom.cfg"),
+                AccessTransformerRules.entries(jar));
+        AccessTransformerRules rules = AccessTransformerRules.read(jar);
+        assertEquals(1, rules.ruleCount(), "the declared list replaces the default entry");
+        assertEquals("net.minecraft.world.level.block.Block", rules.targets().get(0));
+    }
+
+    @Test
+    void declaredButMissingAtFileMeansNoRules(@TempDir Path dir) throws IOException {
+        Path jar = dir.resolve("declared-missing.jar");
+        writeJar(jar, java.util.Map.of(
+                "META-INF/neoforge.mods.toml", """
+                        [[accessTransformers]]
+                        file = "META-INF/at/missing.cfg"
+                        """,
+                AccessTransformerRules.ENTRY,
+                "public net/minecraft/client/Minecraft fps\n"));
+
+        assertTrue(AccessTransformerRules.entries(jar).isEmpty());
+        assertEquals(0, AccessTransformerRules.read(jar).ruleCount());
+    }
+
     private static void writeJar(Path jar, String entryName, String content) throws IOException {
+        writeJar(jar, java.util.Map.of(entryName, content));
+    }
+
+    private static void writeJar(Path jar, java.util.Map<String, String> entries) throws IOException {
         try (OutputStream out = Files.newOutputStream(jar);
              ZipOutputStream zip = new ZipOutputStream(out)) {
-            zip.putNextEntry(new ZipEntry(entryName));
-            zip.write(content.getBytes(StandardCharsets.UTF_8));
-            zip.closeEntry();
+            for (java.util.Map.Entry<String, String> entry : entries.entrySet()) {
+                zip.putNextEntry(new ZipEntry(entry.getKey()));
+                zip.write(entry.getValue().getBytes(StandardCharsets.UTF_8));
+                zip.closeEntry();
+            }
         }
     }
 }

@@ -2,7 +2,15 @@
 
 让 Minecraft 模组在游戏运行时**安全地增删 / 更新 / 热重载**。
 
-> 状态（2026-11-17，细节以 [docs/status.md](docs/status.md) 为准）：**分析器 v0 已可运行**；**A0（嫔级）已验证**；**A1.2（妃级/Mixin + 布局变更）主路径已在 NeoForge 1.21.1 dev client 验证**：热加 `lanserverproperties` 后进世界打开 Open to LAN。**A1.2 失败回滚已跑通**（post-ModList / post-pack 强制失败，恢复 ModList/module/config/类/资源包；post-ModList 重试 add 成功）。构造后事件监听器自 2026-11-16 起可回滚（`EventBusSnapshot`，只覆盖已注册监听器；构造器其它副作用仍不可撤销），存档回读目前只有专用服内容路径（客户端内保存→重开未做）。**mods/inbox 监听 + 预检 + toast/弹窗 + 失败分析初版已跑通**（EasyLAN 检测→加载、坏 jar 失败屏、贵妃级实验性加载与警告）。**双端**：dedicated server 能热加嫔级，命令靠重放生效，payload 适配 E1/E2/E3（含跨进程）已验证。**贵妃级注册表内容（实验性 add-only）已跑通**：方块/物品热加、放置存盘、重启读档 PASS；客户端资源包/创造栏已在单人验证；真实 dogfood（众星捧月 1.5.0）注册层 + datapack 配方/战利品/标签都热加通过；多人 id 同步见 2026-11-16 段。**工程侧**：引擎与两端解耦（`PlatformHooks`）、启动有 `Capabilities` 锚点守卫、`dev/` 不进发布 jar、42 个无游戏 Java 单测。**2026-11-16 后续**：HUD 层/物品装饰重放（含首个客户端夹具）、旧「类加载时晚注入 AT」逐 jar 判死（0/6；2026-11-17 的 JBR late AT 是另一条路，见 [late-at](docs/features/late-at.md)）、WORLDGEN 改写为「标题屏热加 + 新世界」、datapack 删除实测不可行、/modreloader why、分析器真机校准 + AT 维度、构造后 listener 回滚、服务端+客户端同时妃级、data 重载竞态修复。皇后级与软重启尚未开始；已知/未验证项见 [status](docs/status.md)。**2026-11-17**：兼容性测试流水线 v0（`tools/pipeline`）+ JiJ 嵌套 mod/资源包（Xaero's Minimap 自带 XaeroLib 也能热加）；L1 实测覆盖小地图/鼠标手势/前置链；[测试流水线](docs/features/hotadd-test-pipeline.md) / [JBR 使用指引](docs/guides/jbr.md) / [无焦点 L1](docs/features/no-focus.md) / [late AT](docs/features/late-at.md)。
+> 状态（2026-11-18，细节以 [docs/status.md](docs/status.md) 为准）：分析器 v0 可运行；运行时在 NeoForge 1.21.1 dev 环境
+> 验证到四档里的前三档——**嫔级**（无 mixin/注册表）、**妃级**（mixin + 布局变更，JBR 只在改已加载类布局时需要）、
+> **贵妃级 add-only**（方块/物品 + 资源包/创造栏 + datapack + capability），含真实 dogfood 众星捧月 1.5.0；皇后级只提示重启。
+> **AT**：stock 是硬边界；JBR late AT 只覆盖**成员级** access/final（Jade/JEI/Controlling L1 PASS），
+> 类级 `public-f`（去类的 final）不可用，会被拒绝并提示重启（[late-at](docs/features/late-at.md) §5.1）。
+> 失败回滚覆盖 post-ModList / post-pack / post-construct 监听器；构造器其它副作用、post-construct 重试仍不行。
+> 工程侧：`PlatformHooks` 双端解耦、`Capabilities` 锚点守卫、`dev/` 不进发布 jar、**90 个无游戏 Java 单测**；
+> 兼容性流水线 v0（`tools/pipeline`）与无焦点 L1（`-PnoFocus=true`）。皇后级与软重启未开始；已知/未验证项见
+> [status](docs/status.md)，功能文档见 [docs/features/](docs/features/)。
 > 短期目标是把工具做出来给社区用，论文/研究输出留到以后。
 >
 > **先读顺序**：[AGENTS.md](AGENTS.md) → [docs/status.md](docs/status.md)。状态只写在 status.md。

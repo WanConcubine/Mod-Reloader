@@ -10,6 +10,7 @@ import net.neoforged.neoforgespi.language.IModInfo;
 import net.neoforged.neoforgespi.locating.IModFile;
 import net.neoforged.neoforgespi.locating.ModFileDiscoveryAttributes;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -73,9 +74,21 @@ public final class NestedMods {
                         + nested.declaredPath());
             }
             file.setScanResult(scanData, null);
-            if (!file.getAccessTransformers().isEmpty()) {
+            // FML lists an empty AT file too (codecui ships one); only files with
+            // content are a real access need.
+            List<Path> usedAts = new ArrayList<>();
+            for (Path at : file.getAccessTransformers()) {
+                try {
+                    if (Files.size(at) > 0) {
+                        usedAts.add(at);
+                    }
+                } catch (Throwable unreadable) {
+                    usedAts.add(at);
+                }
+            }
+            if (!usedAts.isEmpty()) {
                 throw new AccessTransformer("nested mod " + nested.declaredPath()
-                        + " ships " + file.getAccessTransformers().size()
+                        + " ships " + usedAts.size()
                         + " access transformer file(s); access transformers only apply at startup");
             }
             net.neoforged.neoforgespi.language.IModFileInfo rawInfo = file.getModFileInfo();

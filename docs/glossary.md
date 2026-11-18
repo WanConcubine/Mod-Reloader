@@ -115,7 +115,7 @@
 | **One-shot replay（一次性事件重放）** | 把启动期只发生一次的事件（命令、payload、`RegisterEvent`）在热加后重新投递；按容器重放，避免全局重放导致已加载 mod 的监听器再跑一遍。 |
 | **单向提交（commit-only）** | 贵妃级适配的失败模型：注册表条目无法撤销，提交前尽量预检，提交后失败只能把运行时标记为不可信并要求重启。 |
 | **Registry window（注册表窗口）** | 贵妃级热加的 unfreeze → construct → RegisterEvent 重放 → 清空 state id → freeze 这一段；窗口内失败可以恢复冻结状态，freeze 之后不可回滚。 |
-| **Access transformer（AT）** | NeoForge/Forge 的 `META-INF/accesstransformer.cfg`：放宽 private/final 成员的可见性，**只在类加载时**由 FML 应用。**stock JVM 上热加不应用它，默认变更前拒绝**；2026-11-17 起 JBR 可用实验性 late AT 改已加载类的 access/final（Jade/JEI/Controlling L1，见 [late-at.md](features/late-at.md)）。旧「类加载时晚注入」量测 0/6 仍成立，但不再是“AT 无能为力”的证明。 |
+| **Access transformer（AT）** | NeoForge/Forge 的 `META-INF/accesstransformer.cfg`：放宽 private/final 成员的可见性，**只在类加载时**由 FML 应用。**stock JVM 上热加不应用它，默认变更前拒绝**；2026-11-17 起 JBR 可用实验性 late AT 改**成员级** access/final（Jade/JEI/Controlling L1）。**类级 `public-f`（去类的 final）不可用**：JBR redefine 后构造返回 null、二次 redefine SIGSEGV，runtime 前置拒绝（见 [late-at.md](features/late-at.md) §5.1）。旧「类加载时晚注入」量测 0/6 仍成立，但不再是“AT 无能为力”的证明。 |
 | **ServerThreadHop** | 把一段**必须在服务器线程**上跑的关键区投递过去并等完成（`isSameThread`/无服务器时直跑；超时回退 + warn；原子 claim 防重复）。用于贵妃级的「清 BlockState id + freeze」——那张表区块序列化也在读。见 [features/t4-registry-hotadd.md](features/t4-registry-hotadd.md) §11。 |
 | **EventBusSnapshot（游戏总线监听器回滚）** | 构造前快照 `NeoForge.EVENT_BUS` 的 owner→监听器实例，失败回滚时**按实例**从所有 dispatch list 摘除并修剪 owner 表（`IEventBus#unregister(owner)` 只能按 owner，碰不到被追加到已有 owner 的监听器）。`Capabilities.EVENT_BUS_ROLLBACK` 守卫。见 [features/a1-mixin-hotadd.md](features/a1-mixin-hotadd.md) §10。 |
 | **Datapack 预注册（preregister）** | 标题屏热加时把包先放进 `ResourcePackLoader.modResourcePacks`，让**下一次世界加载**的 `populatePackRepository` 带上它；这是维度/生物群系这类 WORLDGEN 内容唯一能生效的时机（`ServerStartedEvent` 之后已经太晚）。 |

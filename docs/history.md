@@ -1411,3 +1411,200 @@ C:\Dstick\[????????????]\.minecraft\libraries/cpw/mods/bootstraplauncher/...
 - `guides/jbr.md` 顶部把“放 mods/ 重启”改为失败信号；
 - `retro` 新增 §4.2。
 - 未改代码/文案；`./gradlew build` 通过。
+
+## 2026-11-18（JourneyMap 资源重载崩溃：late AT 去「类」final 是 JBR 缺陷）
+
+从已知问题 43 接：JourneyMap 热加 `ok=true` 后资源重载崩（`PalettedPermutations` 全错 +
+`SpriteContents$InterpolationData` 的 `byMipLevel` null）。排查结论不是资源重载：
+
+- `latest.log` 里 `late AT applied com.mojang.blaze3d.platform.NativeImage (3 rule(s))`；JourneyMap 的 AT 含
+  `public-f NativeImage` / `public-f ModelPart`（类级规则，语义是去掉**类**的 `final`），另有两三条成员规则。
+- 崩溃里所有 PNG 解码都返回 null（`BitmapProvider` / `GrassColorReloadListener` / `PalettedPermutations`），
+  但 1.21.1 的 `NativeImage.read` 只会抛异常、不会返回 null → 说明类被改坏了，不是资源缺失。
+- **独立 JBR 探针（不启动游戏）**：JBR 21.0.11 + `-XX:+AllowEnhancedClassRedefinition` + 一次性 agent + ASM：
+  - 只改字段/方法访问（`private→public`）→ `NativeImage.read` 仍 128x128；
+  - 去**类** `final`（有 final 实例字段）→ `NativeImage.read` 返回 null；
+  - 合成 `final class FinalThing`（含 final 字段）→ redefine 后 `new`/工厂/反射构造全部返回 null；
+  - 先剥字段 final 再剥类 final：仍 null；**再 redefine 一次 → SIGSEGV**（`ConstantPoolCacheEntry::clear_entry`）。
+  - 没有 final 实例字段的 final 类去 final 正常 → 触发条件是「类 final + final 实例字段」。
+- 同一机制解释了此前 `replayRenderers` 的 `PartDefinition.bake` NPE（`ModelPart` 也是类级 `-f`）。
+
+修法：`hotadd/LateAccessTransformers` 在改任何字节**之前**用 `classFinalBlockers` 拒绝
+「目标已加载 + 是 final + 规则类级 `-f`」，`FailureKind.ACCESS_TRANSFORMER`，文案要求放 `mods/` 重启让 FML 在加载期应用；
+成员级 access/final 照旧。`rewrite` 对非 final 类的类级 `-f` 是空操作（不记 note）；对 final 类保留 final 并记 note（防御）。
+单测 `LateAccessTransformersTest`：成员规则照旧、类级规则保留 final + 1 条 note、非 final 类 0 note。
+`CompatCheck` 新增 `-PverifyCompatSettle=<ticks>`（默认 40），让热加后的资源重载跑完再退出。
+
+实跑（`runClient -PverifyCompat=<journeymap> -PlateAt=true -PnoFocus=true`）：
+- 修复前：`RESULT ok=true`，随后 0.9s 内崩溃（15.39.30 crash report）；
+- 修复后：`ok=false stage=VALIDATE kind=ACCESS_TRANSFORMER isLoaded=false`，无崩溃、无残留；
+  对照（只保留 final、不加拒绝）时资源重载报 `IncompatibleClassChangeError: ComparableNativeImage cannot inherit from final class`，
+  客户端虽然活着但 `Caught error loading resourcepacks, removing all selected resourcepacks` → 拒绝是更诚实的语义。
+- 对照里还观察到：JourneyMap 给 `DynamicTexture` 加的 `scaledImageMap` 在启动期已存在的 `LightTexture` 上是 null，
+  退出时其 `onClose` 注入抛 NPE（`Shutdown failure!`）→ 记入已知问题 45（mixin 新字段不初始化老实例）。
+
+白名单：JourneyMap `jbr J2 (fixing)` → `jbr BLACK (verified)`，stock 行补“late AT 也不适用”；计数 J1×18 / J2×0 / BLACK×6。
+文档：`status.md`（一句话、late AT 行、已知问题 43 结案 + 44/45、下一步）、`features/late-at.md`（§5.1 探针表 + 拒绝语义）、
+`AGENTS.md`（命令注释 + 硬规则 14）、`features/jbr-support.md`、`features/hotadd-test-pipeline.md` 中“只覆盖 access/final”改为“成员级”。
+验证：`./gradlew build`、`python3 tools/whitelist.py check`（54 行）通过。
+
+## 2026-11-18（ShaderReplay 非空路径：先验出“重复注册”，再修掉）
+
+status 的下一项是“shader 重放只有空列表证据（Architectury 0 个 shader），需要一个真实注册 shader 的夹具”。
+
+- **夹具**：`experiments/client-fixture` 增加 `clientfixture:marker`——`assets/clientfixture/shaders/core/marker.{json,vsh,fsh}`
+  （从原版 `position_color` 复制，`vertex/fragment` 写成 `clientfixture:marker`，因为 `ShaderInstance` 对裸露名字默认
+  `minecraft:` 命名空间，第一次跑就踩到 `FileNotFoundException: minecraft:shaders/core/marker.vsh`）+
+  mod bus 上的 `RegisterShadersEvent` 监听器，consumer 写静态字段（和真实模组一样）。schema 版本 `1 new`。
+- **harness**：`CompatCheck` 新增 `-PverifyShaderCount=<n>`：记录首次 add 前 `GameRenderer.shaders` 的 size，DONE 前断言增量；
+  配合已有的 `-PverifyCompatSettle` 让热加重载跑完。实测 `shaders RESULT: PASS (56 -> 57, expected +1)`。
+- **顺带发现并修掉一个 bug**：日志里夹具的 `registered shader` 出现**两次**——热加资源重载的 `GameRenderer.reloadShaders`
+  会给 ModList 里所有容器（含刚热加的那个）fire `RegisterShadersEvent`，而 `afterHotAdd` 之后 `ShaderReplay` 又补了一次；
+  同名 `ShaderInstance` 覆盖活实例并把第一个泄漏掉（既浪费 GLSL 编译，也可能让静态字段指向错误实例）。
+  修法：`PlatformHooks.injectResourcePacks` 返回“是否触发了资源重载”，`ClientPlatformHooks.afterHotAdd` 在 true 时
+  跳过 replay 并打印原因；`ClientResourcePacks.injectAll` 返回该布尔（顺带删掉没有调用方的 `inject(...)` 包装）。
+  修后日志：`registered shader` 只出现一次 + `shader replay skipped: the resource reload already ran RegisterShadersEvent...`，
+  map 仍 `56 -> 57`。
+- **兜底路径**：jar 无 `assets/` 且没注册 reload listener 时不会触发重载，`ShaderReplay` 仍负责补一次；
+  这条路径目前没有夹具（已记在 status 下一步）。
+- 文档：`status.md`（已验证、已知问题 21 措辞、下一步行与交接）、`features/client-registration-audit.md`（covered 说明与夹具证据）、
+  `experiments/client-fixture/README.md`（shader + 期望日志）、`AGENTS.md` §2（两条 harness 命令）。
+- 验证：`./gradlew build`、`-PverifyCompat=<clientfixture> -PverifyShaderCount=1` PASS、`python3 tools/whitelist.py check`。
+
+## 2026-11-18（JiJ 嵌套 AT 是误判：空文件 + toml LIBRARY；Moonlight 转自定义注册表）
+
+起点是 status 的“某条建议：让 late AT 覆盖 JiJ 嵌套 jar（Moonlight 的 AT 在 codecui 里）”。先核对语料，结论是**前提错了**：
+
+- 全语料扫描（外层 + `META-INF/jarjar/*.jar`）：**没有一个 jar 有非空的嵌套 AT**；codecui 的
+  `META-INF/accesstransformer.cfg` 是 **0 字节**，`accesstransformer1.cfg` 也是 0 字节（FML 本来就只认默认文件）。
+- Moonlight 的 126 条 AT 在**外层** jar；它的 `kind=ACCESS_TRANSFORMER` 来自两层误判：
+  1. `NestedMods` 把 codecui 当嵌套 **mod**（manifest 没有 `FMLModType`），FML 的 `getAccessTransformers()` 列出空 AT 文件 → “ships 1 access transformer”；
+  2. `ModInspector.scanJar` 只看 `META-INF/accesstransformer.cfg` **是否存在**，不看内容。
+- FML 的 AT 发现规则（loader 4.0.45 反编译）：toml `[[accessTransformers]] file="…"` 存在时**只用**这些文件，否则默认
+  `META-INF/accesstransformer.cfg`；空文件等于没有规则。
+
+修法：
+- `AccessTransformerRules.entries(zip)` 按 FML 的规则算入口；`read` 合并这些文件；`hasRules(zip)` 只认**有内容**的条目。
+  单测：空 AT、toml 声明替换默认、声明但文件缺失、toml `modType=LIBRARY`（`ModInspectorTest`）。
+- `ModInspector.scanJar` 用 `hasRules`；`isGameLibrary` 除 manifest `FMLModType` 外也认 toml `modType = "LIBRARY"`
+  （codecui 就是这种）；`NestedMods` 跳过 0 字节 AT。**嵌套 jar 的真 AT 仍不覆盖**。
+
+复跑 Moonlight（`-PverifyCompat=<moonlight> -PlateAt=true -PnoFocus=true`）：越过 MODULE/JiJ，late AT 应用 126 条规则，
+随后 `kind=CONSTRUCT`：
+`IllegalStateException: Attempting to instantiate registry with name moonlight:villager_trades after NewRegistryEvent was fired!`
+（`MoonlightRegistry.<clinit>`）。也就是说新的真实原因是**自定义注册表**，不是嵌套 AT；回滚把 126 个 late AT 目标与两个
+mixin config 都恢复了（`remove mixin config ... ok`），但 mixin 已经注入过，日志仍提示重启后稳定。
+Supplementaries 依赖 Moonlight，仍缺前置。
+
+记录：status 已知问题 36 更正 + 新增 46（`NewRegistryEvent` 自定义注册表不可热加）；白名单 Moonlight 的 stock/jbr 行原因与证据更正
+（库存量仍 BLACK）、Supplementaries 证据补一句；计数 89 单测。
+验证：`./gradlew test`（89）、`python3 tools/whitelist.py check`、Moonlight harness。
+
+## 2026-11-18（自定义注册表热加：方案评估，未动代码）
+
+Moonlight 从嵌套 AT 误判里出来后卡在 `kind=CONSTRUCT`：
+`IllegalStateException: Attempting to instantiate registry with name moonlight:villager_trades after
+NewRegistryEvent was fired!`（`MoonlightRegistry.<clinit>`）。
+
+核实 NeoForge 21.1.265 源码（`neoforge-21.1.265-sources.jar`）：
+- 报错来自 `RegistryManager.trackModdedRegistry`——`pendingModdedRegistries` 在启动的 `postNewRegistryEvent()` 末尾被置 null；
+  之后 `DeferredRegister.makeRegistry` / `RegistryBuilder.create` 都会失败。
+- 启动顺序：construct → `NewRegistryEvent.fill()`（unfreeze/注册/freeze **根注册表**，然后 pending=null）→ `RegisterEvent` 每注册表
+  → `GameData.freezeData()`（冻结 root 全部并分配 id）→ `ModifyRegistriesEvent`。
+- 现有 `RegistryStage` 已经做了 `unfreeze → RegisterEvent 重放 → freeze`，且 `GameData.getRegistrationOrder()` 与
+  `freezeData()` 都遍历**活的**根注册表 → 只要新注册表进了 root，commit/freeze/快照会自动覆盖。
+- 因此差距只有三步：临时恢复 pending 集合（构造期）、构造后**只对新容器** fire `NewRegistryEvent` + 调包私有 `fill()`、复刻守卫校验并恢复 null。
+
+评估结论写入 `docs/research-newregistry-hotadd.md`：A（重放）可行、中等工作量，风险在运行时 unfreeze/freeze 根注册表、
+`fill()` 无 try/finally、fill 之后失败只能 dirty；B（预检干净拒绝）小改动、先做；C（启动期预注册）等同安装，不建议。
+未改任何代码；status 已知问题 46 与下一步已链接该评估。
+
+## 2026-11-18（优先级调整：客户端工具模组 = 内容/贵妃级模组）
+
+所有者明确：**客户端模组与内容级模组优先级相同**（此前 status 的产品锚点只写“缺失的客户端工具模组”）。
+
+- 影响：自定义注册表（`NewRegistryEvent`，Moonlight/CraftTweaker）不再按“收益偏薄、暂缓”处理，回到 P0；
+  按 [research-newregistry-hotadd.md](research-newregistry-hotadd.md) 的三步实现，先 fixture spike。
+- 保留的结论：方案 B 的**静态**预检拒绝不可取（Architectury/Balm 引用 API 但已 J1 通过），只做运行时异常映射。
+- 未改代码；status 的「产品锚点」「已知问题 46」「下一步」已同步。
+
+## 2026-11-18（自定义注册表重放实现：Moonlight 转 J1）
+
+按评估文档的三步实现（`hotadd/CustomRegistries`）：
+
+- `RegistryStage.begin` 时把 `RegistryManager.pendingModdedRegistries` 临时换成一个空集合，`commit`/中止后恢复；
+- 构造后、commit 前，**只对新容器** fire `NewRegistryEvent`，然后调用包私有 `fill()` 把注册表注册进根注册表；
+- 复刻 `postNewRegistryEvent` 的“创建了但没注册”校验；`fill()` 抛错时**强制 re-freeze 根注册表**（它先 unfreeze 再注册，
+  没有 try/finally）。
+- `RegisterEvent`/freeze/`takeFrozenSnapshot` 由现有 `RegistryStage` 自动覆盖（`getRegistrationOrder()` 与 `freezeData()`
+  都按活的根注册表遍历），无需改 commit。
+
+验证：
+- 新夹具 `experiments/registry-fixture`（构造期建 `registryfixture:trades` + 1 条目）：`custom registry RESULT: PASS`、
+  commit 90 个注册表；`CompatCheck` 新增 `-PverifyCustomRegistry=<id>`（可选 `Size`）与 `FailureKind.CUSTOM_REGISTRY` + 两语言文案。
+- Moonlight（JBR + late AT）：3 个自定义注册表创建、commit 90→92、`ok=true isLoaded=true`、blocks 1060→1061、
+  items 1333→1335、stoneId 稳定；白名单 JBR BLACK → **J1（candidate）**。
+
+过程中修了两个 late AT 健壮性问题（都来自“对已混入的类再 redefine”）：
+- `LateAccessTransformers` 捕获字节改为 **缓存 → 类资源 → 最后 retransform**（retransform 会让 Mixin agent 二次注入）；
+- `MixinAgentGuard` 改为**常驻 wrapper**：第一次安装后不再 remove/add，只维护 `SUPPRESSED` 集合。之前 late AT 与 mixin 阶段
+  连续 suspend 时，第二次会找不到 agent、wrapper 留在链上，导致下一次 redefine 二次 transform。
+
+剩余：`fill()` 之后失败只能 dirty；datapack 注册表/`ModifyRegistriesEvent` 未重放；CraftTweaker 未复跑。
+Supplementaries 越过 JiJ/依赖后暴露新问题（问题 47）：late AT 对 `Entity`（Moonlight 已混入）仍二次 transform →
+`ClassFormatError`，`kind=ROLLBACK_PARTIAL`；Moonlight 单独 add 已 J1。
+
+## 2026-11-18（问题 47 修复：redefine 期间的三次注入路径；Supplementaries 前进到问题 48）
+
+诊断：给 `MixinAgentGuard` 加日志后确认——Moonlight 阶段 guard **确实**拦到了 `Entity`，但 Supplementaries 的 late AT
+redefine 仍被 Mixin agent 二次注入。结论：JBR 的 redefine 调用并不总能给出可用的类身份（`beingRedefined`/类名），
+按名抑制不可靠；且 Mixin agent 不是唯一的注入路径。
+
+修法：
+- `MixinAgentGuard` 改为**包裹全部已注册 transformer 的常驻 wrapper**（安装一次，之后不再 remove/add）；
+- 新增 `MixinAgentGuard.blanket()`：在**每一次** `redefineClasses` 期间全局抑制所有 transformer（我们给的字节就是最终字节），
+  用 try-with-resources 保证及时恢复；late AT 与回滚 redefine 都使用它；
+- 名字抑制仍保留给 mixin 阶段的目标窗口。
+
+复跑 `moonlight → supplementaries`：`transform guard installed (4 transformer(s) wrapped)`，Entity 不再报 `ClassFormatError`；
+Moonlight 仍 `ok=true`。Supplementaries 越过 VALIDATE，在 MIXIN 阶段新卡：
+`NoClassDefFoundError: com/bawnorton/mixinsquared/MixinSquaredBootstrap`（嵌套 `mixinsquared-forge-0.3.8.jar` 已作为 library
+注入 module path，但 Mixin 加载 `mixinsquared.forge.ini` 时的类查找看不到它）→ 记为已知问题 48。
+
+## 2026-11-18（JiJ 递归拆包：问题 48 修复；Supplementaries 前进到模型层）
+
+诊断：`mixinsquared-forge-0.3.8.jar` 里只有一个包（`com/bawnorton/mixinsquared/platform/forge`），
+核心 `com.bawnorton.mixinsquared.MixinSquaredBootstrap` 在它**自己再嵌套一层**的 `MixinSquared` jar 里；
+`JarInJar` 只拆一层 → bootstrap 不可见 → `register mixinsquared.forge.init.mixins.json` 时 CNFE。
+
+修法：`JarInJar.extract` 改为递归（`MAX_NESTED_DEPTH=3`），每层都物化、建 `SecureJar`、收集 manifest `MixinConfigs`；
+`declaredPath` 用 `a!/b` 记录层级。复跑：`jar-in-jar: 3 nested jar(s) ... modules [mixinsquared.forge, MixinSquared,
+sable.companion.common]`，MixinSquared 配置可加载，Supplementaries 越过 MIXIN/CONSTRUCT 并注册内容
+（blocks 1061→1306、items 1335→1584）。
+
+同时把 `blanket()` 也用到 mixin 阶段的 redefine/回滚（JBR 的 hierarchy update 会顺带重定义子类，只按名抑制不够）。
+
+新卡点（EVENT 阶段，已记录）：
+- 问题 49（结构）：`EntityRenderersEvent$CreateSkullModels` → `No model for layer supplementaries:enderman_head#enderman_head`；
+  deferred 里 `ItemBlockRenderTypes.setRenderLayer` 被 `Render layers can only be set during client loading!` 拒绝。
+  模型层在启动时 bake，`RegisterLayerDefinitions` 未重放；要么重新 bake `EntityModelSet`，要么明确重启。
+- 问题 50：失败回滚 `MineshaftPieces$MineShaftPiece` 报 `VerifyError`，`kind=ROLLBACK_PARTIAL`。
+
+## 2026-11-18（模型层重放：问题 49 不是结构边界，Supplementaries 转 J1 candidate）
+
+核实源码（`EntityModelSet` / `ClientHooks` / `LayerDefinitions` / `ItemBlockRenderTypes`）：
+- `EntityModelSet.roots` 是可替换字段，每次资源重载由 `LayerDefinitions.createRoots()` 重建，而后者会合并
+  `ClientHooks.loadLayerDefinitions`（即 `RegisterLayerDefinitions` 注册的 supplier）。`bakeLayer` 每次查表、无缓存。
+- `ItemBlockRenderTypes.checkClientLoading` 只看 `ClientModLoader.isLoading()`（私有静态 `loading`），该 flag 的另一个消费者是
+  `Options` 的保存保护；在 FMLClientSetup 重放窗口内临时置 true 风险可控。
+
+实现：
+- `ClientRegistrationReplay` 增加 `replayLayerDefinitions(container)`：fire `EntityRenderersEvent.RegisterLayerDefinitions`，
+  然后调用 `EntityModelSet.onResourceManagerReload` 重建 roots（日志 `layer definitions replayed: 213 -> 234`）；
+- 新增 `replayStaged(containers)`：**全容器先层、后渲染器**。否则嵌套容器（sablecompanion）先重建 `SkullBlockRenderer`，
+  外层（supplementaries）的 `enderman_head` 层还没注册 → `No model for layer ...`；
+- `ClientPlatformHooks.acceptClientLifecycle` 在 FMLClientSetup + deferred queue 窗口内把 `ClientModLoader.loading` 置 true 再恢复。
+
+复跑 `moonlight → supplementaries`：两者 `ok=true isLoaded=true`，blocks 1061→1306、items 1335→1584、层 213→234，
+无 `No model for layer` / `Render layers can only be set...`。白名单 Supplementaries JBR BLACK → **J1（candidate）**。
+仍开放：问题 50（失败回滚 VerifyError）；窗口无焦点时 `pauseGame` 会撞隐藏 screen（测试用聚焦窗口跑）。

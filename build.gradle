@@ -253,6 +253,27 @@ neoForge {
                 // at a time, and log a verdict per jar (comma-separated, deps first).
                 systemProperty 'modreloader.verifyCompat', verifyCompat
             }
+            if (providers.gradleProperty('verifyCompatSettle').orNull) {
+                // Extra ticks after the last jar so the hot-add resource reload can
+                // finish (and crash) before the harness stops the client.
+                systemProperty 'modreloader.verifyCompatSettle',
+                        providers.gradleProperty('verifyCompatSettle').get()
+            }
+            if (providers.gradleProperty('verifyCustomRegistry').orNull) {
+                // Assert the hot-add created a built-in registry (NewRegistryEvent replay).
+                systemProperty 'modreloader.verifyCustomRegistry',
+                        providers.gradleProperty('verifyCustomRegistry').get()
+            }
+            if (providers.gradleProperty('verifyCustomRegistrySize').orNull) {
+                systemProperty 'modreloader.verifyCustomRegistrySize',
+                        providers.gradleProperty('verifyCustomRegistrySize').get()
+            }
+            if (providers.gradleProperty('verifyShaderCount').orNull) {
+                // Assert the add put at least N entries into GameRenderer's shader
+                // map (RegisterShadersEvent replay; needs a jar that registers one).
+                systemProperty 'modreloader.verifyShaderCount',
+                        providers.gradleProperty('verifyShaderCount').get()
+            }
             if (providers.gradleProperty('verifyRelaunchPlan').orNull) {
                 // Managed relaunch: build the real plan + prove the script/spawn path
                 // starts a JVM, without restarting the game.

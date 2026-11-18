@@ -174,7 +174,7 @@ Error: Could not create the Java Virtual Machine.
 - `JbrSupport.available()` 是启发式，不证明真实能力；
 - 「用 JBR 重启」只影响本次会话，且真实“新窗口起来、旧进程退出”只在 macOS dev 验证过 plan/spawn，Windows/PCL2 未端到端；
 - 我们**不会**把 `-XX:+AllowEnhancedClassRedefinition` 自动加到非 JBR JVM 上（那会让游戏起不来）；
-- JBR 的 late AT 只覆盖 access/final，且是实验路径；一次性启动事件、已提交的注册表回滚仍不能解决。
+- JBR 的 late AT 只覆盖**成员级** access/final，且是实验路径（类级 `-f` 会被拒绝，见 [late-at.md](late-at.md) §5.1）；一次性启动事件、已提交的注册表回滚仍不能解决。
 
 ## 5. 玩家 FAQ
 
@@ -198,7 +198,7 @@ Error: Could not create the Java Virtual Machine.
 
 **Q：JBR 能解决 access transformer 吗？**
 **stock JVM 不能**；JBR 的 enhanced redefinition 可以改已加载类的 access/final，`-PlateAt=true` 的 late AT 在 Jade/JEI/Controlling 上已 L1 PASS。
-但这仍是实验性、JBR-only、只覆盖 access/final、没有 L2 功能证明；不含 JBR 时这类模组仍必须重启。见 [late-at.md](late-at.md) 与 [matrix §9](hotadd-compatibility-matrix.md)。
+但这仍是实验性、JBR-only、只覆盖成员级 access/final、没有 L2 功能证明；类级 `-f` 与不含 JBR 时这类模组仍必须重启。见 [late-at.md](late-at.md) 与 [matrix §9](hotadd-compatibility-matrix.md)。
 
 ## 6. 我们还能做什么（按优先级）
 

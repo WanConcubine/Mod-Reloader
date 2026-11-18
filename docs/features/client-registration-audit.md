@@ -123,7 +123,10 @@ registration audit <ids>: N mod-bus event(s); covered [...]; crash [...]; behavi
 `RegisterParticleProvidersEvent`（`ClientRegistrationReplay#replayParticleProviders`，2026-11-16：容器定向重放，put-only）、
 `RegisterRecipeBookCategoriesEvent`（`client/RecipeBookCategoryReplay`，2026-11-18：复制 live manager map 后 putAll；
 客户端夹具新增 `registerBookCategories(CRAFTING, …)`，实测 `1 new, 4 aggregate / 1 type / 0 lookup`）、
-`RegisterShadersEvent`（`client/ShaderReplay`，2026-11-18：等热加资源重载完成后向 `GameRenderer` 的 shader map 填入并调用 consumer；Architectury 已 PASS）。
+`RegisterShadersEvent`（2026-11-18：热加资源重载本身会跑 `GameRenderer.reloadShaders`，它为 **ModList 里的所有容器**（含刚热加的）
+fire 这个事件，所以常规路径由 NeoForge 自己完成；`client/ShaderReplay` 只在**没有触发资源重载**（jar 无 `assets/` 且没注册
+reload listener）时补一次。夹具新增 `clientfixture:marker`（JSON 在夹具自己的包里），
+`-PverifyCompat=<clientfixture> -PverifyShaderCount=1` → `shaders RESULT: PASS (56 -> 57)`，且日志只出现一次注册）。
 
 **已知崩溃（拒绝）**：`RegisterSpriteSourceTypesEvent`。
 
@@ -183,9 +186,8 @@ Mekanism、MekanismGenerators、ExtremeReactors2），共 **129 处事件引用*
 - 2026-11-16 已补 `RegisterGuiLayersEvent`（实测语料里 2/16 个 jar 引用：AppleSkin、Mekanism；HUD 静默）：
   `client/GuiLayerReplay` 对 live 层表副本重放再换入，harness `-PverifyAddCommand=<appleskin> -PverifyGuiLayers=true`
   断言 25 → 31 层、6 个 `appleskin:*` 层、原有层顺序不变、渲染 60 tick 不崩。
-- 下一批收益：`RegisterItemDecorationsEvent`（物品装饰，静默；`ItemDecoratorHandler.DECORATOR_LOOKUP` 是静态
-  `ImmutableMap`，可照 `GuiLayerReplay` 的「读 live → 副本重放 → 换回」做法）、模型层
-  `EntityRenderersEvent.RegisterLayerDefinitions`（已 bake，要重建 `EntityModelSet`，成本更高）。
+- 下一批收益：`RegisterItemDecorationsEvent` 已由 `ItemDecoratorReplay` 覆盖（2026-11-16）；模型层
+  `EntityRenderersEvent.RegisterLayerDefinitions` 也已覆盖（2026-11-18，见上表）。
 - 没有 `unresolved`：16 个 jar 里所有 `net.neoforged.**Event` 都能加载（客户端）。
 
 ## 6. 验证
@@ -260,7 +262,7 @@ registration audit [appleskin]: 4 mod-bus event(s); covered [fml.event.lifecycle
 |---|---|---|
 | `RegisterItemDecorationsEvent` | ~~silent~~ → **covered**（2026-11-16） | 物品装饰；`ItemDecoratorHandler.DECORATOR_LOOKUP` 是静态 `ImmutableMap`，照 GUI 层的「读 live → 副本追加 → 换回」做；fixture `experiments/client-fixture` + `-PverifyItemDecorators` 断言 |
 | `RegisterGuiLayersEvent` | ~~silent~~ → **covered**（2026-11-16） | HUD 层；`client/GuiLayerReplay`，AppleSkin 25→31 层实测 |
-| `EntityRenderersEvent.RegisterLayerDefinitions` | behavior | **不做（成本明确）**：模型层在启动时已 bake，重放需要重建 `EntityModelSet`/`ModelManager` 的实体模型集合，并且已 bake 的渲染器不会自己刷新；收益是"hot-add 一个新实体"——我们连实体类内容都没支持（post-register 事件未重放），现在做等于给半成品补零件 |
+| `EntityRenderersEvent.RegisterLayerDefinitions` | ~~behavior~~ → **covered**（2026-11-18） | `client/ClientRegistrationReplay#replayLayerDefinitions`：fire 事件后调用 `EntityModelSet.onResourceManagerReload` 重建 roots（`ClientHooks` 的静态表合并进来）；层回放与 renderer 重建按"全容器先层后渲染器"分阶段。Supplementaries 实测 213→234 层、skull 模型可用 |
 | `RegisterColorHandlersEvent.ColorResolvers` | silent | **不做（成本/收益）**：群系着色 resolver 是 `ColorResolver` 列表，重放本身不难，但受影响的只有群系色调（草地/树叶/水），而狗头语料里没有只有 resolver 才正确的模组；等有真实 subject 再做，现有 `.Block/.Item` 两种已覆盖 |
 | `ModifyDefaultComponentsEvent` | behavior | **不做**：默认组件在启动时被烘进每个 `Item` 的组件表，重放要逐 item 重建 `DataComponentMap` 并替换 `Item.components`；属于"改已注册对象"而不是"往 map 里加"，风险高于收益（缺组件的症状是"物品行为少一点"） |
 | `NewRegistryEvent` / `ModifyRegistriesEvent` | behavior | **不做（框架禁止）**：NeoForge 启动后关闭自建注册表（`pendingModdedRegistries = null`），运行时创建 registry 无处可挂 |

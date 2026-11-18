@@ -42,9 +42,11 @@ import java.util.Map;
  * dirty and ask for a restart. Before the commit, abort clears the state id map
  * and re-freezes, which preserves the canonical BlockState ids.
  *
- * <p>Only add-only built-in registry content is supported. Datapack registries
- * (biome/dimension/enchantment/…), mods' own registries and post-register events
- * (block entity blocks, spawn placements, attributes) are not replayed yet.
+ * <p>Add-only built-in registry content is supported, including a mod's own
+ * built-in registries ({@link CustomRegistries} replays {@code NewRegistryEvent}
+ * after construction). Datapack registries (biome/dimension/enchantment/…),
+ * {@code ModifyRegistriesEvent} and post-register events (block entity blocks,
+ * spawn placements, attributes) are not replayed yet.
  */
 public final class RegistryStage {
     private static final MethodHandle REGISTER_EVENT_CTOR = registerEventCtor();
@@ -121,6 +123,7 @@ public final class RegistryStage {
         });
         committed = true;
         active = false;
+        CustomRegistries.close();
 
         int stoneAfter = stoneId();
         int blocksAfter = BuiltInRegistries.BLOCK.size();

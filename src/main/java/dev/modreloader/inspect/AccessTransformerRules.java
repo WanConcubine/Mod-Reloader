@@ -12,6 +12,8 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * The access-transformer rules of a mod jar, parsed from
@@ -33,6 +35,15 @@ import java.util.zip.ZipFile;
  */
 public final class AccessTransformerRules {
     public static final String ENTRY = "META-INF/accesstransformer.cfg";
+
+    /**
+     * FML's AT list is not just the default entry: {@code [[accessTransformers]]}
+     * blocks in the mods.toml replace it entirely. Moonlight ships an empty
+     * {@code accesstransformer1.cfg} that FML ignores; a jar whose only AT file is
+     * empty has no access transformers at all.
+     */
+    private static final List<String> MODS_TOML =
+            List.of("META-INF/neoforge.mods.toml", "META-INF/mods.toml");
 
     /**
      * One parsed rule. A rule with {@code member == null} widens the class
@@ -215,20 +226,88 @@ public final class AccessTransformerRules {
     }
 
     /**
-     * Reads the rules from {@code jar}.
+     * Reads the rules from {@code jar}, from the same files FML would apply.
      *
      * @return the parsed rules, or {@link #empty()} when the jar has no AT file
      * @throws IOException when the jar cannot be read
      */
     public static AccessTransformerRules read(Path jar) throws IOException {
         try (ZipFile zip = new ZipFile(jar.toFile())) {
-            ZipEntry entry = zip.getEntry(ENTRY);
-            if (entry == null) {
-                return empty();
+            StringBuilder text = new StringBuilder();
+            for (String name : entries(zip)) {
+                ZipEntry entry = zip.getEntry(name);
+                if (entry == null) {
+                    continue;
+                }
+                try (InputStream in = zip.getInputStream(entry)) {
+                    text.append(new String(in.readAllBytes(), StandardCharsets.UTF_8)).append('\n');
+                }
             }
+            return text.isEmpty() ? empty() : parse(text.toString());
+        }
+    }
+
+    /** AT entries FML would apply: the toml-declared files, else the default entry. */
+    public static List<String> entries(Path jar) throws IOException {
+        try (ZipFile zip = new ZipFile(jar.toFile())) {
+            return entries(zip);
+        }
+    }
+
+    static List<String> entries(ZipFile zip) throws IOException {
+        List<String> declared = new ArrayList<>();
+        for (String toml : MODS_TOML) {
+            ZipEntry entry = zip.getEntry(toml);
+            if (entry == null) {
+                continue;
+            }
+            String text;
             try (InputStream in = zip.getInputStream(entry)) {
-                return parse(new String(in.readAllBytes(), StandardCharsets.UTF_8));
+                text = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            }
+            Matcher block = Pattern.compile("(?ms)\\[\\[accessTransformers\\]\\](.*?)(?=\\R\\[\\[|\\z)")
+                    .matcher(text);
+            while (block.find()) {
+                Matcher file = Pattern.compile("(?m)^\\s*file\\s*=\\s*\"([^\"]+)\"")
+                        .matcher(block.group(1));
+                while (file.find()) {
+                    declared.add(file.group(1).replace('\\', '/').trim());
+                }
             }
         }
+        List<String> out = new ArrayList<>();
+        if (!declared.isEmpty()) {
+            // FML uses the declared list instead of the default entry.
+            for (String name : declared) {
+                if (zip.getEntry(name) != null) {
+                    out.add(name);
+                }
+            }
+            return out;
+        }
+        if (zip.getEntry(ENTRY) != null) {
+            out.add(ENTRY);
+        }
+        return out;
+    }
+
+    /**
+     * True when at least one AT entry FML would apply actually parses to a rule.
+     * Size alone is not enough: a comment-only or whitespace-only file is just
+     * as inert as an empty one (and refusing for it would be a false positive).
+     */
+    static boolean hasRules(ZipFile zip) throws IOException {
+        for (String name : entries(zip)) {
+            ZipEntry entry = zip.getEntry(name);
+            if (entry == null) {
+                continue;
+            }
+            try (InputStream in = zip.getInputStream(entry)) {
+                if (parse(new String(in.readAllBytes(), StandardCharsets.UTF_8)).ruleCount() > 0) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }

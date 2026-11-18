@@ -173,19 +173,34 @@ public final class ModInspector {
     public static boolean isGameLibrary(Path jar) {
         try (ZipFile zip = new ZipFile(jar.toFile())) {
             ZipEntry manifest = zip.getEntry("META-INF/MANIFEST.MF");
-            if (manifest == null) {
-                return false;
+            if (manifest != null) {
+                String text = new String(zip.getInputStream(manifest).readAllBytes(),
+                        java.nio.charset.StandardCharsets.UTF_8);
+                for (String line : text.split("\\R")) {
+                    String lower = line.toLowerCase(Locale.ROOT);
+                    if (lower.startsWith("fmlmodtype:") && lower.contains("gamelibrary")) {
+                        return true;
+                    }
+                }
             }
-            String text = new String(zip.getInputStream(manifest).readAllBytes(),
-                    java.nio.charset.StandardCharsets.UTF_8);
-            for (String line : text.split("\\R")) {
-                String lower = line.toLowerCase(Locale.ROOT);
-                if (lower.startsWith("fmlmodtype:") && lower.contains("gamelibrary")) {
-                    return true;
+            // Nested libraries (codecui) declare it in the toml instead of the
+            // manifest; FML's JarModsDotTomlModFileReader reads exactly this key.
+            for (String toml : List.of("META-INF/neoforge.mods.toml", "META-INF/mods.toml")) {
+                ZipEntry entry = zip.getEntry(toml);
+                if (entry == null) {
+                    continue;
+                }
+                String text = new String(zip.getInputStream(entry).readAllBytes(),
+                        java.nio.charset.StandardCharsets.UTF_8);
+                for (String line : text.split("\\R")) {
+                    String lower = line.split("#", 2)[0].trim().toLowerCase(Locale.ROOT);
+                    if (lower.startsWith("modtype") && lower.contains("library")) {
+                        return true;
+                    }
                 }
             }
         } catch (Throwable ignored) {
-            // Unreadable manifest: fall back to the generic message.
+            // Unreadable metadata: fall back to the generic message.
         }
         return false;
     }
@@ -205,9 +220,6 @@ public final class ModInspector {
             while (entries.hasMoreElements()) {
                 ZipEntry entry = entries.nextElement();
                 String name = entry.getName().toLowerCase(Locale.ROOT);
-                if (name.equals("meta-inf/accesstransformer.cfg")) {
-                    accessTransformers = true;
-                }
                 if (name.endsWith(".so") || name.endsWith(".dll") || name.endsWith(".dylib")
                         || name.startsWith("meta-inf/native-image/")
                         || name.equals("meta-inf/coremods.json")) {
@@ -226,6 +238,14 @@ public final class ModInspector {
                 } catch (Throwable ignored) {
                     // A single malformed class should not break the preflight.
                 }
+            }
+            try {
+                // An empty AT file (Moonlight's codecui ships one) has no rules and
+                // must not refuse the add. Custom [[accessTransformers]] paths count too.
+                accessTransformers = AccessTransformerRules.hasRules(zip);
+            } catch (Throwable t) {
+                ModReloader.LOGGER.warn("[ModReloader] cannot inspect access transformers of {}", jar, t);
+                accessTransformers = true;
             }
         } catch (Throwable t) {
             ModReloader.LOGGER.warn("[ModReloader] cannot scan jar {}", jar, t);

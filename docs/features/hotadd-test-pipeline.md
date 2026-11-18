@@ -207,8 +207,8 @@ access/final 标志；`LateAccessTransformers` 捕获当前字节、只改 AT �
 
 - Jade 57/57 规则、39/39 目标 → `ok=true`、插件 bootstrap；JEI 34/34、16/16 → `ok=true`；
   Controlling 1/1；Jade `-PfailAfterModList` 回滚 39/39 ok。
-- JourneyMap 21/26 应用后被 **`CLIENT_REGISTRATION`**（`RegisterShadersEvent`）挡住，不是 AT。
-- 仍然 JBR-only、opt-in、只覆盖 access/final、只到 L1；**不要写成“AT 已解决”**。
+- JourneyMap 的 21/26（成员级规则）可应用，但 `public-f NativeImage/ModelPart` 是类级去 final，JBR 做不到（构造返回 null、二次 redefine SIGSEGV），现在前置拒绝（[status 已知问题 43/44](../status.md)、[late-at.md](late-at.md) §5.1）。
+- 仍然 JBR-only、opt-in、只覆盖**成员级** access/final、只到 L1；类级 `public-f`（去类的 final）不可用（[late-at.md](late-at.md) §5.1），**不要写成“AT 已解决”**。
 
 新场景 `input-lateat` / `tooltip-lateat` / `recipe-lateat` 用 `late_at: true` 表达；baseline 场景保留。
 详见 [late-at.md](late-at.md)。

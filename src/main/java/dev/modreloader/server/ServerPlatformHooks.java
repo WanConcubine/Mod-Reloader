@@ -35,10 +35,11 @@ public final class ServerPlatformHooks implements PlatformHooks {
     }
 
     @Override
-    public void injectResourcePacks(java.util.List<ModFileInfo> fileInfos, Set<String> modIds,
-                                    Rollback rollback) {
+    public boolean injectResourcePacks(java.util.List<ModFileInfo> fileInfos, Set<String> modIds,
+                                       Rollback rollback) {
         ModReloader.LOGGER.info(
                 "[ModReloader] server side: skipping resource pack injection for {}", modIds);
+        return false;
     }
 
     @Override

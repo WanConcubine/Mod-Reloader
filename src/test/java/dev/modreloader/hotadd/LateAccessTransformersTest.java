@@ -28,7 +28,7 @@ class LateAccessTransformersTest {
         List<AccessTransformerRules.Rule> list = rules.rules();
 
         LateAccessTransformers.Rewrite rewrite = LateAccessTransformers.rewrite(
-                synthetic(), "demo.Target", list);
+                synthetic(Opcodes.ACC_PUBLIC), "demo.Target", list);
         assertTrue(rewrite.matchedAny());
         assertEquals(2, rewrite.matched());
 
@@ -38,9 +38,37 @@ class LateAccessTransformersTest {
         assertTrue((flags[1] & Opcodes.ACC_PUBLIC) != 0, "method must be public");
     }
 
-    private static byte[] synthetic() {
+    @Test
+    void classLevelRuleWidensButKeepsClassFinal() {
+        AccessTransformerRules rules = AccessTransformerRules.parse("""
+                public-f demo.Target
+                """);
+        LateAccessTransformers.Rewrite rewrite = LateAccessTransformers.rewrite(
+                synthetic(Opcodes.ACC_FINAL), "demo.Target", rules.rules());
+
+        assertEquals(1, rewrite.matched());
+        int access = new ClassReader(rewrite.bytes()).getAccess();
+        assertTrue((access & Opcodes.ACC_PUBLIC) != 0, "class must become public");
+        assertTrue((access & Opcodes.ACC_FINAL) != 0,
+                "class final must stay: JBR redefine drops instances when it is removed");
+        assertEquals(1, rewrite.notes().size());
+    }
+
+    @Test
+    void classLevelRuleOnNonFinalClassNeedsNoNote() {
+        AccessTransformerRules rules = AccessTransformerRules.parse("""
+                public-f demo.Target
+                """);
+        LateAccessTransformers.Rewrite rewrite = LateAccessTransformers.rewrite(
+                synthetic(Opcodes.ACC_PUBLIC), "demo.Target", rules.rules());
+
+        assertEquals(1, rewrite.matched());
+        assertEquals(0, rewrite.notes().size(), "nothing to keep when the class is not final");
+    }
+
+    private static byte[] synthetic(int classAccess) {
         ClassWriter writer = new ClassWriter(0);
-        writer.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "demo/Target", null,
+        writer.visit(Opcodes.V21, classAccess, "demo/Target", null,
                 "java/lang/Object", null);
         FieldVisitor field = writer.visitField(
                 Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_FINAL, "secret", "I", null, null);

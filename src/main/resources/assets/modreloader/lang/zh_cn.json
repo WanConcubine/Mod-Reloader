@@ -185,5 +185,7 @@
   "modreloader.jbr_setup.downloading": "正在下载…",
   "modreloader.jbr_setup.ready": "已就绪，正在重启…",
   "modreloader.jbr_setup.failed": "失败：%s（游戏保持运行；可重试，或把 jar 放进 mods/ 重启）",
-  "modreloader.jbr_setup.short": "自动准备 JBR"
+  "modreloader.jbr_setup.short": "自动准备 JBR",
+  "modreloader.failure.custom_registry.summary": "这个模组在构造期创建自己的注册表，而 NeoForge 只允许在启动完成前这么做。",
+  "modreloader.failure.custom_registry.suggestion": "把 jar 放进 mods/ 并重启；运行期热加暂时不能创建注册表。窗口打不开时没有提交任何内容。"
 }

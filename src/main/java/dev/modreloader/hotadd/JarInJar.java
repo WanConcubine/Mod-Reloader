@@ -55,6 +55,8 @@ public final class JarInJar {
     /** Refuse to copy a nested jar bigger than this; nothing real comes close. */
     private static final long MAX_NESTED_BYTES = 256L * 1024 * 1024;
     private static final int MAX_NESTED_JARS = 64;
+    /** How many JiJ levels are unpacked (Supplementaries needs two). */
+    private static final int MAX_NESTED_DEPTH = 3;
 
     /**
      * @param declaredPath the path inside the outer jar, as written in metadata.json
@@ -103,43 +105,61 @@ public final class JarInJar {
     public static Result extract(Path outerJar) throws IOException {
         List<Nested> nested = new ArrayList<>();
         List<String> skipped = new ArrayList<>();
-        try (ZipFile zip = new ZipFile(outerJar.toFile())) {
+        collect(outerJar, "", 0, nested, skipped, new int[]{0});
+        return new Result(List.copyOf(nested), List.copyOf(skipped));
+    }
+
+    /**
+     * Extracts one level and recurses into nested jars that bundle more jars.
+     * Supplementaries → mixinsquared-forge → mixinsquared-common is two levels;
+     * stopping after the first left {@code MixinSquaredBootstrap} missing
+     * (NoClassDefFoundError when Mixin loads its config).
+     */
+    private static void collect(Path jarFile, String prefix, int depth, List<Nested> nested,
+                                List<String> skipped, int[] seen) throws IOException {
+        if (depth > MAX_NESTED_DEPTH) {
+            skipped.add(prefix + " (nesting deeper than " + MAX_NESTED_DEPTH + " levels)");
+            return;
+        }
+        try (ZipFile zip = new ZipFile(jarFile.toFile())) {
             ZipEntry metadataEntry = zip.getEntry(METADATA_PATH);
             if (metadataEntry == null) {
-                return Result.EMPTY;
+                return;
             }
             Optional<Metadata> metadata;
             try (InputStream in = zip.getInputStream(metadataEntry)) {
                 metadata = MetadataIOHandler.fromStream(in);
             }
             if (metadata.isEmpty()) {
-                return new Result(List.of(), List.of(METADATA_PATH + " could not be parsed"));
+                skipped.add(prefix + METADATA_PATH + " could not be parsed");
+                return;
             }
 
-            int seen = 0;
             for (ContainedJarMetadata contained : metadata.get().jars()) {
-                if (++seen > MAX_NESTED_JARS) {
+                if (++seen[0] > MAX_NESTED_JARS) {
                     skipped.add("more than " + MAX_NESTED_JARS + " nested jars declared");
-                    break;
+                    return;
                 }
                 String path = checkedPath(contained.path());
                 if (path == null) {
-                    skipped.add(contained.path() + " (not a relative .jar path inside the jar)");
+                    skipped.add(prefix + contained.path()
+                            + " (not a relative .jar path inside the jar)");
                     continue;
                 }
+                String declaredPath = prefix.isEmpty() ? path : prefix + "!/" + path;
                 if (contained.isObfuscated()) {
                     // FML deobfuscates those at build time; loading the raw bytes
                     // would give us classes with the wrong names.
-                    skipped.add(path + " (isObfuscated: needs deobfuscation, restart required)");
+                    skipped.add(declaredPath + " (isObfuscated: needs deobfuscation, restart required)");
                     continue;
                 }
                 ZipEntry entry = zip.getEntry(path);
                 if (entry == null) {
-                    skipped.add(path + " (declared but not present in the jar)");
+                    skipped.add(declaredPath + " (declared but not present in the jar)");
                     continue;
                 }
                 if (entry.getSize() > MAX_NESTED_BYTES) {
-                    skipped.add(path + " (" + entry.getSize() + " bytes, over the size limit)");
+                    skipped.add(declaredPath + " (" + entry.getSize() + " bytes, over the size limit)");
                     continue;
                 }
                 byte[] bytes;
@@ -148,16 +168,16 @@ public final class JarInJar {
                 }
                 if (bytes.length > MAX_NESTED_BYTES) {
                     // getSize() is -1 for streamed zips, so re-check what we read.
-                    skipped.add(path + " (" + bytes.length + " bytes, over the size limit)");
+                    skipped.add(declaredPath + " (" + bytes.length + " bytes, over the size limit)");
                     continue;
                 }
                 Path file = materialize(bytes, fileNameOf(path));
                 SecureJar secureJar = SecureJar.from(JarContents.of(file));
-                nested.add(new Nested(path, file, secureJar, secureJar.name(), declaresMod(file),
-                        manifestMixinConfigs(file)));
+                nested.add(new Nested(declaredPath, file, secureJar, secureJar.name(),
+                        declaresMod(file), manifestMixinConfigs(file)));
+                collect(file, declaredPath, depth + 1, nested, skipped, seen);
             }
         }
-        return new Result(List.copyOf(nested), List.copyOf(skipped));
     }
 
     /**

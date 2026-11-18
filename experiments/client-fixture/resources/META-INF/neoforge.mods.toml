@@ -7,9 +7,10 @@ modId = "clientfixture"
 version = "1.0.0"
 displayName = "Client Registration Fixture"
 description = '''
-Registers one HUD layer (RegisterGuiLayersEvent) and one item decoration
-(RegisterItemDecorationsEvent). Used to verify the client registration replays
-of the hot-add runtime; it has no gameplay content.
+Registers one HUD layer (RegisterGuiLayersEvent), one item decoration
+(RegisterItemDecorationsEvent) and one shader (RegisterShadersEvent) whose
+JSON lives in this jar. Used to verify the client registration replays of the
+hot-add runtime; it has no gameplay content.
 '''
 
 [[dependencies.clientfixture]]

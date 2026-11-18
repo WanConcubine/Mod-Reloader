@@ -283,7 +283,7 @@ ModReloader **不会**自动下载、打包或修改启动器配置。
 可能他用的是 JBR + 参数，或者那个模组的目标类在他那里还没加载。`/modreloader jbr` 能看出 JVM 差异。
 
 **Q：JBR 能解决所有 AT 吗？**
-不能。JBR 的 late AT 只覆盖 access/final，且是实验性；目标不可改、规则不匹配、注册审计等仍会挡。
+不能。JBR 的 late AT 只覆盖**成员级** access/final（类级 `public-f` 去 final 会被拒绝并提示重启），且是实验性；目标不可改、规则不匹配、注册审计等仍会挡。
 stock JVM 上 AT 仍然只能重启。
 
 **Q：加参数后游戏打不开。**

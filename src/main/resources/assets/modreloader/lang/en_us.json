@@ -185,5 +185,7 @@
   "modreloader.jbr_setup.downloading": "Downloading…",
   "modreloader.jbr_setup.ready": "Ready, restarting…",
   "modreloader.jbr_setup.failed": "Failed: %s (the game keeps running; retry, or put the jar in mods/ and restart)",
-  "modreloader.jbr_setup.short": "Auto-install JBR"
+  "modreloader.jbr_setup.short": "Auto-install JBR",
+  "modreloader.failure.custom_registry.summary": "This mod creates its own registry during construction, which NeoForge only allows before startup finishes.",
+  "modreloader.failure.custom_registry.suggestion": "Restart the game with the jar in mods/. Hot-add cannot create registries after startup yet; nothing was committed if the window could not be opened."
 }

@@ -1,0 +1,27 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "MIT"
+
+[[mods]]
+modId = "registryfixture"
+version = "1.0.0"
+displayName = "Custom Registry Fixture"
+description = '''
+Creates one built-in registry (registryfixture:trades) and one entry during
+construction. Used to verify NewRegistryEvent replay in the hot-add runtime;
+it has no gameplay content.
+'''
+
+[[dependencies.registryfixture]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21.1,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.registryfixture]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1,1.22)"
+ordering = "NONE"
+side = "BOTH"

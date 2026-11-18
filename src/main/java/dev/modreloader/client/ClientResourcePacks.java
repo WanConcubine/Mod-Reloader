@@ -30,16 +30,6 @@ public final class ClientResourcePacks {
     }
 
     /**
-     * @param newReloadListeners client reload listeners the add registered; they
-     *                           only run on a reload, so the reload must not be
-     *                           skipped when this is non-zero
-     */
-    public static void inject(ModFile modFile, ModFileInfo fileInfo, Set<String> modIds,
-                              Rollback rollback, int newReloadListeners) {
-        injectAll(List.of(fileInfo), modIds, rollback, newReloadListeners);
-    }
-
-    /**
      * Adds the packs of the outer mod <em>and</em> its nested mods in one reload.
      *
      * <p>Nested mods carry their own {@code assets/}: Xaero's Minimap bundles
@@ -48,8 +38,9 @@ public final class ClientResourcePacks {
      * {@code shaders/core/xaerolib/framebuffer_lines.json not found}. Doing one
      * pack at a time would also mean one full resource reload per nested jar.
      */
-    public static void injectAll(List<ModFileInfo> fileInfos, Set<String> modIds,
-                                 Rollback rollback, int newReloadListeners) {
+    public static boolean injectAll(List<ModFileInfo> fileInfos, Set<String> modIds,
+                                    Rollback rollback, int newReloadListeners) {
+        boolean reloadRequested = false;
         try {
             List<ModFileInfo> withResources = new ArrayList<>();
             for (ModFileInfo fileInfo : fileInfos) {
@@ -67,7 +58,7 @@ public final class ClientResourcePacks {
                 ModReloader.LOGGER.info(
                         "[ModReloader] no client resources in {}; skipping the resource pack "
                                 + "injection and reload", modIds);
-                return;
+                return false;
             }
             Minecraft mc = Minecraft.getInstance();
             Map<IModFile, Object> packs = UnsafeAccess.getStatic(ResourcePackLoader.class, "modResourcePacks");
@@ -127,6 +118,7 @@ public final class ClientResourcePacks {
                 ModReloader.LOGGER.info("[ModReloader] resource packs selected after add: {} (new {})",
                         repository.getSelectedPacks().stream().map(Pack::getId).toList(), added);
                 requestReload(mc, String.valueOf(added));
+                reloadRequested = true;
             } else {
                 ModReloader.LOGGER.info("[ModReloader] no resource pack found for {}", modIds);
             }
@@ -135,6 +127,7 @@ public final class ClientResourcePacks {
         } catch (Throwable t) {
             ModReloader.LOGGER.warn("[ModReloader] resource pack injection failed", t);
         }
+        return reloadRequested;
     }
 
     // --- serialized reloads -------------------------------------------------

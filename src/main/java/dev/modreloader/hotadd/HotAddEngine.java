@@ -48,7 +48,7 @@ public final class HotAddEngine {
     public enum FailureKind {
         NONE, MISSING_FILE, NOT_A_MOD, LIBRARY, INVALID_METADATA, ALREADY_LOADED, MISSING_DEPENDENCY, JBR_REQUIRED,
         MIXIN_RUNTIME, NETWORK_PAYLOAD, UNSUPPORTED_TIER, CAPABILITY, MIXIN_CONFIG, MIXIN_TARGET, REDEFINE, MODULE, MODLIST, REGISTRY,
-        CONSTRUCT, EVENT, RESOURCE_PACK, DATAPACK, ACCESS_TRANSFORMER, CLIENT_REGISTRATION, JAR_IN_JAR,
+        CONSTRUCT, EVENT, RESOURCE_PACK, DATAPACK, ACCESS_TRANSFORMER, CLIENT_REGISTRATION, JAR_IN_JAR, CUSTOM_REGISTRY,
         COREMOD, ROLLBACK_PARTIAL, UNKNOWN
     }
 
@@ -470,6 +470,7 @@ public final class HotAddEngine {
                             registryCapability.describe());
                 }
                 RegistryStage.begin(rollback);
+                CustomRegistries.open(rollback);
             }
             PlatformHooks hooks = PlatformHooks.get();
             int keysBefore = hooks.keyMappingCount();
@@ -478,6 +479,23 @@ public final class HotAddEngine {
                 FmlEvents.construct(container);
                 constructed[0] = true;
                 loaded.add(container.getModId());
+            }
+            try {
+                // Layer definitions for every container, then the renderer rebuild:
+                // nested containers would otherwise bake layers the outer mod has
+                // not registered yet.
+                hooks.afterClientLifecycles(containers);
+            } catch (Throwable t) {
+                ModReloader.LOGGER.warn("[ModReloader] staged client replay failed", t);
+            }
+            if (registryContent) {
+                try {
+                    CustomRegistries.replay(containers);
+                } catch (Throwable t) {
+                    return fail(rollback, Stage.CONSTRUCT, FailureKind.CUSTOM_REGISTRY,
+                            "custom registry replay failed: " + t.getClass().getSimpleName()
+                                    + ": " + t.getMessage() + ". Restart with the jar in mods/.");
+                }
             }
             if (Boolean.getBoolean("modreloader.failAfterConstruct")) {
                 return fail(rollback, Stage.CONSTRUCT, FailureKind.UNKNOWN,
@@ -649,8 +667,26 @@ public final class HotAddEngine {
                         "[ModReloader] mixins of {} were applied before the failure; the client is "
                                 + "unstable until restarted", ids);
             }
-            return fail(rollback, stage, kindFor(stage), message);
+            FailureKind kind = kindFor(stage);
+            if (kind == FailureKind.CONSTRUCT || kind == FailureKind.UNKNOWN) {
+                if (mentionsCustomRegistry(t)) {
+                    kind = FailureKind.CUSTOM_REGISTRY;
+                    message += " (the mod creates its own registry during construction; hot-add "
+                            + "cannot do that without the registry window — restart with the jar in mods/)";
+                }
+            }
+            return fail(rollback, stage, kind, message);
         }
+    }
+
+    private static boolean mentionsCustomRegistry(Throwable throwable) {
+        for (Throwable current = throwable; current != null; current = current.getCause()) {
+            String text = current.getMessage();
+            if (text != null && text.contains("after NewRegistryEvent was fired")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** AT composition for the refusal message; never throws. */

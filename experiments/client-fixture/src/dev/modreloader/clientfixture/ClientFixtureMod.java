@@ -1,6 +1,8 @@
 package dev.modreloader.clientfixture;
 
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import net.minecraft.client.RecipeBookCategories;
+import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.inventory.RecipeBookType;
 import net.minecraft.world.item.Items;
@@ -9,9 +11,12 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.event.RegisterItemDecorationsEvent;
 import net.neoforged.neoforge.client.event.RegisterRecipeBookCategoriesEvent;
+import net.neoforged.neoforge.client.event.RegisterShadersEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.List;
 
 /**
@@ -24,11 +29,14 @@ import java.util.List;
  *
  * <ul>
  *   <li>a GUI layer ({@code clientfixture:hud_marker}) above all vanilla layers;</li>
- *   <li>an item decoration on {@code minecraft:diamond}.</li>
+ *   <li>an item decoration on {@code minecraft:diamond};</li>
+ *   <li>a shader ({@code clientfixture:marker}) whose JSON lives in this jar,
+ *       so the replay only works after the hot-add resource reload.</li>
  * </ul>
  *
  * <p>Used by {@code -PverifyAddCommand=<jar> -PverifyAddCommandModId=clientfixture
- * -PverifyGuiLayers=true -PverifyItemDecorators=true} (see
+ * -PverifyGuiLayers=true -PverifyItemDecorators=true} and by
+ * {@code -PverifyCompat=<jar> -PverifyShaderCount=1} (see
  * {@code docs/features/client-registration-audit.md}).
  */
 @Mod(ClientFixtureMod.MOD_ID)
@@ -36,13 +44,31 @@ public final class ClientFixtureMod {
     public static final String MOD_ID = "clientfixture";
     public static final ResourceLocation HUD_LAYER =
             ResourceLocation.fromNamespaceAndPath(MOD_ID, "hud_marker");
+    public static final ResourceLocation SHADER =
+            ResourceLocation.fromNamespaceAndPath(MOD_ID, "marker");
+    /** Set by {@link RegisterShadersEvent}'s consumer, like a real mod's static field. */
+    public static volatile ShaderInstance markerShader;
     private static final Logger LOGGER = LoggerFactory.getLogger("ClientFixture");
 
     public ClientFixtureMod(IEventBus modBus) {
         modBus.addListener(ClientFixtureMod::onRegisterGuiLayers);
         modBus.addListener(ClientFixtureMod::onRegisterItemDecorations);
         modBus.addListener(ClientFixtureMod::onRegisterRecipeBookCategories);
+        modBus.addListener(ClientFixtureMod::onRegisterShaders);
         LOGGER.info("[ClientFixture] constructed; listeners attached");
+    }
+
+    private static void onRegisterShaders(RegisterShadersEvent event) {
+        try {
+            ShaderInstance shader = new ShaderInstance(event.getResourceProvider(),
+                    SHADER.toString(), DefaultVertexFormat.POSITION_COLOR);
+            event.registerShader(shader, applied -> markerShader = applied);
+            LOGGER.info("[ClientFixture] registered shader {}", SHADER);
+        } catch (IOException e) {
+            // The fixture exists to fail loudly: a missing shader JSON must not
+            // look like "the replay worked".
+            throw new UncheckedIOException(e);
+        }
     }
 
     private static void onRegisterGuiLayers(RegisterGuiLayersEvent event) {

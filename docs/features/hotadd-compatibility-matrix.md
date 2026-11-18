@@ -198,5 +198,7 @@ is a datagen class, which a playing game never loads); access transformers only 
 - JBR 21 + flag：接受 `private → public`、去掉 `final`，按 public 编译的调用方随后可直接访问。
 
 实现与实测见 [late-at.md](late-at.md)：Jade 57 规则/39 目标全应用并 `ok=true`，JEI 34/34，
-Controlling 1/1，Jade 失败回滚 39/39 ok；JourneyMap 过了 AT 但被 `RegisterShadersEvent` 注册审计挡住。
-它仍限 JBR、opt-in、access/final、L1；不要把 §8 的“0/6”继续当成“AT 无能为力”。
+Controlling 1/1，Jade 失败回滚 39/39 ok。**2026-11-18 边界**：类级 `public-f`（去类的 `final`）不可用——
+JBR redefine 后该类的构造返回 null，再次 redefine 会 SIGSEGV，所以 late AT 前置拒绝；JourneyMap（`public-f NativeImage`）
+因此从“可热加”退回 BLACK（含在 [status.md](../status.md) 已知问题 43/44）。
+它仍限 JBR、opt-in、**成员级** access/final、L1；不要把 §8 的“0/6”继续当成“AT 无能为力”。

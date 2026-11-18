@@ -25,7 +25,7 @@
 | 环境 | 可热加、无 bug | 可热加、有 bug | 判不可加但可救 | 结构性不可加 |
 |---|---|---|---|---|
 | stock | T1 × 7 | T2 × 0 | T3 × 0 | BLACK × 23 |
-| JBR | J1 × 18 | J2 × 1 | — | BLACK × 5 |
+| JBR | J1 × 20 | J2 × 0 | — | BLACK × 4 |
 
 ## stock JVM（不靠 JBR）
 
@@ -54,7 +54,7 @@
 | Embeddium | embeddium-1.0.15+mc1.21.1.jar | GUIFEI | verified | access transformer（19 条） | stock harness 2026-11-18 kind=ACCESS_TRANSFORMER；替代：重启 / JBR late AT |
 | GeckoLib | geckolib-neoforge-1.21.1-4.9.3.jar | GUIFEI | verified | access transformer（27 条） | stock harness 2026-11-18 kind=ACCESS_TRANSFORMER；替代：重启 / JBR late AT（JBR redefine 仍失败） |
 | ModernFix | modernfix-neoforge-5.27.27+mc1.21.1.jar | GUIFEI | verified | access transformer（74 条） | stock harness 2026-11-18 kind=ACCESS_TRANSFORMER；替代：重启 / JBR late AT（JBR 仍失败且崩溃） |
-| Moonlight Lib | moonlight-1.21.1-3.8.3-neoforge.jar | GUIFEI | verified | 嵌套 mod codecui 自带 AT | stock harness 2026-11-18 kind=ACCESS_TRANSFORMER；替代：重启 / JBR（late AT 不覆盖嵌套） |
+| Moonlight Lib | moonlight-1.21.1-3.8.3-neoforge.jar | GUIFEI | verified | 外层 126 条 AT（嵌套 codecui 的 AT 文件是空的；空文件误判已修） | stock harness 2026-11-18 kind=ACCESS_TRANSFORMER；替代：重启 / JBR（late AT 覆盖到的成员级规则可应用） |
 | Supplementaries | supplementaries-1.21.1-4.1.1-neoforge.jar | GUIFEI | fixing | JiJ 已修；stock 仍缺 Moonlight 依赖，待重测 | stock harness 2026-11-18 kind=JAR_IN_JAR（修复前）；JiJ 修复后未复跑 stock |
 | Xaero 世界地图（Xaero's World Map） | xaeroworldmap-neoforge-1.21.1-1.47.0.jar | HUANGHOU | verified | 布局 mixin（loaded class）需 JBR | stock harness 2026-11-17 kind=JBR_REQUIRED；替代：重启 / JBR |
 | Xaero 小地图（Xaero's Minimap） | xaerominimap-neoforge-1.21.1-26.6.0.jar | HUANGHOU | verified | 布局 mixin（loaded class）需 JBR | stock harness 2026-11-17 kind=JBR_REQUIRED；替代：重启 / JBR |
@@ -62,7 +62,7 @@
 | 传送石碑（Waystones） | waystones-neoforge-1.21.1-21.1.47.jar | GUIFEI | verified | 布局 mixin（Entity 加接口）需 JBR（Balm 预装） | stock harness 2026-11-18 kind=JBR_REQUIRED；Balm 预置 run/mods；替代：JBR / 重启 |
 | 农夫乐事（Farmer's Delight） | FarmersDelight-1.21.1-1.3.4.jar | GUIFEI | verified | access transformer（16 条） | stock harness 2026-11-18 kind=ACCESS_TRANSFORMER；替代：重启 / JBR late AT（JBR 仍卡 RegisterRecipeBookCategoriesEvent） |
 | 帕秋莉手册（Patchouli） | Patchouli-1.21.1-93-NEOFORGE.jar | GUIFEI | verified | 布局 mixin（loaded class）需 JBR | stock harness 2026-11-18 kind=JBR_REQUIRED；替代：JBR / 重启 |
-| 旅行地图（JourneyMap） | journeymap-neoforge-1.21.1-6.0.9.jar | FEI | verified | access transformer（39 条） | stock harness 2026-11-17 kind=ACCESS_TRANSFORMER；替代：重启 / JBR（仍卡 RegisterShadersEvent） |
+| 旅行地图（JourneyMap） | journeymap-neoforge-1.21.1-6.0.9.jar | FEI | verified | access transformer（39 条，含类级 public-f NativeImage/ModelPart） | stock harness 2026-11-17 kind=ACCESS_TRANSFORMER；替代：重启（JBR late AT 也不适用，见 JBR 行） |
 | 物品管理器（JEI） | jei-1.21.1-neoforge-19.70.0.469.jar | GUIFEI | verified | access transformer（34 条） | stock harness 2026-11-17 kind=ACCESS_TRANSFORMER；替代：重启 / JBR late AT（L1 通过） |
 | 玉（Jade） | Jade-1.21.1-NeoForge-15.10.6.jar | FEI | verified | access transformer（57 条） | stock harness 2026-11-17 kind=ACCESS_TRANSFORMER；替代：重启 / JBR late AT（L1 通过） |
 | 铁氧体核心（FerriteCore） | ferritecore-7.0.3-neoforge.jar | FEI | verified | 布局 mixin（StateHolder 等）需 JBR | stock harness 2026-11-18 kind=JBR_REQUIRED；替代：JBR / 重启 |
@@ -71,7 +71,7 @@
 
 ## JBR（enhanced redefinition）
 
-### J1 · JBR 下可热加，未发现 bug（18）
+### J1 · JBR 下可热加，未发现 bug（20）
 
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|
@@ -83,7 +83,9 @@
 | Embeddium | embeddium-1.0.15+mc1.21.1.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（late AT 19 rule） |
 | GeckoLib | geckolib-neoforge-1.21.1-4.9.3.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（MixinAgentGuard） |
 | ModernFix | modernfix-neoforge-5.27.27+mc1.21.1.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18：单独与批次（GeckoLib→FerriteCore→ModernFix→MouseTweaks）均 ok=true isLoaded=true；MixinAgentGuard + 新 config 隔离 |
+| Moonlight Lib | moonlight-1.21.1-3.8.3-neoforge.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18：NewRegistryEvent 重放已实现（3 个注册表创建、commit 90→92、blocks 1060→1061、items 1333→1335、stoneId 稳定），ok=true isLoaded=true；所有者实例复测后转 verified |
 | Simple Voice Chat | voicechat-neoforge-1.21.1-2.6.27.jar | HUANGHOU | candidate | - | JBR harness 2026-11-18 ok=true isLoaded=true（无 AT；lateAt 批次） |
+| Supplementaries | supplementaries-1.21.1-4.1.1-neoforge.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18：JiJ 递归 + 自定义注册表 + 模型层重放后 ok=true isLoaded=true；blocks 1061→1306、items 1335→1584、层 213→234；所有者实例复测后转 verified |
 | Xaero 小地图（Xaero's Minimap） | xaerominimap-neoforge-1.21.1-26.6.0.jar | HUANGHOU | candidate | - | JBR harness 2026-11-17 ok=true isLoaded=true（含 JiJ xaerolib） |
 | ZeroCore2 | ZeroCore2-1.21.1-2.4.9.jar | GUIFEI | candidate | - | JBR harness 2026-11-17 ok=true isLoaded=true |
 | 农夫乐事（Farmer's Delight） | FarmersDelight-1.21.1-1.3.4.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（MixinAgentGuard；blocks 1060→1192 items 1333→1518） |
@@ -94,18 +96,11 @@
 | 饰品栏（Curios） | curios-neoforge-9.5.1+1.21.1.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（late AT 16 rule） |
 | 鼠标手势（Mouse Tweaks） | MouseTweaks-neoforge-mc1.21-2.26.1.jar | FEI | candidate | - | JBR harness 2026-11-17 ok=true isLoaded=true（redefined AbstractContainerScreen） |
 
-### J2 · JBR 下可热加，但有 bug（1）
-
-| 模组 | jar | tier | state | bug | 证据 |
-|---|---|---|---|---|---|
-| 旅行地图（JourneyMap） | journeymap-neoforge-1.21.1-6.0.9.jar | FEI | fixing | 资源重载崩溃：PalettedPermutations trim_palette / SpriteContents mip null（late AT/mixin 已修复） | JBR+lateAt harness 2026-11-18 ok=true 后崩溃（crash-2026-11-18_15.39.30-client.txt）；单独与批次均复现 |
-
-### BLACK · 结构性不可热加（5）
+### BLACK · 结构性不可热加（4）
 
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|
 | CraftTweaker | CraftTweaker-neoforge-1.21.1-21.0.39.jar | GUIFEI | verified | 自定义 registry 在 NewRegistryEvent 之后注册（crafttweaker:transformer_serializer） | JBR+lateAt harness 2026-11-17 kind=CONSTRUCT（villager trade converters → 自定义 registry 太晚）；替代：重启 |
-| Moonlight Lib | moonlight-1.21.1-3.8.3-neoforge.jar | GUIFEI | verified | 嵌套 mod codecui 的 AT（late AT 不覆盖嵌套 jar） | JBR+lateAt harness 2026-11-18 kind=ACCESS_TRANSFORMER；替代：重启 |
-| Supplementaries | supplementaries-1.21.1-4.1.1-neoforge.jar | GUIFEI | fixing | 缺 Moonlight 依赖（JiJ 已修；Moonlight 预装 dev 启动崩 codecui.Schema） | JBR+lateAt harness 2026-11-18：越过 MODULE/JiJ，kind=MISSING_DEPENDENCY；nested 2，containers [sablecompanion] |
 | Xaero 世界地图（Xaero's World Map） | xaeroworldmap-neoforge-1.21.1-1.47.0.jar | HUANGHOU | verified | 构造期失败：config channel 注册太晚 + XaeroWorldMapCore ClassNotFound | JBR harness 2026-11-17 kind=CONSTRUCT；替代：重启（可能是运行时可修的缺口） |
 | 传送石碑（Waystones） | waystones-neoforge-1.21.1-21.1.47.jar | GUIFEI | verified | EVENT：post-construct 失败且注册已部分生效（+44 方块 / +55 物品），需重启 | JBR harness 2026-11-18 kind=EVENT（Balm 先热加成功）；替代：重启（注册不可回滚） |
+| 旅行地图（JourneyMap） | journeymap-neoforge-1.21.1-6.0.9.jar | FEI | verified | 类级 AT 去 final 无法在运行期完成：ComparableNativeImage extends NativeImage（NativeImage 必须非 final） | JBR 21.0.11 probe：redefine 去掉类 final 后该类的构造全部返回 null（NativeImage.read → null）；随后再次 redefine 时 JVM SIGSEGV（ConstantPoolCacheEntry::clear_entry）；late AT 现在在改任何字节前拒绝（-PverifyCompat=journeymap -PlateAt=true → stage=VALIDATE kind=ACCESS_TRANSFORMER），需放 mods/ 重启由 FML 在加载期应用 |

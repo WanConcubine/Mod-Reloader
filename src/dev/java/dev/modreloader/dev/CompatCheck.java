@@ -32,6 +32,23 @@ public final class CompatCheck {
     private static final int TITLE_SETTLE_TICKS = 100;
     /** Gap between two adds so the client resource reload of the previous one settles. */
     private static final int PER_JAR_TICKS = 60;
+    /** Ticks to keep running after the last jar ({@code -PverifyCompatSettle=}). */
+    private static final int SETTLE_TICKS =
+            Integer.getInteger("modreloader.verifyCompatSettle", 40);
+    /**
+     * {@code -PverifyShaderCount=<n>}: assert that the hot-added jar(s) put at
+     * least n new entries into {@code GameRenderer}'s shader map. Shader replay
+     * only runs after the hot-add resource reload, so this also proves the
+     * ordering (the fixture's shader JSON is inside its own pack).
+     */
+    private static final int EXPECTED_SHADERS =
+            Integer.getInteger("modreloader.verifyShaderCount", -1);
+    /** {@code -PverifyCustomRegistry=<namespace:path>}: assert the hot-add created it. */
+    private static final String CUSTOM_REGISTRY =
+            System.getProperty("modreloader.verifyCustomRegistry", "").trim();
+    private static final int CUSTOM_REGISTRY_SIZE =
+            Integer.getInteger("modreloader.verifyCustomRegistrySize", 1);
+    private static int shadersBefore = -1;
     private static final int TIMEOUT_TICKS = 20 * 600;
 
     private static final List<Path> JARS = new ArrayList<>();
@@ -84,7 +101,9 @@ public final class CompatCheck {
             return;
         }
         if (index >= JARS.size()) {
-            if (ticks >= 40) {
+            if (ticks >= SETTLE_TICKS) {
+                verifyShaders();
+                verifyCustomRegistry();
                 ModReloader.LOGGER.info("[CompatCheck] DONE {}/{}", index, JARS.size());
                 finish();
             }
@@ -98,6 +117,9 @@ public final class CompatCheck {
     }
 
     private static void add(Path jar) {
+        if (shadersBefore < 0) {
+            shadersBefore = shaderCount();
+        }
         int blocksBefore = BuiltInRegistries.BLOCK.size();
         int itemsBefore = BuiltInRegistries.ITEM.size();
         String tier = "?";
@@ -135,6 +157,47 @@ public final class CompatCheck {
                 blocksBefore, BuiltInRegistries.BLOCK.size(), itemsBefore,
                 BuiltInRegistries.ITEM.size(), result.message());
         index++;
+    }
+
+    private static void verifyCustomRegistry() {
+        if (CUSTOM_REGISTRY.isEmpty()) {
+            return;
+        }
+        try {
+            var id = net.minecraft.resources.ResourceLocation.parse(CUSTOM_REGISTRY);
+            var registry = BuiltInRegistries.REGISTRY.get(id);
+            int size = registry == null ? -1 : registry.size();
+            boolean pass = registry != null && size >= CUSTOM_REGISTRY_SIZE;
+            ModReloader.LOGGER.info(
+                    "[CompatCheck] custom registry RESULT: {} ({} present={}, size={}, expected>={})",
+                    pass ? "PASS" : "FAIL", id, registry != null, size, CUSTOM_REGISTRY_SIZE);
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn("[CompatCheck] custom registry check failed", t);
+            ModReloader.LOGGER.info("[CompatCheck] custom registry RESULT: FAIL ({})", CUSTOM_REGISTRY);
+        }
+    }
+
+    private static void verifyShaders() {
+        if (EXPECTED_SHADERS < 0) {
+            return;
+        }
+        int after = shaderCount();
+        int added = shadersBefore < 0 || after < 0 ? -1 : after - shadersBefore;
+        boolean pass = added >= EXPECTED_SHADERS;
+        ModReloader.LOGGER.info("[CompatCheck] shaders RESULT: {} ({} -> {}, expected +{})",
+                pass ? "PASS" : "FAIL", shadersBefore, after, EXPECTED_SHADERS);
+    }
+
+    private static int shaderCount() {
+        try {
+            var renderer = net.minecraft.client.Minecraft.getInstance().gameRenderer;
+            Object shaders = dev.modreloader.hotadd.UnsafeAccess.get(
+                    renderer, net.minecraft.client.renderer.GameRenderer.class, "shaders");
+            return shaders instanceof java.util.Map<?, ?> map ? map.size() : -1;
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn("[CompatCheck] cannot read the shader map", t);
+            return -1;
+        }
     }
 
     private static void finish() {

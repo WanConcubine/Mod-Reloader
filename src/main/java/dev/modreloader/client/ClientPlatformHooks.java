@@ -49,6 +49,8 @@ import java.util.Set;
 public final class ClientPlatformHooks implements PlatformHooks {
     /** Reload listeners added by the current add; reset on every {@link #acceptClientLifecycle}. */
     private int lastReloadListeners;
+    /** Whether the current add requested a resource reload (its shader pass fires the event). */
+    private boolean lastReloadRequested;
 
     @Override
     public int keyMappingCount() {
@@ -60,8 +62,24 @@ public final class ClientPlatformHooks implements PlatformHooks {
     public void acceptClientLifecycle(ModContainer container) {
         DeferredWorkQueue queue = new DeferredWorkQueue(
                 "modreloader-" + container.getModId() + "-client");
-        container.acceptEvent(new FMLClientSetupEvent(container, queue));
-        queue.runTasks();
+        lastReloadRequested = false;
+        // Some mods call ItemBlockRenderTypes.setRenderLayer from client setup (or
+        // a deferred task). NeoForge guards that with ClientModLoader.isLoading();
+        // re-open the flag for the replay window, like the other internal toggles.
+        boolean wasLoading = net.neoforged.neoforge.client.loading.ClientModLoader.isLoading();
+        if (!wasLoading) {
+            UnsafeAccess.setStaticBoolean(
+                    net.neoforged.neoforge.client.loading.ClientModLoader.class, "loading", true);
+        }
+        try {
+            container.acceptEvent(new FMLClientSetupEvent(container, queue));
+            queue.runTasks();
+        } finally {
+            if (!wasLoading) {
+                UnsafeAccess.setStaticBoolean(
+                        net.neoforged.neoforge.client.loading.ClientModLoader.class, "loading", false);
+            }
+        }
         container.acceptEvent(new RegisterKeyMappingsEvent(Minecraft.getInstance().options));
         replayMenuScreens(container);
         // Kept for the resource-pack stage: a newly registered reload listener only
@@ -100,13 +118,31 @@ public final class ClientPlatformHooks implements PlatformHooks {
     }
 
     @Override
-    public void injectResourcePacks(java.util.List<ModFileInfo> fileInfos, Set<String> modIds,
-                                    Rollback rollback) {
-        ClientResourcePacks.injectAll(fileInfos, modIds, rollback, lastReloadListeners);
+    public void afterClientLifecycles(List<ModContainer> containers) {
+        ClientRegistrationReplay.replayStaged(containers);
+    }
+
+    @Override
+    public boolean injectResourcePacks(java.util.List<ModFileInfo> fileInfos, Set<String> modIds,
+                                       Rollback rollback) {
+        lastReloadRequested = ClientResourcePacks.injectAll(
+                fileInfos, modIds, rollback, lastReloadListeners);
+        return lastReloadRequested;
     }
 
     @Override
     public void afterHotAdd(java.util.List<ModContainer> containers) {
+        if (lastReloadRequested) {
+            // GameRenderer.reloadShaders runs as part of that reload and fires
+            // RegisterShadersEvent for every container already in ModList, which
+            // includes this hot-added one. Replaying it again would construct a
+            // second ShaderInstance for the same name, put it over the live one
+            // and leak the first.
+            ModReloader.LOGGER.info(
+                    "[ModReloader] shader replay skipped: the resource reload already ran "
+                            + "RegisterShadersEvent for the hot-added mod");
+            return;
+        }
         ClientRegistrationReplay.enqueueShaderReplay(containers);
     }
 

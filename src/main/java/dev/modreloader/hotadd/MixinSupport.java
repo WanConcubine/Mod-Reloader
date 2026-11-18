@@ -511,7 +511,12 @@ public final class MixinSupport {
             return;
         }
         try {
-            instrumentation.redefineClasses(new ClassDefinition(type, mixed));
+            try (AutoCloseable blanket = MixinAgentGuard.blanket()) {
+                // The mixed bytes are final: JBR's hierarchy update can redefine
+                // subclasses too, and letting any transformer run again would
+                // re-apply configs to classes that already contain them.
+                instrumentation.redefineClasses(new ClassDefinition(type, mixed));
+            }
             ClassBytesCache.put(dotted, mixed);
             redefined.add(dotted);
             ModReloader.LOGGER.info("[ModReloader] redefined {} with mixins ({} bytes)",
@@ -550,7 +555,9 @@ public final class MixinSupport {
         if (original == null) {
             throw new IllegalStateException("no original bytes captured for " + dotted);
         }
-        instrumentation.redefineClasses(new ClassDefinition(type, original));
+        try (AutoCloseable blanket = MixinAgentGuard.blanket()) {
+            instrumentation.redefineClasses(new ClassDefinition(type, original));
+        }
         ClassBytesCache.put(dotted, original);
         ModReloader.LOGGER.info("[ModReloader] rollback: restored class {} ({} bytes)",
                 dotted, original.length);
