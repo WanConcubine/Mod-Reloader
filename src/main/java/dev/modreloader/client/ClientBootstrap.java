@@ -86,6 +86,8 @@ public final class ClientBootstrap {
             probeDone = true;
             MixinProbe.probe(Path.of(probe)).forEach(ModReloader.LOGGER::info);
         }
+        // Shader JSONs arrive with the hot-add pack; wait for its reload.
+        ClientRegistrationReplay.processPendingShaderReplay();
     }
 
     /**

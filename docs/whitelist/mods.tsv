@@ -20,7 +20,7 @@ Balm	balm-neoforge-1.21.1-21.0.67.jar	eaae887582a67a02	jbr	J1	GUIFEI	-	candidate
 Controlling	Controlling-neoforge-1.21.1-19.0.5.jar	cc525fb6b030d9e4	jbr	J1	FEI	-	candidate	JBR+lateAt harness 2026-11-17 ok=true；late AT 1 rule / 1 target	2026-11-17
 玉（Jade）	Jade-1.21.1-NeoForge-15.10.6.jar	276f1f65a20d04f5	jbr	J1	FEI	-	candidate	JBR+lateAt harness 2026-11-17：reload 串行化修复后 4-jar 连加（Searchables→Controlling→Jade→JEI）无崩溃、屏幕正常恢复；原崩溃 crash-2026-11-17_20.13.47-client.txt（config translation）	2026-11-17
 物品管理器（JEI）	jei-1.21.1-neoforge-19.70.0.469.jar	9ab82d9bdbc8d9a0	jbr	J1	GUIFEI	-	candidate	JBR+lateAt harness 2026-11-17 ok=true（hot-added [mezz_config, jei]，34 rule）	2026-11-17
-旅行地图（JourneyMap）	journeymap-neoforge-1.21.1-6.0.9.jar	9bd7734542233d52	jbr	BLACK	FEI	CLIENT_REGISTRATION：RegisterShadersEvent 未重放	verified	JBR+lateAt harness 2026-11-17 kind=CLIENT_REGISTRATION；替代：重启	2026-11-17
+旅行地图（JourneyMap）	journeymap-neoforge-1.21.1-6.0.9.jar	9bd7734542233d52	jbr	J2	FEI	资源重载崩溃：PalettedPermutations trim_palette / SpriteContents mip null（late AT/mixin 已修复）	fixing	JBR+lateAt harness 2026-11-18 ok=true 后崩溃（crash-2026-11-18_15.39.30-client.txt）；单独与批次均复现	2026-11-18
 Rhino	rhino-2101.2.7-build.81+Rhino-1.21.jar	c79f19d9acea367a	stock	T1	PIN	-	candidate	stock harness 2026-11-17 ok=true isLoaded=true	2026-11-17
 JECharacters	jecharacters-neoforge-4.5.15.jar	a0579b63f3dee9a0	stock	T1	PIN	-	candidate	stock harness 2026-11-17 ok=true isLoaded=true（coremod 晚注入）	2026-11-17
 ZeroCore2	ZeroCore2-1.21.1-2.4.9.jar	4f853167fbeff977	stock	BLACK	GUIFEI	布局 mixin（loaded class）需 JBR	verified	stock harness 2026-11-17 kind=JBR_REQUIRED；替代：JBR / 重启	2026-11-17
@@ -43,7 +43,7 @@ Comforts	comforts-neoforge-9.0.5+1.21.1.jar	6b0fd35a1349107e	stock	BLACK	GUIFEI	
 Moonlight Lib	moonlight-1.21.1-3.8.3-neoforge.jar	d487a1101ab90998	stock	BLACK	GUIFEI	嵌套 mod codecui 自带 AT	verified	stock harness 2026-11-18 kind=ACCESS_TRANSFORMER；替代：重启 / JBR（late AT 不覆盖嵌套）	2026-11-18
 Supplementaries	supplementaries-1.21.1-4.1.1-neoforge.jar	84c06d5ab1a5dc20	stock	BLACK	GUIFEI	JiJ 已修；stock 仍缺 Moonlight 依赖，待重测	fixing	stock harness 2026-11-18 kind=JAR_IN_JAR（修复前）；JiJ 修复后未复跑 stock	2026-11-18
 Cloth Config API	cloth-config-15.0.140-neoforge.jar	65e722e0d98431a0	jbr	J1	PIN	-	candidate	JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（late AT 3 rule）	2026-11-18
-Architectury API	architectury-13.0.12-neoforge.jar	aa558d884c9d3539	jbr	BLACK	GUIFEI	CLIENT_REGISTRATION：RegisterShadersEvent 未重放（late AT 311 rule 已应用，耗时约 70s）	verified	JBR+lateAt harness 2026-11-18 kind=CLIENT_REGISTRATION；替代：重启 / 等事件重放补齐	2026-11-18
+Architectury API	architectury-13.0.12-neoforge.jar	aa558d884c9d3539	jbr	J1	GUIFEI	-	candidate	JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（ShaderReplay 事件重放；late AT 311 rule）	2026-11-18
 GeckoLib	geckolib-neoforge-1.21.1-4.9.3.jar	20a1995e4074f387	jbr	J1	GUIFEI	-	candidate	JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（MixinAgentGuard）	2026-11-18
 饰品栏（Curios）	curios-neoforge-9.5.1+1.21.1.jar	a45df2125c262199	jbr	J1	GUIFEI	-	candidate	JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（late AT 16 rule）	2026-11-18
 帕秋莉手册（Patchouli）	Patchouli-1.21.1-93-NEOFORGE.jar	959af52ed6640c31	jbr	J1	GUIFEI	-	candidate	JBR harness 2026-11-18 ok=true isLoaded=true（无 AT；redefined SmithingTrimRecipe 等）	2026-11-18

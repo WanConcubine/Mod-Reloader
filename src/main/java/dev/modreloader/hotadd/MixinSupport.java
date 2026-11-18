@@ -512,6 +512,7 @@ public final class MixinSupport {
         }
         try {
             instrumentation.redefineClasses(new ClassDefinition(type, mixed));
+            ClassBytesCache.put(dotted, mixed);
             redefined.add(dotted);
             ModReloader.LOGGER.info("[ModReloader] redefined {} with mixins ({} bytes)",
                     dotted, mixed.length);
@@ -550,6 +551,7 @@ public final class MixinSupport {
             throw new IllegalStateException("no original bytes captured for " + dotted);
         }
         instrumentation.redefineClasses(new ClassDefinition(type, original));
+        ClassBytesCache.put(dotted, original);
         ModReloader.LOGGER.info("[ModReloader] rollback: restored class {} ({} bytes)",
                 dotted, original.length);
     }
@@ -574,7 +576,11 @@ public final class MixinSupport {
                 // has already applied the newly prepared configs to the live class.
                 // Measured 2026-11-16: a refused interface mixin still ended up on
                 // `EditBox` while `redefined=[]`, i.e. the capture itself mutated it.
-                byte[] bytes = readClassResource(dotted);
+                // Prefer what this runtime last installed (late AT / earlier add).
+                byte[] bytes = ClassBytesCache.get(dotted);
+                if (bytes == null) {
+                    bytes = readClassResource(dotted);
+                }
                 if (bytes == null && type != null) {
                     ModReloader.LOGGER.warn(
                             "[ModReloader] no class-file resource for {}; falling back to a "

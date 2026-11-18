@@ -58,6 +58,13 @@ public interface PlatformHooks {
     void afterRegistryContent();
 
     /**
+     * The add completed. The client queues shader replay until its resource reload
+     * has finished (shader JSONs live in the new pack); the server does nothing.
+     */
+    default void afterHotAdd(List<ModContainer> containers) {
+    }
+
+    /**
      * Players reachable from this side's server. Used for anything that has to be
      * pushed to already-connected clients (registry snapshots, hot-add notices).
      *

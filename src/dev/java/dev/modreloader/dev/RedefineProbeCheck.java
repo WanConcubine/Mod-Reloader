@@ -22,6 +22,8 @@ import org.objectweb.asm.tree.TypeInsnNode;
 
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -77,6 +79,7 @@ public final class RedefineProbeCheck {
             for (String name : classes) {
                 probe(instrumentation, name, out);
             }
+            probeFinalRemoval(instrumentation, out);
         } catch (Throwable t) {
             out.add("FAIL setup: " + t.getClass().getSimpleName() + ": " + t.getMessage());
         }
@@ -123,6 +126,39 @@ public final class RedefineProbeCheck {
             run(instrumentation, type, addTriple(original), original, name, "add-three-methods", out);
         } catch (Throwable t) {
             out.add(name + " ERROR: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+        }
+    }
+
+    /** Does JBR's redefine actually drop {@code final} from a loaded method? */
+    private static void probeFinalRemoval(Instrumentation instrumentation, List<String> out) {
+        try {
+            Class<?> screen = Class.forName("net.minecraft.client.gui.screens.Screen", false,
+                    Minecraft.class.getClassLoader());
+            byte[] original = readClass(screen);
+            ClassNode node = read(original);
+            MethodNode target = null;
+            for (MethodNode method : node.methods) {
+                if (method.name.equals("init")
+                        && method.desc.equals("(Lnet/minecraft/client/Minecraft;II)V")) {
+                    target = method;
+                    break;
+                }
+            }
+            if (target == null) {
+                out.add("Screen.init remove-final SKIP: method not found");
+                return;
+            }
+            boolean before = (target.access & Opcodes.ACC_FINAL) != 0;
+            target.access &= ~Opcodes.ACC_FINAL;
+            instrumentation.redefineClasses(new ClassDefinition(screen, write(node)));
+            Method reflected = screen.getDeclaredMethod("init", Minecraft.class, int.class, int.class);
+            boolean after = Modifier.isFinal(reflected.getModifiers());
+            out.add("Screen.init remove-final before=" + before + " after=" + after);
+            instrumentation.redefineClasses(new ClassDefinition(screen, original));
+            out.add("Screen.init remove-final restore OK");
+        } catch (Throwable t) {
+            out.add("Screen.init remove-final FAIL: " + t.getClass().getSimpleName() + ": "
+                    + t.getMessage());
         }
     }
 

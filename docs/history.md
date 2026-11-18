@@ -1328,6 +1328,24 @@ C:\Dstick\[????????????]\.minecraft\libraries/cpw/mods/bootstraplauncher/...
 - 白名单：ModernFix 从 J2 升 JBR J1（candidate）；JBR 计数 J1×17 / J2×0 / BLACK×7。
 - 边界：若两个模组真正改同一个类，当前仍以原类字节为基底，尚未专门验证“同目标叠加”。
 
+## 2026-11-18（deepseek-flash）shader 重放 + 类字节缓存（Architectury J1、JourneyMap J2）
+
+- 新增 `client/ShaderReplay`：热加成功后在 `ClientRegistrationReplay` 入队，
+  等 `ClientResourcePacks` 的重载结束（shader JSON 在新 pack 里）再发
+  `RegisterShadersEvent`，把 shader 填进 `GameRenderer.shaders` 并调用 consumer。
+  审计把 `RegisterShadersEvent` 从 `crash` 移入 `covered`；负向夹具改用
+  `RegisterSpriteSourceTypesEvent`。
+- 新增 `hotadd/ClassBytesCache`：late AT 与 mixin 每次成功 redefine 后缓存实际字节，
+  回滚写回；`captureOriginals` 优先用缓存。修掉 JourneyMap 的
+  `public-f Screen init` 被 mixin 阶段用原始字节覆盖、`JmUILegacy` override final 失败。
+- 实测：Architectury（late AT 311 rule）`ok=true isLoaded=true`；shader 列表为 0。
+  JourneyMap 现在 `ok=true isLoaded=true`，但随后资源重载崩：
+  `PalettedPermutations` 大量 `trim_palette` 缺失 + `SpriteContents` mip null
+  （crash-2026-11-18_15.39.30-client.txt）；单独与批次均复现，shader 非空路径仍未验证。
+- 白名单：Architectury → JBR J1（candidate）；JourneyMap → JBR J2（state=fixing）；
+  JBR 计数 J1×18 / J2×1 / BLACK×5。
+- 单测 / `./gradlew test` PASS。
+
 ## 2026-11-18（deepseek-flash）复盘 + 文档/记忆整理（不改产品行为）
 
 所有者要求复盘并整理文档与记忆。本轮只改文档，不改代码行为。

@@ -126,8 +126,11 @@ public final class LateAccessTransformers {
                 return fail("JBR refused " + target + ": " + t.getClass().getSimpleName()
                         + ": " + t.getMessage());
             }
-            rollback.add("late AT " + target, () -> instrumentation.redefineClasses(
-                    new ClassDefinition(type, original)));
+            ClassBytesCache.put(target, rewritten.bytes());
+            rollback.add("late AT " + target, () -> {
+                instrumentation.redefineClasses(new ClassDefinition(type, original));
+                ClassBytesCache.put(target, original);
+            });
             applied++;
             messages.add("applied " + target + " (" + rewritten.matched() + " rule(s))");
             rewritten.unmatched().forEach(message -> messages.add("  " + message));

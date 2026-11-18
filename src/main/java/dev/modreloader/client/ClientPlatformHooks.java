@@ -106,6 +106,11 @@ public final class ClientPlatformHooks implements PlatformHooks {
     }
 
     @Override
+    public void afterHotAdd(java.util.List<ModContainer> containers) {
+        ClientRegistrationReplay.enqueueShaderReplay(containers);
+    }
+
+    @Override
     public void replayCommands() {
         if (!ServerCommands.available()) {
             // Title screen / no world yet: there is no integrated server to

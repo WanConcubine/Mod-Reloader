@@ -135,6 +135,8 @@ public final class RegistrationAudit {
             "net.neoforged.neoforge.client.event.RegisterParticleProvidersEvent",
             // client/RecipeBookCategoryReplay (copy of the live manager maps, then putAll)
             "net.neoforged.neoforge.client.event.RegisterRecipeBookCategoriesEvent",
+            // client/ShaderReplay (after the hot-add resource reload; GameRenderer map)
+            "net.neoforged.neoforge.client.event.RegisterShadersEvent",
             // NetworkAdaptation / RegistryStage / CapabilityReplay
             "net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent",
             "net.neoforged.neoforge.registries.RegisterEvent",
@@ -168,7 +170,6 @@ public final class RegistrationAudit {
      * listener lives on the consuming mod's bus).
      */
     private static final Set<String> CRASH = Set.of(
-            "net.neoforged.neoforge.client.event.RegisterShadersEvent",
             "net.neoforged.neoforge.client.event.RegisterSpriteSourceTypesEvent");
 
     /**

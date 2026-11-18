@@ -45,10 +45,10 @@ import java.util.zip.ZipOutputStream;
  */
 public final class RegAuditCheck {
     private static final int TITLE_SETTLE_TICKS = 100;
-    // Recipe book categories moved to "covered" on 2026-11-18; shaders are still
-    // a crash-level gap and remain the negative exemplar.
+    // Recipe book categories and shaders moved to "covered" on 2026-11-18;
+    // sprite source types are still a crash-level gap and remain the exemplar.
     private static final String CRASH_EVENT =
-            "net/neoforged/neoforge/client/event/RegisterShadersEvent";
+            "net/neoforged/neoforge/client/event/RegisterSpriteSourceTypesEvent";
     private static final String SILENT_EVENT =
             "net/neoforged/neoforge/client/event/RegisterDimensionSpecialEffectsEvent";
 

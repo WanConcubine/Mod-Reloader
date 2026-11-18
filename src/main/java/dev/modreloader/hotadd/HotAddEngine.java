@@ -614,6 +614,12 @@ public final class HotAddEngine {
                         ModList.get().getModContainerById(id).isPresent(),
                         keysBefore, keysAfter);
             }
+            try {
+                // Client: shader JSONs are in the new pack, so replay after its reload.
+                hooks.afterHotAdd(containers);
+            } catch (Throwable t) {
+                ModReloader.LOGGER.warn("[ModReloader] post-add client hook failed", t);
+            }
 
             String message = "hot-added " + loaded + " (modules " + moduleNames + ")";
             if (!mixinSummary.isEmpty()) {

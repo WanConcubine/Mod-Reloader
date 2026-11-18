@@ -40,7 +40,6 @@ class RegistrationAuditTest {
     @Test
     void eventsThatCrashWhenUsedAreFatal() {
         for (String event : List.of(
-                "net.neoforged.neoforge.client.event.RegisterShadersEvent",
                 "net.neoforged.neoforge.client.event.RegisterSpriteSourceTypesEvent")) {
             RegistrationAudit.Report report = classify(true, event);
             assertEquals(RegistrationAudit.Severity.CRASH,
@@ -49,6 +48,17 @@ class RegistrationAuditTest {
             assertTrue(report.shortNames(RegistrationAudit.Severity.CRASH).contains(
                     event.substring(event.lastIndexOf('.') + 1)), event);
         }
+    }
+
+    @Test
+    void shadersAreCoveredByTheReplay() {
+        // 2026-11-18: ShaderReplay waits for the hot-add resource reload, then
+        // posts the event and fills GameRenderer's shader map.
+        RegistrationAudit.Report report = classify(true,
+                "net.neoforged.neoforge.client.event.RegisterShadersEvent");
+        assertEquals(RegistrationAudit.Severity.COVERED,
+                report.entries().get(0).severity());
+        assertFalse(report.fatal());
     }
 
     @Test

@@ -20,7 +20,7 @@ NeoForge 的 mod bus 上有一批**只在启动时 fire 一次**的注册事件�
 | 形态 | 例子 | 用户怎么看到 |
 |---|---|---|
 | 静默 | `RegisterGuiLayersEvent`（已补）、`RegisterItemDecorationsEvent` | 少了个 HUD 元素 / 装饰，没人知道 |
-| 点一下崩 | `RegisterShadersEvent` | 自定义渲染时崩（tooltip 工厂 2026-11-16、配方书分类 2026-11-18 已重放，见下） |
+| 点一下崩 | —（`RegisterShadersEvent` 2026-11-18 已重放；tooltip 工厂、配方书分类也已重放） | 自定义渲染时崩 |
 | 行为变了 | `RegisterCapabilitiesEvent`、`ModifyDefaultComponentsEvent` | 机器不工作、组件缺失 |
 | 加载期崩 | `RegisterSpriteSourceTypesEvent`（资源重载） | 热加当次就崩 |
 
@@ -69,7 +69,7 @@ NeoForge 的 mod bus 上有一批**只在启动时 fire 一次**的注册事件�
 | `covered` | 我们已经重放/构造（`ClientRegistrationReplay` / `FmlEvents` / `NetworkAdaptation` / `RegistryStage`） | 无 |
 | `recurring` | 启动后还会再 fire（`ModelEvent.*`、`TextureAtlasStitchedEvent`、`BuildCreativeModeTabContentsEvent`、`SoundEngineLoadEvent`、`RegisterConfigurationTasksEvent`、`RenderLevelStageEvent`） | 无 |
 | `datagen` | `GatherDataEvent` / `RegisterGameTestsEvent` | 无 |
-| `crash` | 用到就崩：`RegisterShadersEvent`、`RegisterSpriteSourceTypesEvent`（粒子类 2026-11-16、配方书分类 2026-11-18 移入 `covered`） | **变更前拒绝**（`FailureKind.CLIENT_REGISTRATION`） |
+| `crash` | 用到就崩：`RegisterSpriteSourceTypesEvent`（粒子类 2026-11-16、配方书分类与 shader 2026-11-18 移入 `covered`） | **变更前拒绝**（`FailureKind.CLIENT_REGISTRATION`） |
 | `behavior` | 能跑但功能变了：默认组件、自注册 registry、属性/刷怪/POI、模型层（已 bake） | 大声 warn，**不拒绝** |
 | `silent` | 没有已知症状（物品装饰、维度特效、地图装饰…；HUD 层已移出，见下） | warn |
 | `base` | 抽象事件基类（`EntityRenderersEvent`、`RegisterColorHandlersEvent`、`DataPackRegistryEvent`）；真正 fire 的是具体子类 | 仅记录 |
@@ -79,7 +79,7 @@ NeoForge 的 mod bus 上有一批**只在启动时 fire 一次**的注册事件�
 **5/16 个模组**（众星捧月、ZeroCore2、AE2、Mekanism、ExtremeReactors2）都注册 capabilities，
 其中众星捧月是我们的 dogfood——直接拒绝会让内容模组全线不可热加，而它们的方块/物品/配方仍然能用。
 当时先把它归到 `behavior`（warn）并列为下一优先级；**2026-11-16 已补上重放**（`hotadd/CapabilityReplay`），
-现在归 `covered`。拒绝仍然只留给「一用就崩」的两类。决策记录见 [ADR-0012](../decisions/0012-registration-audit-severity.md)。
+现在归 `covered`。拒绝仍然只留给「一用就崩」的一类。决策记录见 [ADR-0012](../decisions/0012-registration-audit-severity.md)。
 
 ### 3.3 接进引擎
 
@@ -105,7 +105,7 @@ registration audit <ids>: N mod-bus event(s); covered [...]; crash [...]; behavi
 
 它做两件只读的事：① 扫描给定 jar 并逐条打印分级（**不热加**，所以 AT/缺依赖的 jar 也能进语料）；
 ② 现造两个最小 mod jar（`neoforge.mods.toml` + 一个字段引用事件），
-一个引用 `RegisterShadersEvent`（必须被 `HotAddEngine` 以 `CLIENT_REGISTRATION` 拒绝在 `VALIDATE`），
+一个引用 `RegisterSpriteSourceTypesEvent`（必须被 `HotAddEngine` 以 `CLIENT_REGISTRATION` 拒绝在 `VALIDATE`），
 一个只引用仍然没有重放的 `RegisterDimensionSpecialEffectsEvent`（必须**不**被判致命）。
 
 ## 4. 事件清单
@@ -122,9 +122,10 @@ registration audit <ids>: N mod-bus event(s); covered [...]; crash [...]; behavi
 `RegisterItemDecorationsEvent`（`client/ItemDecoratorReplay`，2026-11-16）、
 `RegisterParticleProvidersEvent`（`ClientRegistrationReplay#replayParticleProviders`，2026-11-16：容器定向重放，put-only）、
 `RegisterRecipeBookCategoriesEvent`（`client/RecipeBookCategoryReplay`，2026-11-18：复制 live manager map 后 putAll；
-客户端夹具新增 `registerBookCategories(CRAFTING, …)`，实测 `1 new, 4 aggregate / 1 type / 0 lookup`）。
+客户端夹具新增 `registerBookCategories(CRAFTING, …)`，实测 `1 new, 4 aggregate / 1 type / 0 lookup`）、
+`RegisterShadersEvent`（`client/ShaderReplay`，2026-11-18：等热加资源重载完成后向 `GameRenderer` 的 shader map 填入并调用 consumer；Architectury 已 PASS）。
 
-**已知崩溃（拒绝）**：`RegisterShadersEvent`、`RegisterSpriteSourceTypesEvent`。
+**已知崩溃（拒绝）**：`RegisterSpriteSourceTypesEvent`。
 
 **行为类（warn）**：`ModifyDefaultComponentsEvent`、`NewRegistryEvent`、`DataPackRegistryEvent.*`、
 `ModifyRegistriesEvent`、`EntityAttributeCreationEvent`、`EntityAttributeModificationEvent`、`RegisterSpawnPlacementsEvent`、
@@ -150,8 +151,7 @@ Mekanism、MekanismGenerators、ExtremeReactors2），共 **129 处事件引用*
 随后 `RegisterItemDecorationsEvent` 也移入 `covered`（1 处引用：Mekanism）；**2026-11-16 深夜第三轮**：
 `RegisterParticleProvidersEvent` 从 `crash` 移入 `covered`（2 处引用：AE2、Mekanism）→ 71 covered / 1 crash；
 总数仍是 129，没有任何当前 PASS 的模组变拒绝。）
-**2026-11-18**：`RegisterRecipeBookCategoriesEvent` 从 `crash` 移入 `covered`（Farmer's Delight 引用；
-`recipe book categories replayed: 1 new` 由客户端夹具实测）。上面的 129 处统计是历史快照，未重算。
+**2026-11-18**：`RegisterRecipeBookCategoriesEvent` 与 `RegisterShadersEvent` 从 `crash` 移入 `covered`；配方书由客户端夹具实测 `1 new`，shader 由 Architectury 热加 PASS 验证。上面的 129 处统计是历史快照，未重算。
 
 逐 jar（只列非空项）：
 

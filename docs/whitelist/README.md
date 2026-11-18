@@ -25,7 +25,7 @@
 | 环境 | 可热加、无 bug | 可热加、有 bug | 判不可加但可救 | 结构性不可加 |
 |---|---|---|---|---|
 | stock | T1 × 7 | T2 × 0 | T3 × 0 | BLACK × 23 |
-| JBR | J1 × 17 | J2 × 0 | — | BLACK × 7 |
+| JBR | J1 × 18 | J2 × 1 | — | BLACK × 5 |
 
 ## stock JVM（不靠 JBR）
 
@@ -71,10 +71,11 @@
 
 ## JBR（enhanced redefinition）
 
-### J1 · JBR 下可热加，未发现 bug（17）
+### J1 · JBR 下可热加，未发现 bug（18）
 
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|
+| Architectury API | architectury-13.0.12-neoforge.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（ShaderReplay 事件重放；late AT 311 rule） |
 | Balm | balm-neoforge-1.21.1-21.0.67.jar | GUIFEI | candidate | - | JBR harness 2026-11-17 ok=true isLoaded=true（含 JiJ kuma_api） |
 | Cloth Config API | cloth-config-15.0.140-neoforge.jar | PIN | candidate | - | JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（late AT 3 rule） |
 | Comforts | comforts-neoforge-9.0.5+1.21.1.jar | GUIFEI | candidate | - | JBR harness 2026-11-18 ok=true isLoaded=true（Balm 先热加） |
@@ -93,14 +94,18 @@
 | 饰品栏（Curios） | curios-neoforge-9.5.1+1.21.1.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（late AT 16 rule） |
 | 鼠标手势（Mouse Tweaks） | MouseTweaks-neoforge-mc1.21-2.26.1.jar | FEI | candidate | - | JBR harness 2026-11-17 ok=true isLoaded=true（redefined AbstractContainerScreen） |
 
-### BLACK · 结构性不可热加（7）
+### J2 · JBR 下可热加，但有 bug（1）
 
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|
-| Architectury API | architectury-13.0.12-neoforge.jar | GUIFEI | verified | CLIENT_REGISTRATION：RegisterShadersEvent 未重放（late AT 311 rule 已应用，耗时约 70s） | JBR+lateAt harness 2026-11-18 kind=CLIENT_REGISTRATION；替代：重启 / 等事件重放补齐 |
+| 旅行地图（JourneyMap） | journeymap-neoforge-1.21.1-6.0.9.jar | FEI | fixing | 资源重载崩溃：PalettedPermutations trim_palette / SpriteContents mip null（late AT/mixin 已修复） | JBR+lateAt harness 2026-11-18 ok=true 后崩溃（crash-2026-11-18_15.39.30-client.txt）；单独与批次均复现 |
+
+### BLACK · 结构性不可热加（5）
+
+| 模组 | jar | tier | state | bug | 证据 |
+|---|---|---|---|---|---|
 | CraftTweaker | CraftTweaker-neoforge-1.21.1-21.0.39.jar | GUIFEI | verified | 自定义 registry 在 NewRegistryEvent 之后注册（crafttweaker:transformer_serializer） | JBR+lateAt harness 2026-11-17 kind=CONSTRUCT（villager trade converters → 自定义 registry 太晚）；替代：重启 |
 | Moonlight Lib | moonlight-1.21.1-3.8.3-neoforge.jar | GUIFEI | verified | 嵌套 mod codecui 的 AT（late AT 不覆盖嵌套 jar） | JBR+lateAt harness 2026-11-18 kind=ACCESS_TRANSFORMER；替代：重启 |
 | Supplementaries | supplementaries-1.21.1-4.1.1-neoforge.jar | GUIFEI | fixing | 缺 Moonlight 依赖（JiJ 已修；Moonlight 预装 dev 启动崩 codecui.Schema） | JBR+lateAt harness 2026-11-18：越过 MODULE/JiJ，kind=MISSING_DEPENDENCY；nested 2，containers [sablecompanion] |
 | Xaero 世界地图（Xaero's World Map） | xaeroworldmap-neoforge-1.21.1-1.47.0.jar | HUANGHOU | verified | 构造期失败：config channel 注册太晚 + XaeroWorldMapCore ClassNotFound | JBR harness 2026-11-17 kind=CONSTRUCT；替代：重启（可能是运行时可修的缺口） |
 | 传送石碑（Waystones） | waystones-neoforge-1.21.1-21.1.47.jar | GUIFEI | verified | EVENT：post-construct 失败且注册已部分生效（+44 方块 / +55 物品），需重启 | JBR harness 2026-11-18 kind=EVENT（Balm 先热加成功）；替代：重启（注册不可回滚） |
-| 旅行地图（JourneyMap） | journeymap-neoforge-1.21.1-6.0.9.jar | FEI | verified | CLIENT_REGISTRATION：RegisterShadersEvent 未重放 | JBR+lateAt harness 2026-11-17 kind=CLIENT_REGISTRATION；替代：重启 |

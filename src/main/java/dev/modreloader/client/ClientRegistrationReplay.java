@@ -26,6 +26,7 @@ import net.neoforged.neoforge.client.gui.ClientTooltipComponentManager;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 
 import java.lang.invoke.MethodType;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.function.Function;
 import java.util.HashSet;
@@ -70,7 +71,34 @@ import java.util.Set;
  * dogfood does not hit that.
  */
 public final class ClientRegistrationReplay {
+    private static final List<ModContainer> PENDING_SHADERS = new ArrayList<>();
+
     private ClientRegistrationReplay() {
+    }
+
+    /** Shader resources must be loaded first; the caller queues after the add. */
+    public static void enqueueShaderReplay(List<ModContainer> containers) {
+        synchronized (PENDING_SHADERS) {
+            PENDING_SHADERS.addAll(containers);
+        }
+    }
+
+    /** Client tick: replay once the hot-add resource reload has finished. */
+    public static void processPendingShaderReplay() {
+        if (ClientResourcePacks.isReloading()) {
+            return;
+        }
+        List<ModContainer> pending;
+        synchronized (PENDING_SHADERS) {
+            if (PENDING_SHADERS.isEmpty()) {
+                return;
+            }
+            pending = new ArrayList<>(PENDING_SHADERS);
+            PENDING_SHADERS.clear();
+        }
+        for (ModContainer container : pending) {
+            ShaderReplay.replay(container);
+        }
     }
 
     /**
