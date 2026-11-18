@@ -163,19 +163,38 @@ coremod 只补 class 级变换。世界生成注册表已收窄到「标题屏�
 
 ## 下一步
 
-> 下一会话从 **P1-3 收尾**（push CI）或 **P3** 开始；P0/P1/P2 项已全部完成或已收口。
-> ⚠️ 本机 dev client 显示层不稳（曾连续两次卡在 `glfwSwapBuffers`）：显示恢复前优先做不需要 GL 的活（分析器、单测、`runServer`、文档）。
+> **当前交接（2026-11-18，commit `dbb57cf`，已推送）**。下一会话从这里接：
+>
+> - 已完成：JBR 自动准备端到端（macOS dev PASS）；白名单 54 行；配方书与 shader 事件重放；
+>   `MixinAgentGuard`、手动 transform 新 config 隔离、`ClassBytesCache`；Architectury/GeckoLib/
+>   FerriteCore/Farmer's Delight/ModernFix 已转 JBR J1（candidate）。
+> - JBR 计数：**J1×18 / J2×1 / BLACK×5**（最新数据见 [whitelist/mods.tsv](whitelist/mods.tsv)）。
+> - 下一项优先级：
+>   1. **已知问题 43**：JourneyMap 热加成功但资源重载崩（`PalettedPermutations trim_palette` /
+>      `SpriteContents` mip null；单独与批次均复现）。
+>   2. **ShaderReplay 非空路径**：Architectury 的 shader 列表为 0；需要一个真实注册 shader 的夹具。
+>   3. 剩余 JBR BLACK：CraftTweaker、Xaero's World Map、Moonlight、Supplementaries 等（逐个看是否可修）。
+>   4. PCL2/Windows 全链路仍未验证（已知问题 37）。
+> - 证据：`/tmp/wl-*.log` 可能被系统清理；结论已写入 history/status。JBR 在 `run/jbr-21.0.11`（gitignored），
+>   语料在 `/tmp/modreloader-corpus`。
+> - 风险：`MixinAgentGuard` 依赖 JDK/Mixin 内部字段（找不到会 no-op）；`ClassBytesCache` 不覆盖
+>   “eager loaded（未 redefine）”的目标。
+>
+> ⚠️ 本机 dev client 显示层不稳（曾连续两次卡在 `glfwSwapBuffers` / `Failed to find a primary monitor`）：
+> 优先做不需要 GL 的活；必须起客户端时一次一个场景。
 > 所有 harness 命令见 [AGENTS §2](../AGENTS.md)；**热加类 harness 要求 `run/mods/` 里没有众星捧月 jar**（备份 `/tmp/dogfood-runmods-backup.jar`）。
 
 | 优先 | 任务 | 关键点 / 落点 | 验收 |
 |---|---|---|---|
-| **P1-3** | Git 收尾 | workflow/tag/截图已就绪，只剩 push 上去让 CI 真跑一次 | Actions 绿 |
+| **P1-3** | Git 收尾 | 代码已推送（`6569599` / `dbb57cf`），只剩观察 Actions 是否绿、需要时打 tag | Actions 绿 |
 | **P0-新** | 流水线 L2 | 新 `-PverifyScenario`：标题屏热加 → 建世界 → N tick → HUD/按键/截图；先覆盖 minimap/mouse-gestures | 断言 + 截图证据 |
 | **P0-新** | 语料扩到 20–30 个常用模组 | 小地图/JEI/HUD/输入/前置库；把 `check` 放进 PR | 报告 + 矩阵 |
-| **P0-新** | 模组白名单实测（所有者驱动） | **2026-11-18 扩样后 54 行**：stock T1×7（众星捧月 owner 定级；Simple Voice Chat 新晋）/ BLACK×23；JBR J1×13 / J2×0 / BLACK×11。新增 14 个常用模组（Cloth Config、Architectury、GeckoLib、Curios、Patchouli、Embeddium、ModernFix、FerriteCore、Simple Voice Chat、Farmer's Delight、Waystones、Comforts、Moonlight、Supplementaries），全部 harness 证据已入表，JBR 通过项为 `candidate`，等所有者实例复测。见 [whitelist/mods.tsv](whitelist/mods.tsv) 与视图 [whitelist/README.md](whitelist/README.md)；规则 [mod-whitelist.md](features/mod-whitelist.md) | 所有者复测后 candidate → verified |
+| **P0-新** | 模组白名单实测（所有者驱动） | **2026-11-18 扩样后 54 行**：stock T1×7 / BLACK×23；**JBR J1×18 / J2×1 / BLACK×5**。新增 14 个常用模组全部入表；ModernFix、GeckoLib、FerriteCore、Farmer's Delight、Architectury 已由 harness 转 J1（candidate），JourneyMap J2（资源重载崩溃，见已知问题 43）。见 [whitelist/mods.tsv](whitelist/mods.tsv) 与视图 [whitelist/README.md](whitelist/README.md)；规则 [mod-whitelist.md](features/mod-whitelist.md) | 所有者复测后 candidate → verified |
 | **P0-新** | ✅ Jade J2 崩溃（已修） | 根因：旧 reload 完成时 vanilla 会 re-init 当前 Screen，而新 mod 的 ScreenEvent 在语言文件加载前触发 → Jade 断言缺翻译。修法：`ClientResourcePacks.requestReload` 串行化 reload（跑着就排队），链期间隐藏 Screen、最后一次 reload 后恢复；4-jar 复跑 0 崩溃、屏幕恢复 TitleScreen | owner 实例复验后 candidate → verified |
 | **P0-新** | Xaero's World Map：config channel 注册太晚 | JBR 下 `kind=CONSTRUCT`（`Attempted to register a config channel too late` + `XaeroWorldMapCore` CNFE）；可能是运行时可修缺口 | 修或确认只能重启 |
 | **P0-新** | late AT 硬化 | L2 功能（Jade tooltip/JEI 界面）、Mekanism/AE2、多 mod AT 冲突、嵌套 AT、Windows/Linux、默认 UX | [late-at.md](features/late-at.md) |
+| **P0-新** | JourneyMap 资源重载崩溃 | 已知问题 43：`PalettedPermutations trim_palette` / `SpriteContents` mip null；先查热加 reload 与 sprite atlas 生命周期、`pack_format: 9` 的 pack | 单独热加后不再崩 |
+| **P0-新** | ShaderReplay 非空路径 | 给客户端夹具加一个真实 shader（复用原版 shader JSON 或最小自定义），断言 `shaders replayed: 1 new` | 夹具 PASS |
 | **P0-新** | 消除“JBR 后仍需重启”的缺口 | 把 JBR BLACK / 只能重启的模组（Xaero's World Map、CraftTweaker、ModernFix 半应用等）列成缺口逐个修；重启不作为可接受结果（JBR 切换除外）。**2026-11-18 已修并复跑**：ModernFix 半应用（回滚顺序）、Supplementaries JiJ ClassCast（越过 JiJ，转 MISSING_DEPENDENCY）、配方书分类（夹具 `1 new`）、Mixin agent 二次 transform（`MixinAgentGuard`）+ 手动 transform 只保留新 config + `ClassBytesCache` → Farmer's Delight / GeckoLib / FerriteCore / ModernFix / Architectury 转 J1；JourneyMap 从 shader 拒绝转为 J2（资源重载崩溃，见 43）；嵌套 AT（Moonlight）仍待处理 | 缺口清零或写明结构性不可行 |
 | **P0-文案** | ✅ 玩家文案去参数名（2026-11-18） | 玩家界面不再出现 `lateAt`/`-XX`/`-D`：`preflight.access_transformer`、`gui.failure.jbr_late_at_hint`、`relaunch.jbr.late_at_warning`、`jbr_setup.body`、`toast.resume.late_at`、`jbr_guide.body` 等 14 个 key 改成“用 JBR 重启一次/自动准备”；`gui.env` 去掉 late AT 开关显示；`JbrSupport.hint()/diagnose()` 不再教玩家加参数；AT 失败消息同步去掉参数名 | `LangKeysTest.playerCopyDoesNotExposeJvmFlags` + `./gradlew test` / `build` PASS |
 | **P1-新** | JBR 端到端 + 探针 | ✅ **2026-11-18 macOS dev 端到端 PASS**（`-PverifyJbrFlow`）：stock Temurin → 真实下载 90.44 MB / SHA-512 / 解压到 `run/jbr-21.0.11` → `JbrSupport.installation()` 找到 → JBR 重启 → Mouse Tweaks/Balm/Cloth Config 全部 `ok=true isLoaded=true`。剩余：Windows/PCL2 真机、GUI 按钮点击、真实 redefine 探针、「装进 mods/ 并重启」 | 见 [jbr-support.md](features/jbr-support.md) §6 |
