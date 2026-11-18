@@ -1709,3 +1709,36 @@ late AT 从 class 资源（AT/mixin 之前的原始字节）重写已加载类�
 - 现象 3（待确认 UI 来源）：热加 architectury（无资源包、无屏幕重建）后左下角计数仍为 4；热加 Jade 触发
   资源重载/标题屏重建后变为 6。ModList 本身在两次 add 后都正确增长；若计数来自启动时缓存的界面文本，
   这是显示层缓存，不是 ModList 未更新。
+
+## 2026-11-18/19（Windows/PCL2 真机联调：构建链、late AT、Jade、Mekanism、监听）
+
+环境：Windows 11 + PCL2（forced JBR 21.0.11）+ NeoForge 1.21.1-266；游戏目录含中文和方括号。
+
+构建链（一次性踩坑，后续可复用）：
+- `maven.neoforged.net` 被 DNS 污染（解析到 31.13.x），代理节点到 CDN77 也返回 502；官方后备镜像
+  `https://neoforged.forgecdn.net/releases` 可直连。用临时 Gradle init 脚本把所有该源改到镜像。
+- 镜像缺 `net.neoforged:minecraft-dependencies:1.21.1`；从 Mojang 1.21.1 version JSON 的 97 个库重建完整 POM，
+  放进本地 maven 仓库，`createMinecraftArtifacts` 随即通过。
+- Gradle wrapper 8.8 官方源约 22KB/s，改用本机已缓存的 Gradle 8.10；工具链/Gradle JVM 都指向目录里的 JBR 21。
+- 中文路径会让测试 worker 的 `@argfile`（UTF-8）按 `sun.jnu.encoding=GBK` 解码，测试类全部 CNFE；
+  用 `subst X:` 映射 ASCII 盘跑构建。
+- `RelaunchScriptsTest` 两处断言写死 POSIX 路径，Windows 下 `Path.toString()` 是反斜杠；改为从同一 Path 取期望值，
+  `build` 全绿、**93/93**。
+
+真机结果（MixinRuntime + Jade/architectury/ftb-library 在 mods，Mekanism 后加入）：
+- architectury 13.0.12：23:36:02 → 23:37:11（约 69 秒，UI 阻塞），late AT 311 规则/150 类；
+  修复前 22:54 的 `TextureStateShard.blur` `IllegalAccessError` 不再出现，`isLoaded=true`。
+- Jade 15.10.6：热加成功（`Font`/`Font$StringRenderOutput`/`Entity` 等 5 类 redefine，keyMappings 34→39）；
+  但 `FontMixin` 新增的 4 个 glint 字段在旧 `Font` 实例上是 0（构造器里应为 NaN），文字约 65% 亮度（问题 56）。
+- ftb-library：类级 `-f`（`TextColor`）被前置拒绝，符合“类级 AT 需启动期”的边界。
+- Mekanism 10.7.19：预检贵妃档；`RegisterRenderers` 早于注册表提交重放，`mekanism:robit` 的
+  `DeferredHolder` 未绑定 → 标题屏渲染崩溃（问题 58）。已把层/渲染器重放移到 `commit + finishAll` 之后，
+  **修复 jar 未真机复验**。
+- 自身 jar 替换：游戏运行时覆盖 modreloader 的 jar，轮询路径没有“已加载 modId”过滤，把它当新候选弹 toast；
+  底层 SecureJarHandler 的 jar 被替换，加载未加载类时 `NoClassDefFoundError`（问题 57，已修）。
+- 左下角模组数 4→4→6：两次 add 后 ModList 实际都增长；architectury 无资源包不重建标题屏，文本保持旧值，
+  Jade 的资源重载重建标题屏后刷新为 6。计数文本的具体 UI 来源尚未确认。
+
+提交：`3e0ebf2`（late AT 保 AT）、`664d084`（Windows 测试断言）、`6d409c7`（新增字段警告）、
+`93d68be`（status/history）、`685aa5a`（渲染器顺序）、`29ef9e6`（监听过滤）。
+未验证：Mekanism 修复后重跑、Jade 重启后字体确认、计数 UI 来源、Windows 下「准备环境」全链路。

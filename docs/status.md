@@ -1,7 +1,7 @@
 # 项目状态
 
 > **唯一状态源。** 每次会话先读这里；改状态只改这里，不要在各处复制。过程记录见 [history.md](history.md)。
-> 最后更新：2026-11-18
+> 最后更新：2026-11-19
 
 ## 一句话
 
@@ -104,6 +104,13 @@
   `IllegalAccessError`；Jade 15.10.6 热加成功（Font/Font$StringRenderOutput 等 5 类 redefine）。
   同一会话暴露两类边界：Jade 的 `FontMixin` 给已加载 `Font` 新增 4 个实例字段，旧实例字段为 0 而非构造器里的
   `NaN`，文字被压到约 65% 亮度（问题 56）；ftb-library 因类级 `-f`（`TextColor`）被前置拒绝，符合设计。
+- **Windows 构建链（2026-11-18/19）**：Gradle 8.10（wrapper 8.8 官方源约 22KB/s，改用本机缓存）+ JBR 21 toolchain，
+  `build` 绿、**93/93 单测**；`maven.neoforged.net` DNS 污染期间用官方 `neoforged.forgecdn.net` 镜像 +
+  本地重建的 `minecraft-dependencies:1.21.1` POM；中文路径用 `subst X:` 绕过 Gradle worker argfile 的 GBK 解码。
+- **渲染器重放顺序（2026-11-18，已修待复验）**：层/渲染器重放从 construct 之后移到注册表提交 + 生命周期之后；
+  Mekanism 10.7.19 真机首次复现 `mekanism:robit` 未绑定 NPE，修复后的 jar 尚未重跑（用户时间到）。
+- **监听轮询已加载过滤（2026-11-18，已修）**：轮询路径原先没有“modId 已加载”过滤；游戏运行时替换自身 jar
+  被当成新候选并弹 toast，底层 jar 被替换导致 `NoClassDefFoundError`。现在两路径都跳过并要求重启（问题 57）。
 
 ### 未验证
 
@@ -183,6 +190,17 @@
     这是问题 45（新增字段不初始化）的第二个实例；`layoutChange` 现在把字段增减也算作布局变更：无 JBR 前置拒绝，
     JBR 下照常尝试并额外打印“旧实例保持 JVM 默认值，需重启才完全正确”的警告。Jade 的变暗不是崩溃，
     实测重启并让 Jade 正常加载即可恢复；是否把 Jade 记为“需重启才正确渲染”由所有者按白名单规则决定。
+57. ✅ **轮询把已加载 mod 的替换 jar 当新候选（2026-11-18 真机，已修）**：轮询 `scan()` 只过滤 ignored/failed，
+    没有“modId 已加载”检查（手动 `scanNow()` 有）。在游戏运行时覆盖 `modreloader` 自身 jar 后，它被当成新候选并
+    弹 toast；底层 `SecureJarHandler` 指向的 jar 已被替换，加载尚未加载的类时 `NoClassDefFoundError`（类在新 jar 里
+    实际存在），客户端崩溃。现在两路径都按 `inspection.alreadyLoaded()`/modId 过滤，日志提示“替换/更新已加载的 jar
+    需要重启”。**运行时不要替换正在使用的 mod jar**；更新路径仍不支持。
+58. **层/渲染器重放在注册表提交之前（2026-11-18 真机发现，已修待复验）**：Mekanism 10.7.19（预检贵妃档）热加时，
+    `EntityRenderersEvent$RegisterRenderers` 在 `RegistryStage.commit` 之前重放，mod 的 `DeferredHolder` 尚未绑定：
+    `NPE: unbound value ResourceKey[minecraft:entity_type / mekanism:robit]`，随后标题屏渲染崩溃。
+    启动期顺序是“注册表冻结 → common setup → client setup → renderers”；现已把 staged 的层/渲染器重放移到
+    `FmlEvents.finishAll` + `RegistryStage.commit` 之后（仍在资源包注入之前），层先于渲染器、全容器先层不变。
+    **修复后的 jar 尚未在真机重跑 Mekanism**（用户时间到）；下次直接热加 Mekanism 复验。
 
 ## 玩家侧原则（ADR-0015，2026-11-18 最终）
 
@@ -232,10 +250,11 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近三条。
 
+- **2026-11-19（Windows 联调收尾）**：Windows/PCL2/JBR 真机跑通构建（93/93）与 late AT（architectury 311 规则，
+  不再 `TextureStateShard.blur` 崩溃）；Jade 暴露问题 56（新增字段不初始化旧实例，字体变暗）；Mekanism 暴露问题 58
+  （渲染器重放早于注册表提交，已修待复验）；问题 57（轮询把已加载 mod 的替换 jar 当候选，已修）。
 - **2026-11-18（late AT 保 AT，真机 PASS）**：late AT 改为优先抓活类字节（抑制 transformer 后 retransform），
   architectury 真机热加 311 规则/150 类不再触发 `TextureStateShard.blur` 的 `IllegalAccessError`；
   同批 Jade 暴露“新增字段不初始化旧实例”的变暗问题（问题 56，已加警告）。
 - **2026-11-18（统一「准备热加载环境」动作）**：JBR 入口收口为一个按钮：复用已装/运行中的 JBR，缺失才下载解压到
   `gameDir/jbr-21.0.11`，重启带齐 enhanced + lateAt；菜单未就绪时常驻入口，失败屏同文案。菜单截图验证。
-- **2026-11-18（JBR 识别三态 + 菜单标识）**：修“启动器已选 JBR 却被要求用 JBR 重启”；菜单左上角彩色标识，
-  文案按状态区分，`installation()` 优先复用运行中的 JBR。截图与 relaunch plan 验证。
