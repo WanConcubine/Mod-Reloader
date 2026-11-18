@@ -90,22 +90,27 @@ class RelaunchScriptsTest {
 
     @Test
     void posixScriptWaitsBeforeStarting() {
-        String script = RelaunchScripts.posix(Path.of("/jbr/bin/java"),
-                List.of("-cp", "/a b/c.jar", "Main"), Path.of("/game dir"), 3);
+        Path java = Path.of("/jbr/bin/java");
+        Path gameDir = Path.of("/game dir");
+        String script = RelaunchScripts.posix(java,
+                List.of("-cp", "/a b/c.jar", "Main"), gameDir, 3);
         assertTrue(script.startsWith("#!/bin/sh\n"));
         assertTrue(script.contains("sleep 3\n"));
-        assertTrue(script.contains("cd '/game dir' || exit 1"));
-        assertTrue(script.contains("exec '/jbr/bin/java' '-cp' '/a b/c.jar' 'Main'"));
+        // Path.toString() uses the platform separator: '/' on POSIX, '\' on Windows.
+        assertTrue(script.contains("cd '" + gameDir + "' || exit 1"));
+        assertTrue(script.contains("exec '" + java + "' '-cp' '/a b/c.jar' 'Main'"));
     }
 
     @Test
     void windowsScriptQuotesAndDoublesPercent() {
-        String script = RelaunchScripts.windows(Path.of("C:/jbr/bin/java.exe"),
-                List.of("-Dfoo=%BAR%", "C:/a b/game.jar"), Path.of("C:/game"), 3);
+        Path java = Path.of("C:/jbr/bin/java.exe");
+        Path gameDir = Path.of("C:/game");
+        String script = RelaunchScripts.windows(java,
+                List.of("-Dfoo=%BAR%", "C:/a b/game.jar"), gameDir, 3);
         assertTrue(script.startsWith("@echo off\r\n"));
         assertTrue(script.contains("timeout /t 3 /nobreak >nul"));
-        assertTrue(script.contains("cd /d \"C:/game\""));
-        assertTrue(script.contains("\"C:/jbr/bin/java.exe\""));
+        assertTrue(script.contains("cd /d \"" + gameDir + "\""));
+        assertTrue(script.contains("\"" + java + "\""));
         assertTrue(script.contains("\"-Dfoo=%%BAR%%\""));
         assertTrue(script.contains("\"C:/a b/game.jar\""));
     }
