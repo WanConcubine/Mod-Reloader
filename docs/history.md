@@ -1624,3 +1624,25 @@ Xaero 的 “config channel too late” 不在 NeoForge，而在 **XaeroLib 自�
 - 世界内 add（`-PverifyAddCommand`）：命令返回 1，但 integrated server 玩家 tick NPE —— `WorldMap.serverPlayerTickHandler` 为 null，
   因为它在 `ServerStartedEvent` 里创建，而世界内热加不会再触发该事件 → 记为**问题 52**（服务端一次性事件未重放，ADR-0007）。
 白名单 World Map JBR BLACK → **J2（candidate）**；计数 J1×20 / J2×1 / BLACK×3。
+
+## 2026-11-18（问题 52：服务端一次性事件定向重放——已实现，未验证；新挂起问题 54）
+
+实现：
+- `EventBusSnapshot.addedSince(snapshot)`：取出本次 add 新增的 game-bus 监听器（快照差值）。
+- 新增 `hotadd/ServerLifecycleReplay`：只对这些新监听器调用 `ServerStartingEvent` / `ServerStartedEvent`；
+  先按 bus 的 `ListenerList` 取匹配集，若与 owner map 不是同一实例则“逐个试调用、类型不符跳过”；
+  服务端实例先 `ServerLifecycleHooks.getCurrentServer()`，为空再反射 `Minecraft#getSingleplayerServer`（集成服）；
+  在 add 成功路径的最后调用（注册表/datapack 已就绪，后面没有可失败步骤）。
+- `EventBusSnapshot.addedSince` 的首次实现有泛型编译错误，已修。
+
+复跑 `-PverifyAddCommand=<xaeroworldmap>` 两次：都卡在
+`Mixin compatibility level set to JAVA_21 after xaerolib.neoforge.mixins.json` 之后（约 10 分钟无日志），
+未走到重放；两个客户端 JVM 需 `kill -9`。之前同一场景能跑完（19:43/19:46），所以是间歇/时序问题 —— 记为**问题 54**，
+下次先 `jstack` 留线程栈（看 Mixin/transform 锁与常驻 guard）再决定修法。
+
+同时确认了 World Map 的另一个阻碍（问题 53）：`loadLater` 在 `FMLClientSetupEvent` 的 deferred queue 里通过
+`Minecraft.getResourceManager()` 读自己的 `vanillaStatesResource`，此时热加资源包还没注入 → `Optional.get()` 抛
+`NoSuchElementException`。需要让包在 client setup deferred task 之前可见，或重跑这些 task。
+
+另：`MixinAgentGuard` 的“包裹全部 transformer”在 19:47 的挂起后被收窄回“只包 Mixin agent”（`blanket()` 已覆盖 redefine 路径），
+**Supplementaries/问题 47 的修复需要在收窄后复验一次**。

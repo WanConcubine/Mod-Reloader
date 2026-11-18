@@ -85,6 +85,44 @@ public final class EventBusSnapshot {
     }
 
     /**
+     * Listener instances that appeared after {@code snapshot} was taken, in bus
+     * order. Used to replay one-shot <em>game-bus</em> events for the hot-added
+     * mod only (posting them globally would re-run every other mod's handler).
+     *
+     * @return the new listeners, or an empty list when the bus cannot be read
+     */
+    public static List<EventListener> addedSince(Snapshot snapshot) {
+        if (snapshot == null) {
+            return List.of();
+        }
+        try {
+            Map<?, ?> live = ownerMap();
+            if (live == null) {
+                return List.of();
+            }
+            Set<EventListener> before = Collections.newSetFromMap(new IdentityHashMap<>());
+            for (List<EventListener> listeners : snapshot.byOwner().values()) {
+                before.addAll(listeners);
+            }
+            List<EventListener> added = new ArrayList<>();
+            for (Object value : live.values()) {
+                if (!(value instanceof List<?> listeners)) {
+                    continue;
+                }
+                for (Object candidate : listeners) {
+                    if (candidate instanceof EventListener listener && !before.contains(listener)) {
+                        added.add(listener);
+                    }
+                }
+            }
+            return List.copyOf(added);
+        } catch (Throwable t) {
+            warnOnce(t);
+            return List.of();
+        }
+    }
+
+    /**
      * Removes every listener that appeared after {@code snapshot} was taken.
      *
      * @return how many listener instances were removed, or -1 when it could not run

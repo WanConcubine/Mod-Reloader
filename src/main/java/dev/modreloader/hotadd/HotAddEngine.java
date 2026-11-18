@@ -651,6 +651,10 @@ public final class HotAddEngine {
             if (!coremodSummary.isEmpty()) {
                 message += coremodSummary.get(0);
             }
+            // Server-level one-shot events (ServerStarting/ServerStarted) only for
+            // this add's listeners. Runs last: nothing failure-prone follows, and
+            // the mod's registries/data packs are already in place.
+            ServerLifecycleReplay.replay(busSnapshot);
             XaeroLibChannels.close();
             ModReloader.LOGGER.info("[ModReloader] {}", message);
             return new Result(true, message);

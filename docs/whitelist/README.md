@@ -100,7 +100,7 @@
 
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|
-| Xaero 世界地图（Xaero's World Map） | xaeroworldmap-neoforge-1.21.1-1.47.0.jar | HUANGHOU | candidate | 热加成功；进世界后服务端初始化缺失（ServerStartedEvent 未重放，serverPlayerTickHandler null）；标题屏 loadLater 崩（需已有世界） | JBR harness 2026-11-18：ConfigChannelRegistry frozen 窗口生效，CompatCheck ok=true isLoaded=true；标题屏 tick 抛 NoSuchElementException（模组自身 loadLater）；世界内 add 返回 1 后 integrated server 玩家 tick NPE（WorldMap.serverPlayerTickHandler null）。需重放 ServerStartedEvent / 用已有存档复测 |
+| Xaero 世界地图（Xaero's World Map） | xaeroworldmap-neoforge-1.21.1-1.47.0.jar | HUANGHOU | candidate | 热加成功；进世界后服务端初始化缺失（ServerStartedEvent 未重放，serverPlayerTickHandler null）；标题屏 loadLater 崩（需已有世界） | JBR harness 2026-11-18：ConfigChannelRegistry frozen 窗口生效，CompatCheck ok=true isLoaded=true；标题屏 tick 抛 NoSuchElementException（模组自身 loadLater）；世界内 add 返回 1 后 integrated server 玩家 tick NPE（WorldMap.serverPlayerTickHandler null）。需重放 ServerStartedEvent / 用已有存档复测；2026-11-18 晚：`ServerStarting/Started` 定向重放已实现但未验证（进入世界复跑卡在 xaerolib mixin 阶段，需 jstack） |
 
 ### BLACK · 结构性不可热加（3）
 

@@ -154,12 +154,14 @@
 44. **类级 AT 去 final 是 JBR 结构性边界**：实例构造返回 null，后续 redefine SIGSEGV；“AT 覆盖 access/final”只指**成员级**；需启动期类变换或 JBR 修复。
 45. **mixin 新增实例字段不初始化已存在对象**：JourneyMap 给 `DynamicTexture` 加字段，老 `LightTexture` 上为 null，退出时 `onClose` 注入 NPE（只影响退出）。
 46. ✅ **自定义注册表（`NewRegistryEvent`）已支持（2026-11-18）**：构造期临时恢复 `pendingModdedRegistries`，构造后只对新容器 fire `NewRegistryEvent` 并调用包私有 `fill()`；`RegisterEvent`/freeze/快照由现有 `RegistryStage` 动态覆盖。夹具 + Moonlight 验证；失败语义：`fill()` 之后失败只能 dirty。datapack 注册表、`ModifyRegistriesEvent` 仍不重放。见 [research-newregistry-hotadd.md](research-newregistry-hotadd.md)。
-47. ✅ **late AT 对已混入的类二次 transform（2026-11-18，已修）**：Supplementaries 的 AT redefine `Entity`（Moonlight 已混入）时，Mixin agent 仍二次注入 → `ClassFormatError`。修法：`MixinAgentGuard` 改为**包裹全部 transformer 的常驻 wrapper**，并在每次 `redefineClasses` 期间用 `blanket()` **全局抑制**（JBR 该路径不一定传类名，按名匹配不可靠）。复跑日志：`transform guard installed (4 transformer(s) wrapped)`、Moonlight `ok=true`，Entity 不再报错。同类问题（40/41）的第三份。
+47. ✅ **late AT 对已混入的类二次 transform（2026-11-18，已修）**：Supplementaries 的 AT redefine `Entity`（Moonlight 已混入）时，Mixin agent 仍二次注入 → `ClassFormatError`。修法：`MixinAgentGuard` 改为常驻 wrapper（2026-11-18 晚已收窄为只包 Mixin agent，靠 `blanket()` 覆盖其它路径，待复验），并在每次 `redefineClasses` 期间用 `blanket()` **全局抑制**（JBR 该路径不一定传类名，按名匹配不可靠）。复跑日志：`transform guard installed (4 transformer(s) wrapped)`、Moonlight `ok=true`，Entity 不再报错。同类问题（40/41）的第三份。
 48. ✅ **嵌套 `MixinSquared` bootstrap（2026-11-18，已修）**：`JarInJar` 递归拆包后，Supplementaries 的 3 个嵌套库（`mixinsquared.forge` / `MixinSquared` / `sable.companion.common`）全部进入 module path，`mixinsquared.forge.init.mixins.json` 能加载其 `MixinSquaredBootstrap`；Supplementaries 越过 MIXIN/CONSTRUCT，注册了 blocks 1061→1306、items 1335→1584。
 49. ✅ **模型层/Skull 模型（2026-11-18，已修）**：`RegisterLayerDefinitions` 现在会被重放，随后调用 `EntityModelSet.onResourceManagerReload` 重建 roots（`LayerDefinitions.createRoots()` 会合并 `ClientHooks` 的静态表）；层回放与“重建 renderer”拆成两阶段、**全容器先层后渲染器**（否则嵌套容器先重建，外层层的模型还没注册）。`ItemBlockRenderTypes.setRenderLayer` 的 client-loading 门禁在 FMLClientSetup 重放窗口内临时放开（`ClientModLoader.loading`，消费者只有该门禁和 options 保存保护）。实测 Supplementaries 层 213→234、无 `No model for layer`、`ok=true`。
 50. **失败回滚对 late-AT 重定义过的类可能 VerifyError（2026-11-18）**：Supplementaries 失败后回滚 `MineshaftPieces$MineShaftPiece` 报 `VerifyError: null`，`kind=ROLLBACK_PARTIAL`。回滚写回的是 late AT 之前的字节，但该类的后续加载/重定义可能已经改变了校验状态；需要专门复现，失败时至少保证“可重启的干净状态”并明确提示。
 51. **无焦点 + 热加重载隐藏 screen 会撞 `PauseScreen` NPE（2026-11-18，测试环境）**：`-PnoFocus=true` 时窗口失焦，`GameRenderer.render` 调 `pauseGame`；而 `ClientResourcePacks` 在 reload 链期间把 `mc.screen` 置空，`PauseScreen.createPauseMenu` 读到 `minecraft.player == null` → NPE（crash-2026-11-18_19.18.27）。**多 add/重载场景用聚焦窗口跑**（不带 `-PnoFocus`）；无焦点只用于单 add/短重载。
-52. **世界内热加不重放服务端一次性事件（2026-11-18）**：Xaero World Map 在 `ServerStartedEvent` 里创建 `WorldMap.serverPlayerTickHandler`；进世界后热加，该事件早已触发 → 下次玩家 tick NPE（integrated server 崩溃）。`RegisterCommandsEvent` 是唯一重放的服务端事件；其余（`ServerAboutToStart`/`ServerStarted`/`LevelLoad` 等）未支持（ADR-0007）。定向重放需要“只调用新容器的 game-bus 监听器”，否则全局重发会让所有模组重跑初始化。
+52. **服务端一次性事件定向重放：已实现，未验证（2026-11-18）**：新增 `hotadd/ServerLifecycleReplay`，用 `EventBusSnapshot.addedSince` 取出本次 add 新增的 game-bus 监听器，只对这些监听器调用 `ServerStartingEvent`/`ServerStartedEvent`（`ListenerList` 不保证与 owner map 同一实例，故有“逐个试调用、类型不符即跳过”的兜底）；服务端实例先取 `ServerLifecycleHooks.getCurrentServer()`，为空再反射 `Minecraft#getSingleplayerServer`。**未验证**：进入世界复跑时，客户端两次卡在 xaerolib mixin 阶段（见 54），没走到重放日志。
+53. **client setup 的 deferred task 早于热加资源包注入（2026-11-18）**：World Map 的 `loadLater` 在 `FMLClientSetupEvent` 的 deferred queue 里读自己的 `vanillaStatesResource`（`Minecraft.getResourceManager()`），此时热加包还没注入 → `Optional.get()` 抛 `NoSuchElementException`。启动期该顺序成立是因为包在 setup 前已注册；运行期需要“包先可用”或把这类 deferred task 放到 资源重载之后重跑。
+54. **xaerolib mixin 阶段挂起（2026-11-18，待查）**：两次 `-PverifyAddCommand=<xaeroworldmap>` 都停在 `Mixin compatibility level set to JAVA_21 after xaerolib.neoforge.mixins.json` 之后，10 分钟无日志；两个客户端 JVM 都需 `kill -9`。之前同一场景能跑到 add 返回 1，所以是间歇/时序问题；下次先 `jstack` 留线程栈（重点看 Mixin/transform 锁与我们的 guard），再决定修法。
 
 ## 玩家侧原则（ADR-0015，2026-11-18 最终）
 
@@ -186,7 +188,9 @@
 | **P0-新** | 语料扩到 20–30 个常用模组 | 小地图/JEI/HUD/输入/前置库；`check` 进 PR | 报告 + 矩阵 |
 | **P0-新** | 模组白名单实测（所有者驱动） | 54 行：stock T1×7 / BLACK×23；JBR J1×18 / BLACK×6；candidate 由所有者复测转 verified | TSV + 视图同步 |
 | **P0-新** | ✅ Xaero's World Map config channel | `XaeroLibChannels` 窗口（`ConfigChannelRegistry.frozen`），仅对引用该类的 jar 生效；World Map `ok=true isLoaded=true` | 已转 J2 |
-| **P0-新** | 服务端一次性事件（问题 52） | 定向重放 `ServerStartedEvent`（只调用新容器的 game-bus 监听器），救 World Map 世界里热加 | World Map J1 |
+| **P0-新** | 服务端一次性事件（问题 52） | `ServerLifecycleReplay` 已实现（定向调用新增监听器 + integrated server 兜底），**未验证**：进入世界复跑卡在 54 | World Map J1 |
+| **P0-新** | xaerolib mixin 阶段挂起（问题 54） | 先 `jstack` 留线程栈再杀；怀疑 Mixin/transform 锁或常驻 guard | 复跑不挂 |
+| **P1-新** | 资源顺序（问题 53） | 让热加包在 client setup deferred task 之前可见，或重跑这些 task | World Map 不再 `NoSuchElement` |
 | **P0-新** | 类级 AT 的启动期替代 | 启动扫描队列里的 AT，在**加载期**去 final（覆盖 `NativeImage` 这类启动即加载的类） | 夹具/真实 jar 复跑 |
 | **P0-新** | ✅ 自定义注册表（`NewRegistryEvent`） | `CustomRegistries` + `RegistryStage` 窗口；夹具 `custom registry RESULT: PASS`，Moonlight `ok=true`（3 个注册表）。剩余：`fill()` 后失败 dirty、datapack 注册表/`ModifyRegistriesEvent` 不重放、CraftTweaker 未复跑 | Moonlight J1（candidate） |
 | **P0-新** | ✅ late AT 对已混类二次 transform（问题 47） | 常驻 wrapper 包裹全部 transformer + 每次 redefine 的 `blanket()` 全局抑制；Moonlight 复跑 `ok=true`，Entity 不再报错 | 批次复跑 |

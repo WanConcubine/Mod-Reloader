@@ -120,11 +120,13 @@ final class MixinAgentGuard implements AutoCloseable {
                     }
                     String name = delegate.getClass().getName();
                     seen.add(name + "@" + System.identityHashCode(delegate));
-                    // Wrapping every transformer is deliberate: during a redefine
-                    // the bytes we hand to JBR are final, so no transform path may
-                    // process the target again. Name-based suppression handles the
-                    // redefine windows; blanket suppression covers the calls where
-                    // JBR passes no usable class identity.
+                    // Only the Mixin agent is wrapped. Other transformers (module
+                    // tracker, dist cleaner) keep their position; a single redefine
+                    // opts into blanket suppression instead, which covers them too
+                    // without re-registering anything mid-load.
+                    if (!name.equals(AGENT_TRANSFORMER)) {
+                        continue;
+                    }
                     if (owner.removeTransformer(delegate)) {
                         owner.addTransformer(new Guard(delegate), true);
                         replaced++;
@@ -134,7 +136,7 @@ final class MixinAgentGuard implements AutoCloseable {
             installed = replaced > 0;
             if (installed) {
                 ModReloader.LOGGER.info(
-                        "[ModReloader] transform guard installed ({} transformer(s) wrapped; "
+                        "[ModReloader] mixin agent guard installed ({} transformer(s) wrapped; "
                                 + "targets are suppressed only during redefine windows)", replaced);
             } else {
                 ModReloader.LOGGER.info("[ModReloader] instrumentation transformers: {}", seen);
