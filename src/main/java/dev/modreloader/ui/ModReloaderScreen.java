@@ -138,11 +138,32 @@ public final class ModReloaderScreen extends Screen {
                             })
                     .bounds(left + 146, height - 30, 140, 20).build());
         } else {
-            addRenderableWidget(Button.builder(Component.translatable(showingIgnored
-                                    ? "modreloader.gui.ignored_back"
-                                    : "modreloader.gui.ignored_list", ignoredEntries().size()),
-                            pressed -> toggleIgnored())
-                    .bounds(width / 2 - 80, height - 30, 160, 20).build());
+            boolean needsPrep = !showingIgnored
+                    && JbrSupport.status() != JbrSupport.Status.READY;
+            if (needsPrep) {
+                int total = 150 + 6 + 150;
+                int left = Math.max(4, width / 2 - total / 2);
+                addRenderableWidget(Button.builder(Component.translatable(
+                                "modreloader.gui.ignored_list", ignoredEntries().size()),
+                                pressed -> toggleIgnored())
+                        .bounds(left, height - 30, 150, 20).build());
+                addRenderableWidget(Button.builder(
+                                Component.translatable("modreloader.jbr_setup.short"),
+                                pressed -> {
+                                    if (minecraft != null) {
+                                        Path pending = selected >= 0 && selected < candidates.size()
+                                                ? candidates.get(selected).path() : null;
+                                        minecraft.setScreen(new JbrSetupScreen(this, pending));
+                                    }
+                                })
+                        .bounds(left + 156, height - 30, 150, 20).build());
+            } else {
+                addRenderableWidget(Button.builder(Component.translatable(showingIgnored
+                                        ? "modreloader.gui.ignored_back"
+                                        : "modreloader.gui.ignored_list", ignoredEntries().size()),
+                                pressed -> toggleIgnored())
+                        .bounds(width / 2 - 80, height - 30, 160, 20).build());
+            }
         }
         refresh();
     }
@@ -247,11 +268,37 @@ public final class ModReloaderScreen extends Screen {
         rebuildWidgets();
     }
 
+    /**
+     * Top-left environment badge. "Been asked to restart on JBR although the
+     * launcher selected JBR" is the confusing case: this shows whether the
+     * runtime sees a JBR at all and whether the enhanced-redefinition flag is on.
+     */
+    private void renderJbrBadge(GuiGraphics guiGraphics) {
+        String key;
+        int color;
+        switch (JbrSupport.status()) {
+            case READY -> {
+                key = "modreloader.gui.jbr.ready";
+                color = 0x55FF55;
+            }
+            case JBR_NO_ENHANCED -> {
+                key = "modreloader.gui.jbr.no_flag";
+                color = 0xFFAA00;
+            }
+            default -> {
+                key = "modreloader.gui.jbr.missing";
+                color = 0xFF5555;
+            }
+        }
+        guiGraphics.drawString(font, Component.translatable(key), 6, 6, color, true);
+    }
+
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         renderBackground(guiGraphics, mouseX, mouseY, partialTick);
         super.render(guiGraphics, mouseX, mouseY, partialTick);
         guiGraphics.drawCenteredString(font, title, width / 2, 20, 0xFFFFFF);
+        renderJbrBadge(guiGraphics);
         String vendor = System.getProperty("java.vendor", "?");
         guiGraphics.drawCenteredString(font, Component.translatable("modreloader.gui.env",
                         vendor,

@@ -40,8 +40,10 @@ public final class JbrSetupScreen extends Screen {
 
     @Override
     protected void init() {
+        String target = minecraft == null ? "jbr-21.0.11"
+                : JbrProvisioner.installDir(minecraft.gameDirectory.toPath()).toString();
         body = MultiLineLabel.create(font, width - 40,
-                Component.translatable("modreloader.jbr_setup.body"));
+                Component.translatable("modreloader.jbr_setup.body", target));
         int y = height - 52;
         addRenderableWidget(Button.builder(Component.translatable("modreloader.jbr_setup.download"),
                         pressed -> start())
@@ -64,6 +66,20 @@ public final class JbrSetupScreen extends Screen {
         }
         running = true;
         error = null;
+        // One action, three states: a usable JBR (the running one included) is
+        // reused directly, only a missing runtime is downloaded. The player should
+        // not have to know where it came from.
+        Optional<Path> existing = dev.modreloader.inspect.JbrSupport.installation();
+        if (existing.isPresent()) {
+            Path java = existing.get().resolve("bin").resolve(
+                    Relauncher.isWindows() ? "java.exe" : "java");
+            if (Relauncher.isRunnable(java)) {
+                status = Component.translatable("modreloader.jbr_setup.found",
+                        existing.get().toString()).getString();
+                relaunch(java);
+                return;
+            }
+        }
         status = Component.translatable("modreloader.jbr_setup.downloading").getString();
         Path gameDir = minecraft.gameDirectory.toPath();
         Thread worker = new Thread(() -> {

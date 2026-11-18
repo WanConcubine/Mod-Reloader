@@ -61,7 +61,7 @@
 | **capability 重放** | 五项全 present；`-PskipCapabilityReplay=true` 时五项 MISSING（反证） | `-PverifyCapabilities=<jar>`；[dogfood-gameplay.md](features/dogfood-gameplay.md) §1.1 |
 | **late AT（实验性）** | Jade 57/39、JEI 34/16、Controlling 1/1；Jade 回滚 39/39 ok；**类级 `public-f` 拒绝**（`stage=VALIDATE kind=ACCESS_TRANSFORMER`） | `-PlateAt=true`；[late-at.md](features/late-at.md) |
 | **失败回滚** | post-ModList / post-pack 恢复 ModList/module/config/类/资源包；post-construct 监听器按实例摘除 | `-PverifyRollback` / `-PfailAfterModList` / `-PfailAfterPack` / `-PfailAfterConstruct` |
-| **工程底座** | `capabilities` 10 组全 ok；无 `libs/` 可 `clean build`；**90 个无游戏 Java 单测**；i18n 两语言**各 187 key** | `./gradlew build`/`test`；[tech-debt.md](tech-debt.md) |
+| **工程底座** | `capabilities` 10 组全 ok；无 `libs/` 可 `clean build`；**93 个无游戏 Java 单测**；i18n 两语言**各 197 key** | `./gradlew build`/`test`；[tech-debt.md](tech-debt.md) |
 
 ## 验证状态
 
@@ -76,6 +76,15 @@
 - **XaeroLib config channel 窗口（2026-11-18）**：`ConfigChannelRegistry.frozen` 在构造期临时放开、add 后恢复；
   只对引用该 registry 的 jar 生效。World Map 复跑 `ok=true isLoaded=true`（此前 `kind=CONSTRUCT`）。
   剩余：它自己的服务端初始化在 `ServerStartedEvent` 里，进世界热加后 `serverPlayerTickHandler` 为 null（问题 52）。
+- **统一环境准备动作（2026-11-18）**：`JbrSetupScreen` 收口为「为热加载增强环境做准备」——已安装/运行中的 JBR 直接复用，
+  缺失时下载（官方、SHA-512）并解压到 `gameDir/jbr-21.0.11`，随后自动重启并带齐 enhanced + lateAt；
+  热加载菜单在未就绪时**常驻**该按钮（截图验证），失败屏与菜单使用同一文案/同一入口。
+- **JBR 环境识别与菜单标识（2026-11-18）**：`JbrSupport.status()` 三态（READY / JBR_NO_ENHANCED / NOT_JBR），
+  检测同时看 vendor/vm.vendor/vm.name/java.home；热加载菜单**左上角**显示彩色标识（✓ 绿 / ✓ 黄「增强重定义未启用」/ ✗ 红）。
+  预检与失败文案按状态区分：已运行 JBR 只缺能力时不再说“使用 JBR”，而是“用运行时重启一次”。
+  `installation()` 现在**优先复用正在运行的 JBR home**，启动器自带、扫描根之外的 JBR 也能用“用 JBR 重启”。
+  验证：`-PverifyMenu=true` 截图（READY 绿）与 `-PverifyMenu=true -PnoJbr=true` 截图（JBR_NO_ENHANCED 黄）；
+  `-PnoJbr=true -PverifyRelaunchPlan=true` → `canRelaunch=true`、JBR spawn PASS。
 - **模型层重放（2026-11-18）**：`RegisterLayerDefinitions` 已重放并在之后重建 `EntityModelSet` roots；层与 renderer 重建按“全容器先层后渲染器”排序；
   `ClientModLoader.loading` 在 FMLClientSetup 窗口内临时为 true（`setRenderLayer` 门禁）。Supplementaries 实测 `layer definitions ... 213 -> 234`、
   `ok=true isLoaded=true`，同批 Moonlight 也 `ok=true`。
@@ -159,6 +168,7 @@
 49. ✅ **模型层/Skull 模型（2026-11-18，已修）**：`RegisterLayerDefinitions` 现在会被重放，随后调用 `EntityModelSet.onResourceManagerReload` 重建 roots（`LayerDefinitions.createRoots()` 会合并 `ClientHooks` 的静态表）；层回放与“重建 renderer”拆成两阶段、**全容器先层后渲染器**（否则嵌套容器先重建，外层层的模型还没注册）。`ItemBlockRenderTypes.setRenderLayer` 的 client-loading 门禁在 FMLClientSetup 重放窗口内临时放开（`ClientModLoader.loading`，消费者只有该门禁和 options 保存保护）。实测 Supplementaries 层 213→234、无 `No model for layer`、`ok=true`。
 50. **失败回滚对 late-AT 重定义过的类可能 VerifyError（2026-11-18）**：Supplementaries 失败后回滚 `MineshaftPieces$MineShaftPiece` 报 `VerifyError: null`，`kind=ROLLBACK_PARTIAL`。回滚写回的是 late AT 之前的字节，但该类的后续加载/重定义可能已经改变了校验状态；需要专门复现，失败时至少保证“可重启的干净状态”并明确提示。
 51. **无焦点 + 热加重载隐藏 screen 会撞 `PauseScreen` NPE（2026-11-18，测试环境）**：`-PnoFocus=true` 时窗口失焦，`GameRenderer.render` 调 `pauseGame`；而 `ClientResourcePacks` 在 reload 链期间把 `mc.screen` 置空，`PauseScreen.createPauseMenu` 读到 `minecraft.player == null` → NPE（crash-2026-11-18_19.18.27）。**多 add/重载场景用聚焦窗口跑**（不带 `-PnoFocus`）；无焦点只用于单 add/短重载。
+55. **「已选 JBR 仍要重启」是产品失败（2026-11-18 所有者）**：玩家已经在启动器里选了 JBR，却因为缺 `-XX:+AllowEnhancedClassRedefinition` 被要求再重启一次——把实现细节（JVM 启动参数）转嫁给玩家，不是可接受的路径。该参数**只能启动时给**，运行时无法补；因此产品修法是**运行时自己负责**：检测到“JBR 但缺能力”时不弹教学屏，而是记住待加载的 jar、自动用同一 JBR 重启一次并在新进程里完成热加（玩家零决策、最多一次自动重启）；若启动器每次都不带参数，则每次会话需要一次自动重启——这仍是缺口，不能写成“已解决”。界面上的三态标识与准确文案（问题 51 同批改动）只是止血，不是修复。55. **「已选 JBR 仍要重启」是产品失败（2026-11-18 所有者）**：玩家已在启动器选了 JBR，却因缺 `-XX:+AllowEnhancedClassRedefinition` 被要求再重启——把实现细节转嫁给玩家，不可接受。**2026-11-18 收口为单一动作「为热加载增强环境做准备」**：菜单（未就绪时常驻）与失败屏都指向同一入口；已安装/正在运行的 JBR 直接复用，不再下载；缺失时官方下载 → SHA-512 → 解压到 `gameDir/jbr-21.0.11`；随后用该 JBR 自动重启并带齐 `-XX:+AllowEnhancedClassRedefinition` + `-Dmodreloader.lateAt=true`。**仍余缺口**：参数只能启动时给，启动器每次不带参数的话，每次会话最多一次自动重启；跨会话永久生效需要启动器/整合包预设（不默认改玩家配置）或 classloader 隔离/软重启（长期）。
 52. **服务端一次性事件定向重放：已实现，未验证（2026-11-18）**：新增 `hotadd/ServerLifecycleReplay`，用 `EventBusSnapshot.addedSince` 取出本次 add 新增的 game-bus 监听器，只对这些监听器调用 `ServerStartingEvent`/`ServerStartedEvent`（`ListenerList` 不保证与 owner map 同一实例，故有“逐个试调用、类型不符即跳过”的兜底）；服务端实例先取 `ServerLifecycleHooks.getCurrentServer()`，为空再反射 `Minecraft#getSingleplayerServer`。**未验证**：进入世界复跑时，客户端两次卡在 xaerolib mixin 阶段（见 54），没走到重放日志。
 53. **client setup 的 deferred task 早于热加资源包注入（2026-11-18）**：World Map 的 `loadLater` 在 `FMLClientSetupEvent` 的 deferred queue 里读自己的 `vanillaStatesResource`（`Minecraft.getResourceManager()`），此时热加包还没注入 → `Optional.get()` 抛 `NoSuchElementException`。启动期该顺序成立是因为包在 setup 前已注册；运行期需要“包先可用”或把这类 deferred task 放到 资源重载之后重跑。
 54. **xaerolib mixin 阶段挂起（2026-11-18，待查）**：两次 `-PverifyAddCommand=<xaeroworldmap>` 都停在 `Mixin compatibility level set to JAVA_21 after xaerolib.neoforge.mixins.json` 之后，10 分钟无日志；两个客户端 JVM 都需 `kill -9`。之前同一场景能跑到 add 返回 1，所以是间歇/时序问题；下次先 `jstack` 留线程栈（重点看 Mixin/transform 锁与我们的 guard），再决定修法。
@@ -209,6 +219,9 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近三条。
 
-- **2026-11-18（自定义注册表 + Moonlight J1）**：`CustomRegistries` 重放 `NewRegistryEvent`（构造期窗口 + 只对新容器 + `fill()`），夹具与 Moonlight 验证通过；late AT 捕获改为缓存/类资源、`MixinAgentGuard` 改常驻 wrapper。白名单 J1×19 / BLACK×5；Supplementaries 新卡点记为问题 47。
-- **2026-11-18（JourneyMap 崩因 = 类级 AT 去 final）**：`LateAccessTransformers` 改字节前拒绝「已加载 + final 类 + 类级 `-f`」；独立 JBR 探针证明去类 final 后构造返回 null、再次 redefine SIGSEGV。JourneyMap 从“ok=true 后资源重载崩”转为干净拒绝，白名单 J2→BLACK；同一根因解释了 `PartDefinition.bake` NPE。`CompatCheck` 加 `-PverifyCompatSettle`。
-- **2026-11-18（ShaderReplay 非空路径）**：夹具加 `clientfixture:marker` + `-PverifyShaderCount`；热加资源重载自己 fire `RegisterShadersEvent`，实测 `56 -> 57`；修掉 `ShaderReplay` 在 reload 后的重复注册/泄漏。
+- **2026-11-18（统一「准备热加载环境」动作）**：JBR 入口收口为一个按钮：复用已装/运行中的 JBR，缺失才下载解压到
+  `gameDir/jbr-21.0.11`，重启带齐 enhanced + lateAt；菜单未就绪时常驻入口，失败屏同文案。菜单截图验证。
+- **2026-11-18（JBR 识别三态 + 菜单标识）**：修“启动器已选 JBR 却被要求用 JBR 重启”；菜单左上角彩色标识，
+  文案按状态区分，`installation()` 优先复用运行中的 JBR。截图与 relaunch plan 验证。
+- **2026-11-18（服务端事件重放，未验证）**：`ServerLifecycleReplay` 定向调用新增 game-bus 监听器；世界里复跑卡在
+  xaerolib mixin 阶段（问题 54），status 如实标注；问题 53（loadLater 资源顺序）记录在案。

@@ -60,10 +60,13 @@ public final class ModReloaderI18n {
             return Component.translatable("modreloader.preflight.already_loaded");
         }
         if (inspection.accessTransformers() && !allowLateAccessTransformers) {
-            // On a JBR session the missing piece is the experimental switch, not the
-            // JVM; "use JBR" there was confusing.
-            return Component.translatable(JbrSupport.available()
-                    ? "modreloader.preflight.access_transformer_late_off"
+            // Three states: capability on, JBR without the flag, or a stock JVM.
+            // "Use JBR" on a JBR session was the confusing case.
+            if (JbrSupport.available()) {
+                return Component.translatable("modreloader.preflight.access_transformer_late_off");
+            }
+            return Component.translatable(JbrSupport.status() == JbrSupport.Status.JBR_NO_ENHANCED
+                    ? "modreloader.preflight.access_transformer_jbr_no_flag"
                     : "modreloader.preflight.access_transformer");
         }
         if (inspection.tier() == ModInspection.Tier.GUIFEI && !allowRegistryContent) {
@@ -86,7 +89,9 @@ public final class ModReloaderI18n {
         }
         if (mixinTier && !JbrSupport.available()) {
             // Still loadable: only layout-changing targets on loaded classes need JBR.
-            return Component.translatable("modreloader.preflight.mixin_no_jbr");
+            return Component.translatable(JbrSupport.status() == JbrSupport.Status.JBR_NO_ENHANCED
+                    ? "modreloader.preflight.mixin_no_jbr_flag"
+                    : "modreloader.preflight.mixin_no_jbr");
         }
         if (inspection.accessTransformers()) {
             // Reachable only when the add is otherwise allowed: the Load button is

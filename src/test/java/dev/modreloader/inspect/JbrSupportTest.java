@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -19,6 +20,31 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class JbrSupportTest {
     @TempDir
     Path root;
+
+    @Test
+    void reusesTheRunningJbrHome() throws Exception {
+        Path home = Files.createDirectory(root.resolve("jbr-21.0.11"));
+        createJbr(home, "21.0.11");
+        assertEquals(Optional.of(home), JbrSupport.runningHome(home.toString(), true));
+        // Not a JBR: never treat the running JVM as the JBR to restart with.
+        assertTrue(JbrSupport.runningHome(home.toString(), false).isEmpty());
+    }
+
+    @Test
+    void recognisesJbrFromVendorOrHome() {
+        assertTrue(JbrSupport.looksLikeJbr("JetBrains s.r.o.", "", "", "/opt/java"));
+        assertTrue(JbrSupport.looksLikeJbr("Eclipse Adoptium", "", "", "/opt/jbr-21.0.11"));
+        assertTrue(JbrSupport.looksLikeJbr("", "JetBrains s.r.o.", "", "/x"));
+        assertFalse(JbrSupport.looksLikeJbr("Eclipse Adoptium", "Eclipse Adoptium",
+                "OpenJDK 64-Bit Server VM", "/opt/jdk-21"));
+    }
+
+    @Test
+    void enhancedFlagIsDetectedInArguments() {
+        assertTrue(JbrSupport.hasEnhancedFlag(
+                List.of("-Xmx2G", "-XX:+AllowEnhancedClassRedefinition")));
+        assertFalse(JbrSupport.hasEnhancedFlag(List.of("-Xmx2G")));
+    }
 
     @Test
     void findsARuntimeInsideTheGameDirectory() throws Exception {

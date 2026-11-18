@@ -123,7 +123,7 @@ public record ModInspection(Path jar, String fileName, List<Mod> mods, Tier tier
         }
         if ((tier == Tier.FEI || (tier == Tier.GUIFEI && mixins)) && !JbrSupport.available()) {
             return "fei-tier without JBR: layout-preserving mixins apply, layout-changing "
-                    + "targets are refused (" + JbrSupport.describe() + ")";
+                    + "targets are refused (" + JbrSupport.describe() + ")" + JbrSupport.hint();
         }
         if (mixinRuntimeMissing()) {
             return "fei-tier mixins require " + MixinRuntimeSupport.name() + " to be installed";

@@ -140,14 +140,14 @@ public final class LoadFailureScreen extends Screen {
 
     /** Keep the retry visible after the restart (failed fingerprints would hide it). */
     private void addJbrButton(int x, int y, int w) {
+        // One product action, one label: prepare the enhanced environment (install
+        // the runtime if needed, then restart with the full flag set). The setup
+        // screen reuses an already installed JBR and enables late AT.
         addRenderableWidget(Button.builder(
-                Component.translatable("modreloader.gui.failure.jbr_restart"), pressed -> {
+                Component.translatable("modreloader.jbr_setup.short"), pressed -> {
                     if (minecraft != null) {
-                        // Always enable late AT on a JBR relaunch: a restart triggered
-                        // by a layout jar would otherwise leave AT mods with no way to
-                        // trigger an AT-aware relaunch (their Load button is disabled).
-                        minecraft.setScreen(new RelaunchConfirmScreen(this,
-                                candidate == null ? null : candidate.path(), true));
+                        minecraft.setScreen(new JbrSetupScreen(this,
+                                candidate == null ? null : candidate.path()));
                     }
                 }).bounds(x, y, w, 20).build());
     }

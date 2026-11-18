@@ -1646,3 +1646,40 @@ Xaero 的 “config channel too late” 不在 NeoForge，而在 **XaeroLib 自�
 
 另：`MixinAgentGuard` 的“包裹全部 transformer”在 19:47 的挂起后被收窄回“只包 Mixin agent”（`blanket()` 已覆盖 redefine 路径），
 **Supplementaries/问题 47 的修复需要在收窄后复验一次**。
+
+## 2026-11-18（JBR 识别：三态 + 菜单左上角标识 + 复用运行中的 JBR）
+
+所有者反馈：启动器已选择 JBR，但热加 JBR 模组时仍被要求“用 JBR 重启”，运行时似乎不知道当前环境。
+
+排查：`JbrSupport.available()` 要求 **JBR + `-XX:+AllowEnhancedClassRedefinition`**。启动器只负责选 JVM，
+不会加我们的 flag；于是“JBR 但缺 flag”被当成“没有 JBR”，文案全在教用户换 JBR。另一个缺口：
+`installation()` 只扫安装根，**不含正在运行的 JBR**，启动器自带、扫描根之外的 JBR 会让“用 JBR 重启”按钮不可用。
+
+改动：
+- `JbrSupport.status()` 三态（READY / JBR_NO_ENHANCED / NOT_JBR）；`isJbr()` 同时看 vendor/vm.vendor/vm.name/java.home；
+  `hasEnhancedFlag()` 抽成可测的纯函数。
+- `ModReloaderScreen` 左上角彩色标识：`JBR ✓ · 增强重定义已启用`（绿）/ `JBR ✓ · 增强重定义未启用（用运行时重启一次即可）`（黄）/
+  `JBR ✗ · 普通 JVM`（红）；底部原有 JVM 行保留。
+- 文案按状态区分：AT/mixin 预检与失败建议新增 `*_jbr_no_flag` / `suggestion.jbr_flag`，不再说“使用 JBR”。
+- `installation()` 优先返回**运行中的** JBR home（`runningHome(javaHome, isJbr)`），使“用 JBR 重启”在启动器 JBR 场景可用。
+- 单测：`looksLikeJbr`、`hasEnhancedFlag`、`runningHome`；JbrSupportTest 共 9 个。
+验证：`-PverifyMenu=true` 截图（绿）、`-PverifyMenu=true -PnoJbr=true` 截图（黄）、
+`-PnoJbr=true -PverifyRelaunchPlan=true` → `canRelaunch=true` + JBR spawn PASS；`./gradlew build`/93 单测。
+另：`-PverifyCompat=<MouseTweaks> -PnoJbr=true` 的拒绝文案现在明确说
+“This JVM is JBR but enhanced redefinition is off; use the failure screen's JBR restart once.”，
+不再是“去用 JBR”。
+
+## 2026-11-18（JBR 入口收口：为热加载增强环境做准备）
+
+所有者要求把 JBR 系列收口为一个动作：玩家启动一次游戏，点「为热加载增强环境做准备」，运行时装好正确的 JBR、
+自动解压到合适路径，随后自动重启并带齐参数，得到一个可热加载的进程。
+
+- `JbrSetupScreen`：入口标题/正文/按钮改为统一文案；正文显示**安装路径**（`gameDir/jbr-21.0.11`）；
+  `start()` 先看 `JbrSupport.installation()`（现在包含正在运行的 JBR），已可用则**跳过下载**直接重启；
+  重启使用 `Relauncher.jbrFlags(true)` → `-XX:+AllowEnhancedClassRedefinition` + `-Dmodreloader.lateAt=true`。
+- `ModReloaderScreen`：未就绪时**常驻**「准备热加载环境」按钮（不再只在“有需要 JBR 的候选”时出现）；
+  截图 `-PverifyMenu=true -PnoJbr=true` 可见黄色标识 + 按钮。
+- `LoadFailureScreen`：JBR 相关按钮统一为同一入口/同一文案，不再分“自动准备/用 JBR 重启”。
+- 诚实边界（status 问题 55）：参数只能启动时给；启动器每次不带参数则每会话最多一次自动重启；
+  跨会话永久生效需要启动器/整合包预设（不默认改玩家配置）或结构方案（classloader 隔离/软重启）。
+验证：`./gradlew build`（93 单测）、菜单截图（README/状态）。

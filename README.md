@@ -8,7 +8,7 @@
 > **AT**：stock 是硬边界；JBR late AT 只覆盖**成员级** access/final（Jade/JEI/Controlling L1 PASS），
 > 类级 `public-f`（去类的 final）不可用，会被拒绝并提示重启（[late-at](docs/features/late-at.md) §5.1）。
 > 失败回滚覆盖 post-ModList / post-pack / post-construct 监听器；构造器其它副作用、post-construct 重试仍不行。
-> 工程侧：`PlatformHooks` 双端解耦、`Capabilities` 锚点守卫、`dev/` 不进发布 jar、**90 个无游戏 Java 单测**；
+> 工程侧：`PlatformHooks` 双端解耦、`Capabilities` 锚点守卫、`dev/` 不进发布 jar、**93 个无游戏 Java 单测**；
 > 兼容性流水线 v0（`tools/pipeline`）与无焦点 L1（`-PnoFocus=true`）。皇后级与软重启未开始；已知/未验证项见
 > [status](docs/status.md)，功能文档见 [docs/features/](docs/features/)。
 > 短期目标是把工具做出来给社区用，论文/研究输出留到以后。

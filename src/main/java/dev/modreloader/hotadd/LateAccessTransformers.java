@@ -69,7 +69,7 @@ public final class LateAccessTransformers {
         }
         if (!JbrSupport.available()) {
             return fail("the needed capability requires JBR 21 with enhanced redefinition ("
-                    + JbrSupport.describe() + ")");
+                    + JbrSupport.describe() + ")" + JbrSupport.hint());
         }
         Instrumentation instrumentation;
         try {

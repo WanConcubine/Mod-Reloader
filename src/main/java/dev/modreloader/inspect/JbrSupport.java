@@ -21,20 +21,60 @@ import java.util.stream.Stream;
  * usual per-OS install roots for a JetBrains Runtime 21+.
  */
 public final class JbrSupport {
+    /** What the running JVM can actually do, for UI and messages. */
+    public enum Status {
+        /** JetBrains Runtime with enhanced redefinition enabled. */
+        READY,
+        /** JetBrains Runtime, but the -XX flag is missing (a restart can add it). */
+        JBR_NO_ENHANCED,
+        /** Not a JetBrains Runtime at all. */
+        NOT_JBR
+    }
+
     private JbrSupport() {
     }
 
     public static boolean isJbr() {
-        return System.getProperty("java.vendor", "").toLowerCase(Locale.ROOT).contains("jetbrains");
+        return looksLikeJbr(
+                System.getProperty("java.vendor", ""),
+                System.getProperty("java.vm.vendor", ""),
+                System.getProperty("java.vm.name", ""),
+                System.getProperty("java.home", ""));
+    }
+
+    /**
+     * Launchers disagree about the vendor string (some report the distro wrapper
+     * instead of JetBrains), so the home path counts too.
+     */
+    static boolean looksLikeJbr(String vendor, String vmVendor, String vmName, String home) {
+        return contains(vendor, "jetbrains")
+                || contains(vmVendor, "jetbrains")
+                || contains(vmName, "jetbrains")
+                || contains(home, "jetbrains")
+                || contains(home, "jbr");
+    }
+
+    private static boolean contains(String value, String needle) {
+        return value != null && value.toLowerCase(Locale.ROOT).contains(needle);
     }
 
     public static boolean enhancedRedefinition() {
-        return ManagementFactory.getRuntimeMXBean().getInputArguments().stream()
-                .anyMatch(arg -> arg.contains("AllowEnhancedClassRedefinition"));
+        return hasEnhancedFlag(ManagementFactory.getRuntimeMXBean().getInputArguments());
+    }
+
+    static boolean hasEnhancedFlag(List<String> arguments) {
+        return arguments.stream().anyMatch(arg -> arg.contains("AllowEnhancedClassRedefinition"));
+    }
+
+    public static Status status() {
+        if (!isJbr()) {
+            return Status.NOT_JBR;
+        }
+        return enhancedRedefinition() ? Status.READY : Status.JBR_NO_ENHANCED;
     }
 
     public static boolean available() {
-        return isJbr() && enhancedRedefinition();
+        return status() == Status.READY;
     }
 
     public static String describe() {
@@ -183,7 +223,24 @@ public final class JbrSupport {
         if (explicit.isPresent() && isUsable(explicit.get())) {
             return explicit;
         }
+        // A launcher-managed JBR often lives outside the usual install roots. If the
+        // game is already running on one, that home is the best candidate: the
+        // "Restart on JBR" button must work for the common case "JBR selected in the
+        // launcher, but the enhanced-redefinition flag is missing".
+        Optional<Path> running = runningHome(System.getProperty("java.home", ""), isJbr());
+        if (running.isPresent()) {
+            return running;
+        }
         return findInstall(installRoots());
+    }
+
+    /** The home of the JVM that is running the game, when it is a usable JBR. */
+    static Optional<Path> runningHome(String javaHome, boolean onJbr) {
+        if (!onJbr || javaHome == null || javaHome.isBlank()) {
+            return Optional.empty();
+        }
+        Path home = Path.of(javaHome);
+        return isUsable(home) ? Optional.of(home) : Optional.empty();
     }
 
     /** Visible for the game-free test: scan the given roots in order. */

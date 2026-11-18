@@ -58,6 +58,13 @@ public final class FailureAnalyzer {
             }
             summary = Component.translatable("modreloader.failure.missing_dependency.summary", dependency);
             suggestion = Component.translatable("modreloader.failure.missing_dependency.suggestion");
+        } else if (JbrSupport.status() == JbrSupport.Status.JBR_NO_ENHANCED
+                && (result.kind() == HotAddEngine.FailureKind.JBR_REQUIRED
+                    || result.kind() == HotAddEngine.FailureKind.ACCESS_TRANSFORMER)) {
+            // The user already selected JBR; the missing piece is the flag a
+            // managed relaunch adds. "Use JBR" here reads as "you are not on JBR".
+            summary = Component.translatable("modreloader.failure." + key + ".summary");
+            suggestion = Component.translatable("modreloader.suggestion.jbr_flag");
         } else {
             summary = Component.translatable("modreloader.failure." + key + ".summary");
             suggestion = Component.translatable("modreloader.failure." + key + ".suggestion");
@@ -109,7 +116,10 @@ public final class FailureAnalyzer {
         } else if (inspection.tier() == ModInspection.Tier.HUANGHOU) {
             suggestion = Component.translatable("modreloader.preflight.suggestion.huanghou");
         } else if (inspection.tier() == ModInspection.Tier.FEI && !JbrSupport.available()) {
-            suggestion = Component.translatable("modreloader.preflight.suggestion.jbr");
+            suggestion = Component.translatable(
+                    JbrSupport.status() == JbrSupport.Status.JBR_NO_ENHANCED
+                            ? "modreloader.preflight.suggestion.jbr_flag"
+                            : "modreloader.preflight.suggestion.jbr");
         } else if (inspection.mixinRuntimeMissing()) {
             suggestion = Component.translatable("modreloader.preflight.suggestion.mixin_runtime",
                     MixinRuntimeSupport.name());
