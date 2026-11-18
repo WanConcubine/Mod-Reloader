@@ -106,6 +106,6 @@
 
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|
-| CraftTweaker | CraftTweaker-neoforge-1.21.1-21.0.39.jar | GUIFEI | verified | 自定义 registry 在 NewRegistryEvent 之后注册（crafttweaker:transformer_serializer） | JBR+lateAt harness 2026-11-17 kind=CONSTRUCT（villager trade converters → 自定义 registry 太晚）；替代：重启 |
+| CraftTweaker | CraftTweaker-neoforge-1.21.1-21.0.39.jar | GUIFEI | fixing | 自定义 registry 已支持（NewRegistryEvent 重放，2026-11-18）；待复跑确认是否还有其它阻碍 | JBR+lateAt harness 2026-11-17 kind=CONSTRUCT（villager trade converters → 自定义 registry 太晚）；替代：重启；2026-11-18：自定义注册表窗口已实现（Moonlight 验证），CraftTweaker 未复跑 |
 | 传送石碑（Waystones） | waystones-neoforge-1.21.1-21.1.47.jar | GUIFEI | verified | EVENT：post-construct 失败且注册已部分生效（+44 方块 / +55 物品），需重启 | JBR harness 2026-11-18 kind=EVENT（Balm 先热加成功）；替代：重启（注册不可回滚） |
 | 旅行地图（JourneyMap） | journeymap-neoforge-1.21.1-6.0.9.jar | FEI | verified | 类级 AT 去 final 无法在运行期完成：ComparableNativeImage extends NativeImage（NativeImage 必须非 final） | JBR 21.0.11 probe：redefine 去掉类 final 后该类的构造全部返回 null（NativeImage.read → null）；随后再次 redefine 时 JVM SIGSEGV（ConstantPoolCacheEntry::clear_entry）；late AT 现在在改任何字节前拒绝（-PverifyCompat=journeymap -PlateAt=true → stage=VALIDATE kind=ACCESS_TRANSFORMER），需放 mods/ 重启由 FML 在加载期应用 |
