@@ -1,6 +1,8 @@
 # JBR 支持：自动准备 + 诊断与降级路径
 
-> 状态：**诊断 + 一键自动准备已实现**（`JbrSupport`、`JbrProvisioner`、`JbrSetupScreen`、失败屏「用 JBR 重启」、`/modreloader jbr`）；**Windows 全链路未验证**；真实能力探针与「装进 mods/ 重启」仍待做。
+> 状态：**已收口为单一动作「为热加载增强环境做准备」**（2026-11-18：`JbrSupport.status()` 三态 + 菜单左上角标识 +
+> 复用已装/运行中的 JBR；`JbrProvisioner`/`JbrSetupScreen`/`/modreloader jbr`）。**所有者在 Windows 真机测试中**；
+> 参数只能启动时给，本次会话有效（每会话最多一次自动重启，见 status 问题 55）；真实能力探针仍待做。
 > 关联：[status.md](../status.md) 已知问题 7/25、[a1-mixin-hotadd.md](a1-mixin-hotadd.md) §10.4、[managed-relaunch.md](managed-relaunch.md)。
 > **玩家/服务端操作步骤见 [JBR 使用指引](../guides/jbr.md)**；本文讲检测、边界与产品路线。
 
@@ -32,7 +34,7 @@
 按代价从低到高：
 
 1. **先不用这个模组**：忽略/关掉提示，游戏继续。已加载的其它模组不受影响。
-2. **点「自动准备 JBR」**（本机没有 JBR 时出现）：运行时从 JetBrains 官方下载 JBR 21、校验 SHA-512、
+2. **点「准备热加载环境」**（菜单未就绪时常驻；本机没有 JBR 时才下载）：运行时从 JetBrains 官方下载 JBR 21、校验 SHA-512、
    解压到游戏目录，然后自动用它重启；参数由运行时加，玩家不填。
    - 下载 95–200 MB，需要网络；失败保留游戏并显示原因，可重试。
 3. **点「用 JBR 重启」**（本机已有 JBR 21 时出现）：只影响这一次会话；会保存世界/设置，确认新进程起来后才退出当前进程。
@@ -99,7 +101,7 @@ Error: Could not create the Java Virtual Machine.
 
 ### 3.0 游戏内自动（推荐，玩家零手工）
 
-- 监听列表/失败界面 → **「自动准备 JBR」**：`JbrProvisioner` 按平台下载官方 JBR 21.0.11
+- 监听列表/失败界面 → **「准备热加载环境」**：已装/运行中的 JBR 直接复用（跳过下载）；否则 `JbrProvisioner` 按平台下载官方 JBR 21.0.11
   （`cache-redirector.jetbrains.com/intellij-jbr/`，SHA-512 固定），解压到 `gameDir/jbr-21.0.11/`，
   然后 `JbrSetupScreen` 用新 JBR + 自动参数重启；失败保留游戏并显示阶段（下载/校验/解压/重启）。
 - 已存在 JBR 时走「用 JBR 重启」，不重复下载。

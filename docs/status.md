@@ -41,7 +41,7 @@
 | **兼容性流水线** | 11 pinned jar / 15 场景（3 个 `late_at`），L0 `check` 绿；L1 PASS（PASS = 复现了场景期望，含“按预期拒绝”）：minimap（JiJ XaeroLib）/ mouse-gestures / hud / input / tooltip-at / recipe-at / library / missing-dependency（拒绝）/ minimap-journeymap（拒绝）/ `mouse-gestures-nojbr`（干净 `JBR_REQUIRED`） | `python3 tools/pipeline/run.py check/run --scenario <id> --mods-dir /tmp/modreloader-corpus`；[hotadd-test-pipeline.md](features/hotadd-test-pipeline.md) |
 | **无焦点自动化** | `Window.<init>` 后插 `GLFW_FOCUS_ON_SHOW=false`；实测 `focused=false` + `hud` PASS；抢焦点时 `FOCUS_STOLEN` | `-PnoFocus=true`；`NoFocusAgentTest`；[no-focus.md](features/no-focus.md) |
 | **JiJ 嵌套 mod + 资源包** | Xaero's → `xaerolib` 有 container、依赖满足、mixin 合并、嵌套 pack 一次加入；`FMLCommonSetupEvent` 全 container 先同步；**2026-11-18 递归 3 层**（Supplementaries → `mixinsquared-forge` → `MixinSquared`，模块与 manifest mixin config 都收齐） | `hotadd/NestedMods`、`ClientResourcePacks.injectAll`；[hotadd-test-pipeline.md](features/hotadd-test-pipeline.md) |
-| **JBR 检测 + 一键准备** | `/modreloader jbr` 打印 JVM/参数/已装 JBR；缺 JBR 时官方 21.0.11 下载（SHA-512）→ 解压 → 带 enhanced + lateAt 重启；**Windows 真机启动未验证** | 单测 7；[jbr-support.md](features/jbr-support.md) |
+| **JBR 环境（2026-11-18 收口）** | 菜单左上角三态标识（✓ 绿 / ✓ 黄「增强未启用」/ ✗ 红）；单一动作「为热加载增强环境做准备」：复用已装/运行中的 JBR，缺失才官方下载（SHA-512）→ 解压到 `gameDir/jbr-21.0.11` → 自动重启带齐 enhanced + lateAt；`/modreloader jbr` 打印诊断。**Windows 真机测试中（所有者）**；参数只能启动时给，每会话最多一次自动重启（问题 55） | 单测 9；[jbr-support.md](features/jbr-support.md) |
 | **late coremod** | jecharacters 在独立 module layer 加载；变换 4 目标（含原版 `SearchTree`），80 deferred；`matches("tieding","铁锭")` false→true | `-PverifyPinyin`（JEI 需在 `run/mods`）；[matrix](features/hotadd-compatibility-matrix.md) §3.2 |
 | **JBR 边界收窄** | 只有「已加载类的布局变更」要 JBR：Mouse Tweaks JBR 下 `ok=true`；`-PnoJbr=true` 干净 `JBR_REQUIRED`；未加载目标免 JBR（fixture PASS） | `-PverifyCompat=<MouseTweaks>`；[a1-mixin-hotadd.md](features/a1-mixin-hotadd.md) §10.4 |
 | **A1 产品化四项** | 第二个妃级模组同会话 PASS；构造后监听器回滚 38→38（2 removed）；服务端+客户端同时妃级连接存活；专用服存档回读 | `-PverifyAddCommand2` / `-PfailAfterConstruct` / `-PmpFeiServer`；[a1](features/a1-mixin-hotadd.md) §10 |
@@ -183,9 +183,11 @@
 
 ## 下一步
 
-> **当前交接（2026-11-18，未提交）**：问题 43 已定为类级 AT 缺陷（44）并改为前置拒绝；shader 重放已验并修掉重复注册；
-> JBR 计数 **J1×20 / J2×1 / BLACK×3**。下一项：JBR BLACK（CraftTweaker/Xaero's World Map/Supplementaries）、
-> 类级 `-f` 的启动期替代、`ShaderReplay` 兜底夹具与流水线 L2、Windows 全链路。
+> **当前交接（2026-11-18，已推送 `e75d56e`）**：当前状态：自定义注册表、JiJ 递归、模型层重放、Xaero config channel、
+> JBR 环境收口（三态/标识/单一动作）都在；**所有者转 Windows 真机测试**（环境准备、MouseTweaks 布局热加）。
+> JBR 计数 **J1×20 / J2×1 / BLACK×3**。下一项：① Windows 实测反馈；② 问题 54（xaerolib mixin 挂起，先 jstack）
+> 与 53（client setup 早于热加包注入）；③ 问题 52/50（服务端事件重放未验证、回滚 VerifyError）；④ CraftTweaker 复跑；
+> ⑤ 类级 `-f` 启动期替代与流水线 L2。
 > 证据在 [history.md](history.md)；JBR 在 `run/jbr-21.0.11`（gitignored），语料 `/tmp/modreloader-corpus`。
 > 风险：`MixinAgentGuard` 依赖内部字段（找不到 no-op）；`ClassBytesCache` 不覆盖 eager loaded 目标。
 > ⚠️ 本机 dev client 显示层不稳：优先不需要 GL 的活，一次只起一个客户端场景；harness 命令见 [AGENTS §2](../AGENTS.md)，
@@ -193,7 +195,7 @@
 
 | 优先 | 任务 | 关键点 / 落点 | 验收 |
 |---|---|---|---|
-| **P1-3** | Git 收尾 | `6569599` / `dbb57cf` 已推送，本轮改动未提交；观察 Actions、需要时打 tag | Actions 绿 |
+| **P1-3** | Git 收尾 | 本轮及 JBR 收口已推送（`e75d56e`）；观察 Actions、需要时打 tag | Actions 绿 |
 | **P0-新** | 流水线 L2 | 标题屏热加 → 建世界 → N tick → HUD/按键/截图；先 minimap/mouse-gestures | 断言 + 截图证据 |
 | **P0-新** | 语料扩到 20–30 个常用模组 | 小地图/JEI/HUD/输入/前置库；`check` 进 PR | 报告 + 矩阵 |
 | **P0-新** | 模组白名单实测（所有者驱动） | 54 行：stock T1×7 / BLACK×23；JBR J1×18 / BLACK×6；candidate 由所有者复测转 verified | TSV + 视图同步 |
