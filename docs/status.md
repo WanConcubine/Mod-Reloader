@@ -73,6 +73,9 @@
 - **JiJ 嵌套元数据误判（2026-11-18）**：空 AT 文件、以及 toml `modType = "LIBRARY"` 的嵌套库不再当成“有 AT 的 mod”；
   `AccessTransformerRules` 按 FML 的规则读 AT（toml `[[accessTransformers]]` 优先，否则默认文件），单测覆盖空文件/自定义路径。
   Moonlight 复跑：越过 MODULE + late AT（126 条），转为 `kind=CONSTRUCT`（自定义注册表，见 46）。
+- **XaeroLib config channel 窗口（2026-11-18）**：`ConfigChannelRegistry.frozen` 在构造期临时放开、add 后恢复；
+  只对引用该 registry 的 jar 生效。World Map 复跑 `ok=true isLoaded=true`（此前 `kind=CONSTRUCT`）。
+  剩余：它自己的服务端初始化在 `ServerStartedEvent` 里，进世界热加后 `serverPlayerTickHandler` 为 null（问题 52）。
 - **模型层重放（2026-11-18）**：`RegisterLayerDefinitions` 已重放并在之后重建 `EntityModelSet` roots；层与 renderer 重建按“全容器先层后渲染器”排序；
   `ClientModLoader.loading` 在 FMLClientSetup 窗口内临时为 true（`setRenderLayer` 门禁）。Supplementaries 实测 `layer definitions ... 213 -> 234`、
   `ok=true isLoaded=true`，同批 Moonlight 也 `ok=true`。
@@ -156,6 +159,7 @@
 49. ✅ **模型层/Skull 模型（2026-11-18，已修）**：`RegisterLayerDefinitions` 现在会被重放，随后调用 `EntityModelSet.onResourceManagerReload` 重建 roots（`LayerDefinitions.createRoots()` 会合并 `ClientHooks` 的静态表）；层回放与“重建 renderer”拆成两阶段、**全容器先层后渲染器**（否则嵌套容器先重建，外层层的模型还没注册）。`ItemBlockRenderTypes.setRenderLayer` 的 client-loading 门禁在 FMLClientSetup 重放窗口内临时放开（`ClientModLoader.loading`，消费者只有该门禁和 options 保存保护）。实测 Supplementaries 层 213→234、无 `No model for layer`、`ok=true`。
 50. **失败回滚对 late-AT 重定义过的类可能 VerifyError（2026-11-18）**：Supplementaries 失败后回滚 `MineshaftPieces$MineShaftPiece` 报 `VerifyError: null`，`kind=ROLLBACK_PARTIAL`。回滚写回的是 late AT 之前的字节，但该类的后续加载/重定义可能已经改变了校验状态；需要专门复现，失败时至少保证“可重启的干净状态”并明确提示。
 51. **无焦点 + 热加重载隐藏 screen 会撞 `PauseScreen` NPE（2026-11-18，测试环境）**：`-PnoFocus=true` 时窗口失焦，`GameRenderer.render` 调 `pauseGame`；而 `ClientResourcePacks` 在 reload 链期间把 `mc.screen` 置空，`PauseScreen.createPauseMenu` 读到 `minecraft.player == null` → NPE（crash-2026-11-18_19.18.27）。**多 add/重载场景用聚焦窗口跑**（不带 `-PnoFocus`）；无焦点只用于单 add/短重载。
+52. **世界内热加不重放服务端一次性事件（2026-11-18）**：Xaero World Map 在 `ServerStartedEvent` 里创建 `WorldMap.serverPlayerTickHandler`；进世界后热加，该事件早已触发 → 下次玩家 tick NPE（integrated server 崩溃）。`RegisterCommandsEvent` 是唯一重放的服务端事件；其余（`ServerAboutToStart`/`ServerStarted`/`LevelLoad` 等）未支持（ADR-0007）。定向重放需要“只调用新容器的 game-bus 监听器”，否则全局重发会让所有模组重跑初始化。
 
 ## 玩家侧原则（ADR-0015，2026-11-18 最终）
 
@@ -168,7 +172,7 @@
 ## 下一步
 
 > **当前交接（2026-11-18，未提交）**：问题 43 已定为类级 AT 缺陷（44）并改为前置拒绝；shader 重放已验并修掉重复注册；
-> JBR 计数 **J1×20 / J2×0 / BLACK×4**。下一项：JBR BLACK（CraftTweaker/Xaero's World Map/Supplementaries）、
+> JBR 计数 **J1×20 / J2×1 / BLACK×3**。下一项：JBR BLACK（CraftTweaker/Xaero's World Map/Supplementaries）、
 > 类级 `-f` 的启动期替代、`ShaderReplay` 兜底夹具与流水线 L2、Windows 全链路。
 > 证据在 [history.md](history.md)；JBR 在 `run/jbr-21.0.11`（gitignored），语料 `/tmp/modreloader-corpus`。
 > 风险：`MixinAgentGuard` 依赖内部字段（找不到 no-op）；`ClassBytesCache` 不覆盖 eager loaded 目标。
@@ -181,7 +185,8 @@
 | **P0-新** | 流水线 L2 | 标题屏热加 → 建世界 → N tick → HUD/按键/截图；先 minimap/mouse-gestures | 断言 + 截图证据 |
 | **P0-新** | 语料扩到 20–30 个常用模组 | 小地图/JEI/HUD/输入/前置库；`check` 进 PR | 报告 + 矩阵 |
 | **P0-新** | 模组白名单实测（所有者驱动） | 54 行：stock T1×7 / BLACK×23；JBR J1×18 / BLACK×6；candidate 由所有者复测转 verified | TSV + 视图同步 |
-| **P0-新** | Xaero's World Map config channel | JBR 下 `kind=CONSTRUCT`（channel 注册太晚）；可能是运行时可修缺口 | 修或确认只能重启 |
+| **P0-新** | ✅ Xaero's World Map config channel | `XaeroLibChannels` 窗口（`ConfigChannelRegistry.frozen`），仅对引用该类的 jar 生效；World Map `ok=true isLoaded=true` | 已转 J2 |
+| **P0-新** | 服务端一次性事件（问题 52） | 定向重放 `ServerStartedEvent`（只调用新容器的 game-bus 监听器），救 World Map 世界里热加 | World Map J1 |
 | **P0-新** | 类级 AT 的启动期替代 | 启动扫描队列里的 AT，在**加载期**去 final（覆盖 `NativeImage` 这类启动即加载的类） | 夹具/真实 jar 复跑 |
 | **P0-新** | ✅ 自定义注册表（`NewRegistryEvent`） | `CustomRegistries` + `RegistryStage` 窗口；夹具 `custom registry RESULT: PASS`，Moonlight `ok=true`（3 个注册表）。剩余：`fill()` 后失败 dirty、datapack 注册表/`ModifyRegistriesEvent` 不重放、CraftTweaker 未复跑 | Moonlight J1（candidate） |
 | **P0-新** | ✅ late AT 对已混类二次 transform（问题 47） | 常驻 wrapper 包裹全部 transformer + 每次 redefine 的 `blanket()` 全局抑制；Moonlight 复跑 `ok=true`，Entity 不再报错 | 批次复跑 |

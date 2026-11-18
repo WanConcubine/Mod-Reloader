@@ -1608,3 +1608,19 @@ sable.companion.common]`，MixinSquared 配置可加载，Supplementaries 越过
 复跑 `moonlight → supplementaries`：两者 `ok=true isLoaded=true`，blocks 1061→1306、items 1335→1584、层 213→234，
 无 `No model for layer` / `Render layers can only be set...`。白名单 Supplementaries JBR BLACK → **J1（candidate）**。
 仍开放：问题 50（失败回滚 VerifyError）；窗口无焦点时 `pauseGame` 会撞隐藏 screen（测试用聚焦窗口跑）。
+
+## 2026-11-18（XaeroLib config channel 窗口：World Map 热加成功，暴露服务端一次性事件）
+
+Xaero 的 “config channel too late” 不在 NeoForge，而在 **XaeroLib 自己的**
+`xaero.lib.common.config.channel.register.ConfigChannelRegistry`：有一个 `frozen` 标志，启动后 `freeze()`，之后 `register` 抛
+`IllegalStateException`。做法与注册表窗口一致：
+
+- 新增 `hotadd/XaeroLibChannels`：只对**引用该 registry 类**的 jar 生效（`RegistrationAuditScanner.referencedTypes`），
+  构造期把 `frozen` 置 false、add 结束（成功或回滚）恢复 true；`INSTANCE`/`frozen` 走 `UnsafeAccess`，找不到只 warn。
+- 复跑 World Map（`-PverifyCompat=<xaeroworldmap>`）：`RESULT ok=true isLoaded=true`，此前是 `kind=CONSTRUCT`。
+
+随后暴露两个模组自身问题：
+- 标题屏：`XaeroWorldMapCore.onMinecraftRunTick` 抛 `NoSuchElementException`（已知的 `loadLater` 行为，需已有世界/L2）。
+- 世界内 add（`-PverifyAddCommand`）：命令返回 1，但 integrated server 玩家 tick NPE —— `WorldMap.serverPlayerTickHandler` 为 null，
+  因为它在 `ServerStartedEvent` 里创建，而世界内热加不会再触发该事件 → 记为**问题 52**（服务端一次性事件未重放，ADR-0007）。
+白名单 World Map JBR BLACK → **J2（candidate）**；计数 J1×20 / J2×1 / BLACK×3。

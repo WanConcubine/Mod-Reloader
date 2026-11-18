@@ -25,7 +25,7 @@
 | 环境 | 可热加、无 bug | 可热加、有 bug | 判不可加但可救 | 结构性不可加 |
 |---|---|---|---|---|
 | stock | T1 × 7 | T2 × 0 | T3 × 0 | BLACK × 23 |
-| JBR | J1 × 20 | J2 × 0 | — | BLACK × 4 |
+| JBR | J1 × 20 | J2 × 1 | — | BLACK × 3 |
 
 ## stock JVM（不靠 JBR）
 
@@ -96,11 +96,16 @@
 | 饰品栏（Curios） | curios-neoforge-9.5.1+1.21.1.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（late AT 16 rule） |
 | 鼠标手势（Mouse Tweaks） | MouseTweaks-neoforge-mc1.21-2.26.1.jar | FEI | candidate | - | JBR harness 2026-11-17 ok=true isLoaded=true（redefined AbstractContainerScreen） |
 
-### BLACK · 结构性不可热加（4）
+### J2 · JBR 下可热加，但有 bug（1）
+
+| 模组 | jar | tier | state | bug | 证据 |
+|---|---|---|---|---|---|
+| Xaero 世界地图（Xaero's World Map） | xaeroworldmap-neoforge-1.21.1-1.47.0.jar | HUANGHOU | candidate | 热加成功；进世界后服务端初始化缺失（ServerStartedEvent 未重放，serverPlayerTickHandler null）；标题屏 loadLater 崩（需已有世界） | JBR harness 2026-11-18：ConfigChannelRegistry frozen 窗口生效，CompatCheck ok=true isLoaded=true；标题屏 tick 抛 NoSuchElementException（模组自身 loadLater）；世界内 add 返回 1 后 integrated server 玩家 tick NPE（WorldMap.serverPlayerTickHandler null）。需重放 ServerStartedEvent / 用已有存档复测 |
+
+### BLACK · 结构性不可热加（3）
 
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|
 | CraftTweaker | CraftTweaker-neoforge-1.21.1-21.0.39.jar | GUIFEI | verified | 自定义 registry 在 NewRegistryEvent 之后注册（crafttweaker:transformer_serializer） | JBR+lateAt harness 2026-11-17 kind=CONSTRUCT（villager trade converters → 自定义 registry 太晚）；替代：重启 |
-| Xaero 世界地图（Xaero's World Map） | xaeroworldmap-neoforge-1.21.1-1.47.0.jar | HUANGHOU | verified | 构造期失败：config channel 注册太晚 + XaeroWorldMapCore ClassNotFound | JBR harness 2026-11-17 kind=CONSTRUCT；替代：重启（可能是运行时可修的缺口） |
 | 传送石碑（Waystones） | waystones-neoforge-1.21.1-21.1.47.jar | GUIFEI | verified | EVENT：post-construct 失败且注册已部分生效（+44 方块 / +55 物品），需重启 | JBR harness 2026-11-18 kind=EVENT（Balm 先热加成功）；替代：重启（注册不可回滚） |
 | 旅行地图（JourneyMap） | journeymap-neoforge-1.21.1-6.0.9.jar | FEI | verified | 类级 AT 去 final 无法在运行期完成：ComparableNativeImage extends NativeImage（NativeImage 必须非 final） | JBR 21.0.11 probe：redefine 去掉类 final 后该类的构造全部返回 null（NativeImage.read → null）；随后再次 redefine 时 JVM SIGSEGV（ConstantPoolCacheEntry::clear_entry）；late AT 现在在改任何字节前拒绝（-PverifyCompat=journeymap -PlateAt=true → stage=VALIDATE kind=ACCESS_TRANSFORMER），需放 mods/ 重启由 FML 在加载期应用 |

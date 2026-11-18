@@ -472,6 +472,11 @@ public final class HotAddEngine {
                 RegistryStage.begin(rollback);
                 CustomRegistries.open(rollback);
             }
+            // XaeroLib freezes its config-channel registry at startup; the Xaero
+            // mods register their channels during construct/common setup.
+            if (XaeroLibChannels.appliesTo(jar)) {
+                XaeroLibChannels.open(rollback);
+            }
             PlatformHooks hooks = PlatformHooks.get();
             int keysBefore = hooks.keyMappingCount();
             List<String> loaded = new ArrayList<>();
@@ -646,6 +651,7 @@ public final class HotAddEngine {
             if (!coremodSummary.isEmpty()) {
                 message += coremodSummary.get(0);
             }
+            XaeroLibChannels.close();
             ModReloader.LOGGER.info("[ModReloader] {}", message);
             return new Result(true, message);
         } catch (Throwable t) {
