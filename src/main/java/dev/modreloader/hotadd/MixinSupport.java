@@ -2,6 +2,7 @@ package dev.modreloader.hotadd;
 
 import dev.modreloader.ModReloader;
 import net.neoforged.fml.ModList;
+import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.fml.loading.moddiscovery.ModFileParser;
 import org.spongepowered.asm.mixin.FabricUtil;
 import org.spongepowered.asm.mixin.MixinEnvironment;
@@ -13,8 +14,12 @@ import org.spongepowered.asm.mixin.transformer.IMixinTransformer;
 import java.io.InputStream;
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +45,13 @@ import java.util.Set;
  * bytes are captured before the new config is attached to the transformer, so a
  * failure can attempt to redefine the class back. JBR's ability to remove
  * interfaces is JVM-dependent; rollback reports failures instead of hiding them.
+ *
+ * <p>JBR's redefine also runs Mixin's agent transformer, which would apply the
+ * config a second time to bytes we already mixed (MixinExtras WrapOperation then
+ * fails and surfaces as {@code ClassFormatError}). {@link MixinAgentGuard}
+ * suspends that transformer only for our targets during the redefine window.
+ * While transforming, only the configs added by this call are active: otherwise
+ * a later hot-add re-applies earlier mods' mixins to the new target bytes.
  *
  * <p>Limits: this re-applies every registered config to loaded target bytes. It
  * is only safe when the target has not been changed by another agent, and it
@@ -79,6 +91,7 @@ public final class MixinSupport {
         List<String> registered = new ArrayList<>();
         List<String> skipped = new ArrayList<>();
         List<String> errors = new ArrayList<>();
+        List<String> addedConfigs = new ArrayList<>();
         Set<String> targets = new LinkedHashSet<>();
 
         List<String> apiProblems = MixinRuntimeApi.probe();
@@ -95,8 +108,8 @@ public final class MixinSupport {
                 skipped.add(config.config() + " (missing " + config.requiredMods() + ")");
                 continue;
             }
-            rollback.add("remove mixin config " + config.config(), () -> removeConfig(config.config()));
             String modId = config.requiredMods().isEmpty() ? primaryModId : config.requiredMods().get(0);
+            addedConfigs.add(config.config());
             try {
                 loadedConfigs.add(loadConfig(config.config(), modId));
             } catch (Throwable t) {
@@ -129,13 +142,13 @@ public final class MixinSupport {
             Map<String, Class<?>> loadedNow = loadedClasses();
             Map<String, byte[]> originals = captureOriginals(targets, loadedNow);
             IMixinTransformer transformer = MixinRuntimeApi.getTransformer();
+            Object processor = MixinRuntimeApi.getProcessor(transformer);
             for (LoadedConfig loaded : loadedConfigs) {
                 if (!registered.contains(loaded.name())) {
                     continue;
                 }
                 try {
-                    MixinRuntimeApi.addIntoProcessor(
-                            MixinRuntimeApi.getProcessor(transformer), loaded.config());
+                    MixinRuntimeApi.addIntoProcessor(processor, loaded.config());
                     raiseCompatibilityLevel(loaded.config(), loaded.name());
                 } catch (Throwable t) {
                     errors.add("activate " + loaded.name() + ": " + t.getClass().getSimpleName()
@@ -145,8 +158,30 @@ public final class MixinSupport {
                 }
             }
             if (errors.isEmpty()) {
-                applied = applyTargets(targets, loadedNow, originals, rollback, errors);
+                // transformClassBytes applies every active config. For a second
+                // hot-add that would re-apply earlier mods' mixins to the new
+                // target bytes; isolate the new configs while we transform.
+                List<Object> allActive = MixinRuntimeApi.getConfigs(processor);
+                List<Object> allPending = MixinRuntimeApi.getPendingConfigs(processor);
+                Set<String> newNames = new LinkedHashSet<>(registered);
+                try {
+                    MixinRuntimeApi.setConfigs(processor, filterByNames(allActive, newNames));
+                    MixinRuntimeApi.setPendingConfigs(processor, filterByNames(allPending, newNames));
+                    applied = applyTargets(targets, loadedNow, originals, rollback, errors);
+                } finally {
+                    MixinRuntimeApi.setConfigs(processor, allActive);
+                    MixinRuntimeApi.setPendingConfigs(processor, allPending);
+                }
             }
+        }
+
+        // Rollback is LIFO, and class restores were registered inside applyTargets.
+        // Queue config removal last so it runs first: restoring class bytes while a
+        // config is still active lets Mixin's agent re-apply the injection, and the
+        // rollback then leaves a handler whose target classes are about to be
+        // unloaded (measured with ModernFix: next tick NoClassDefFoundError).
+        for (String name : addedConfigs) {
+            rollback.add("remove mixin config " + name, () -> removeConfig(name));
         }
 
         return new Report(List.copyOf(configNames), List.copyOf(registered), List.copyOf(skipped),
@@ -178,6 +213,19 @@ public final class MixinSupport {
             ModReloader.LOGGER.warn("[ModReloader] cannot inspect mixin config state", t);
         }
         return false;
+    }
+
+    private static List<Object> filterByNames(List<Object> configs, Set<String> names) {
+        if (configs == null) {
+            return List.of();
+        }
+        List<Object> filtered = new ArrayList<>();
+        for (Object candidate : configs) {
+            if (candidate instanceof IMixinConfig config && names.contains(config.getName())) {
+                filtered.add(candidate);
+            }
+        }
+        return filtered;
     }
 
     private static boolean requirementsMet(List<String> requiredMods, Set<String> hotModIds) {
@@ -360,28 +408,39 @@ public final class MixinSupport {
             return new Applied(redefined, eager, deferred);
         }
 
+        Set<String> dottedTargets = new HashSet<>();
         for (String target : targets) {
-            String dotted = target.replace('/', '.');
-            Class<?> type = loaded.get(dotted);
-            if (type != null) {
-                rollback.add("restore class " + dotted,
-                        () -> redefineBack(instrumentation, type, originals.get(dotted), dotted));
-                redefine(instrumentation, type, mixedBytes.get(dotted), dotted, redefined, errors);
-                continue;
-            }
-            // Not loaded before registration. Load it now (without initializing)
-            // so Mixin transforms it on its first definition; do not redefine.
-            try {
-                Class<?> loadedType = Class.forName(dotted, false, MixinSupport.class.getClassLoader());
-                rollback.add("restore class " + dotted,
-                        () -> redefineBack(instrumentation, loadedType, originals.get(dotted), dotted));
-                eager.add(dotted);
-                ModReloader.LOGGER.info("[ModReloader] eagerly loaded mixin target (mixed on load): {}",
-                        dotted);
-            } catch (Throwable t) {
-                deferred.add(dotted);
-                ModReloader.LOGGER.warn("[ModReloader] cannot eagerly load mixin target {}: {}",
-                        dotted, t.toString());
+            dottedTargets.add(target.replace('/', '.'));
+        }
+        // JBR's redefine invokes the Mixin agent, which would transform the bytes
+        // we already mixed a second time. Keep it away from these targets only.
+        try (MixinAgentGuard ignored = MixinAgentGuard.suspend(instrumentation, dottedTargets)) {
+            for (String target : targets) {
+                String dotted = target.replace('/', '.');
+                Class<?> type = loaded.get(dotted);
+                if (type != null) {
+                    rollback.add("restore class " + dotted,
+                            () -> redefineBack(instrumentation, type, originals.get(dotted), dotted));
+                    redefine(instrumentation, type, mixedBytes.get(dotted), originals.get(dotted),
+                            dotted, redefined, errors);
+                    continue;
+                }
+                // Not loaded before registration. Load it now (without initializing)
+                // so Mixin transforms it on its first definition; do not redefine.
+                try {
+                    Class<?> loadedType = Class.forName(dotted, false,
+                            MixinSupport.class.getClassLoader());
+                    rollback.add("restore class " + dotted,
+                            () -> redefineBack(instrumentation, loadedType, originals.get(dotted),
+                                    dotted));
+                    eager.add(dotted);
+                    ModReloader.LOGGER.info(
+                            "[ModReloader] eagerly loaded mixin target (mixed on load): {}", dotted);
+                } catch (Throwable t) {
+                    deferred.add(dotted);
+                    ModReloader.LOGGER.warn("[ModReloader] cannot eagerly load mixin target {}: {}",
+                            dotted, t.toString());
+                }
             }
         }
         return new Applied(List.copyOf(redefined), List.copyOf(eager), List.copyOf(deferred));
@@ -445,7 +504,8 @@ public final class MixinSupport {
     }
 
     private static void redefine(Instrumentation instrumentation, Class<?> type, byte[] mixed,
-                                 String dotted, List<String> redefined, List<String> errors) {
+                                 byte[] original, String dotted, List<String> redefined,
+                                 List<String> errors) {
         if (!instrumentation.isModifiableClass(type)) {
             errors.add("target is not modifiable: " + dotted);
             return;
@@ -456,8 +516,31 @@ public final class MixinSupport {
             ModReloader.LOGGER.info("[ModReloader] redefined {} with mixins ({} bytes)",
                     dotted, mixed.length);
         } catch (Throwable t) {
+            dumpFailure(dotted, original, mixed);
             errors.add("redefine " + dotted + ": " + t.getClass().getSimpleName() + ": " + t.getMessage());
             ModReloader.LOGGER.error("[ModReloader] mixin redefine failed: {}", dotted, t);
+        }
+    }
+
+    /**
+     * Keeps the exact bytes of a failed redefine. JBR can add fields/methods itself
+     * (verified with the dev probe), so a {@code ClassFormatError} here means the
+     * Mixin output needs inspection — not just a "JBR limitation" label.
+     */
+    private static void dumpFailure(String dotted, byte[] original, byte[] mixed) {
+        try {
+            Path dir = FMLPaths.GAMEDIR.get().resolve("modreloader").resolve("mixin-failures");
+            Files.createDirectories(dir);
+            String safe = dotted.replaceAll("[^A-Za-z0-9_.-]", "_");
+            if (original != null) {
+                Files.write(dir.resolve(safe + ".original.class"), original);
+            }
+            Files.write(dir.resolve(safe + ".mixed.class"), mixed);
+            ModReloader.LOGGER.warn("[ModReloader] mixin failure bytes dumped for {} to {}",
+                    dotted, dir);
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn("[ModReloader] cannot dump mixin failure bytes for {}",
+                    dotted, t);
         }
     }
 

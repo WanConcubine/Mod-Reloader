@@ -14,13 +14,28 @@ public final class ModReloaderI18n {
     }
 
     public static Component blockReason(ModInspection inspection) {
-        return blockReason(inspection, false);
+        return blockReason(inspection, false, false);
     }
 
-    /** @param allowRegistryContent true when registry content can be hot-added (experimental). */
     public static Component blockReason(ModInspection inspection, boolean allowRegistryContent) {
+        return blockReason(inspection, allowRegistryContent, false);
+    }
+
+    /**
+     * @param allowRegistryContent        true when registry content can be hot-added (experimental).
+     * @param allowLateAccessTransformers true when the experimental late-AT path is enabled; an AT
+     *                                    is otherwise a hard gate, so it must be reported before
+     *                                    the tier-specific text. Without this branch the dialog
+     *                                    claimed "experimental loadable" while the Load button was
+     *                                    disabled (Mekanism).
+     */
+    public static Component blockReason(ModInspection inspection, boolean allowRegistryContent,
+                                        boolean allowLateAccessTransformers) {
         if (!inspection.ok()) {
             String error = inspection.error() == null ? "" : inspection.error();
+            if (error.contains("GAMELIBRARY")) {
+                return Component.translatable("modreloader.preflight.library");
+            }
             if (error.contains("not a valid jar")) {
                 return Component.translatable("modreloader.preflight.invalid_jar");
             }
@@ -44,6 +59,13 @@ public final class ModReloaderI18n {
         if (inspection.alreadyLoaded()) {
             return Component.translatable("modreloader.preflight.already_loaded");
         }
+        if (inspection.accessTransformers() && !allowLateAccessTransformers) {
+            // On a JBR session the missing piece is the experimental switch, not the
+            // JVM; "use JBR" there was confusing.
+            return Component.translatable(JbrSupport.available()
+                    ? "modreloader.preflight.access_transformer_late_off"
+                    : "modreloader.preflight.access_transformer");
+        }
         if (inspection.tier() == ModInspection.Tier.GUIFEI && !allowRegistryContent) {
             return Component.translatable("modreloader.preflight.guifei");
         }
@@ -65,6 +87,12 @@ public final class ModReloaderI18n {
         if (mixinTier && !JbrSupport.available()) {
             // Still loadable: only layout-changing targets on loaded classes need JBR.
             return Component.translatable("modreloader.preflight.mixin_no_jbr");
+        }
+        if (inspection.accessTransformers()) {
+            // Reachable only when the add is otherwise allowed: the Load button is
+            // usable because the experimental late-AT path is on. Saying so here is
+            // the warning; anything earlier would hide the gate that really blocked.
+            return Component.translatable("modreloader.preflight.access_transformer_late");
         }
         if (inspection.tier() == ModInspection.Tier.GUIFEI) {
             return Component.translatable("modreloader.preflight.guifei_loadable");

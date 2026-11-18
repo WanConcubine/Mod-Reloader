@@ -22,6 +22,73 @@ class RelaunchScriptsTest {
     }
 
     @Test
+    void splitsAWindowsCommandLine() {
+        String line = "\"C:\\Program Files\\Java\\bin\\java.exe\" -Xmx2G "
+                + "\"-Dfoo=a b\" net.minecraft.client.main.Main --x";
+        assertEquals(List.of("C:\\Program Files\\Java\\bin\\java.exe", "-Xmx2G",
+                        "-Dfoo=a b", "net.minecraft.client.main.Main", "--x"),
+                RelaunchScripts.splitWindowsCommandLine(line));
+        assertEquals(List.of("java", "-cp", "a;b", "Main"),
+                RelaunchScripts.splitWindowsCommandLine("java -cp \"a;b\" Main"));
+        assertEquals(List.of("a\"b"),
+                RelaunchScripts.splitWindowsCommandLine("\"a\\\"b\""));
+    }
+
+    @Test
+    void jvmFlagsLandBeforeTheMainClass() {
+        // Vanilla-shaped command line: the JVM stops reading options at the main
+        // class, so a flag appended at the end would be a program argument.
+        List<String> args = List.of("-Xmx2G", "-cp", "libs/*",
+                "net.minecraft.client.main.Main", "--username", "Dev");
+        assertEquals(List.of("-Xmx2G", "-cp", "libs/*", RelaunchFlags.LATE_AT,
+                        "net.minecraft.client.main.Main", "--username", "Dev"),
+                RelaunchScripts.withJvmFlags(args, List.of(RelaunchFlags.LATE_AT)));
+    }
+
+    @Test
+    void jvmFlagsSkipOptionValuesAndModuleArguments() {
+        // NeoForge userdev shape: -p and --add-modules take a separate value.
+        List<String> args = List.of("-p", "mods", "--add-modules", "ALL-MODULE-PATH",
+                "-DlegacyClassPath=libs/*", "cpw.mods.bootstraplauncher.BootstrapLauncher",
+                "--launchTarget", "forgeclient");
+        List<String> out = RelaunchScripts.withJvmFlags(args, List.of("-XX:+AllowEnhancedClassRedefinition"));
+        assertEquals(List.of("-p", "mods", "--add-modules", "ALL-MODULE-PATH",
+                        "-DlegacyClassPath=libs/*", "-XX:+AllowEnhancedClassRedefinition",
+                        "cpw.mods.bootstraplauncher.BootstrapLauncher",
+                        "--launchTarget", "forgeclient"),
+                out);
+    }
+
+    @Test
+    void jvmFlagsStayAfterAddOpensValue() {
+        List<String> args = List.of("--add-opens", "java.base/java.lang=ALL-UNNAMED",
+                "-Xmx2G", "net.minecraft.client.main.Main", "--username", "Dev");
+        assertEquals(List.of("--add-opens", "java.base/java.lang=ALL-UNNAMED",
+                        "-Xmx2G", "-Dmodreloader.lateAt=true",
+                        "net.minecraft.client.main.Main", "--username", "Dev"),
+                RelaunchScripts.withJvmFlags(args, List.of("-Dmodreloader.lateAt=true")));
+        // Equals form is a single token and must not consume the next one.
+        List<String> equalsForm = List.of("--add-opens=java.base/java.lang=ALL-UNNAMED", "Main", "--x");
+        assertEquals(List.of("--add-opens=java.base/java.lang=ALL-UNNAMED", "-Dfoo=bar", "Main", "--x"),
+                RelaunchScripts.withJvmFlags(equalsForm, List.of("-Dfoo=bar")));
+    }
+
+    @Test
+    void jvmFlagsGoBeforeJarAndModuleLaunches() {
+        assertEquals(List.of("-Xmx1G", "-Dmodreloader.lateAt=true", "-jar", "game.jar", "--x"),
+                RelaunchScripts.withJvmFlags(List.of("-Xmx1G", "-jar", "game.jar", "--x"),
+                        List.of("-Dmodreloader.lateAt=true")));
+        assertEquals(List.of("-Dx=y", "--module", "app/mod.Main"),
+                RelaunchScripts.withJvmFlags(List.of("--module", "app/mod.Main"), List.of("-Dx=y")));
+    }
+
+    @Test
+    void noFlagsLeavesTheCommandLineAlone() {
+        List<String> args = List.of("-cp", "a", "Main");
+        assertEquals(args, RelaunchScripts.withJvmFlags(args, List.of()));
+    }
+
+    @Test
     void posixScriptWaitsBeforeStarting() {
         String script = RelaunchScripts.posix(Path.of("/jbr/bin/java"),
                 List.of("-cp", "/a b/c.jar", "Main"), Path.of("/game dir"), 3);

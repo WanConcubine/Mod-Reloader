@@ -18,6 +18,8 @@
 | [0011](0011-hotadd-must-inform-clients.md) | 热加必须主动告知在线客户端（id/版本/jar/hash + 该怎么办） | Proposed（已实现并跨进程验证） |
 | [0012](0012-registration-audit-severity.md) | 注册审计分级：崩溃类变更前拒绝，行为类只 warn | Proposed（已实现并用 16 个真实 jar 校准） |
 | [0013](0013-late-coremod.md) | 热加 jar 的 coremod（`ICoreMod`）在独立 module layer 里晚注入；JBR 只在「已加载类 + 布局变更」时必需 | Proposed（jecharacters 拼音搜索功能验证通过） |
+| [0014](0014-no-caller-rewrite-for-at.md) | 不改写调用方来“模拟 AT”（Stage-0 否决） | Accepted（所有者 2026-11-17） |
+| [0015](0015-player-side-zero-tinkering.md) | 玩家侧零手工：能力由运行时自动准备，不删能力 | Accepted（所有者 2026-11-18 修正） |
 
 ## 模板
 

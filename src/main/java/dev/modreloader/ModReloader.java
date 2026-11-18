@@ -5,15 +5,18 @@ import dev.modreloader.capability.Capabilities;
 import dev.modreloader.client.ClientBootstrap;
 import dev.modreloader.hotadd.ModNotice;
 import dev.modreloader.hotadd.RegistrySync;
+import dev.modreloader.inspect.JbrSupport;
 import dev.modreloader.inspect.MixinRuntimeSupport;
 import dev.modreloader.server.ServerBootstrap;
 import dev.modreloader.watch.ModWatcherConfig;
 import dev.modreloader.watch.ModsFolderWatcher;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.loading.FMLPaths;
 import org.slf4j.Logger;
 
 import java.lang.management.ManagementFactory;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -51,6 +54,15 @@ public final class ModReloader {
         } else {
             ServerBootstrap.install();
         }
+        // Players often unpack JBR next to .minecraft; include the game dir and
+        // its parent in the install scan (recomputed on every lookup).
+        JbrSupport.includeDirectory(FMLPaths.GAMEDIR.get());
+        String userDir = System.getProperty("user.dir", "");
+        if (!userDir.isBlank()) {
+            JbrSupport.includeDirectory(Path.of(userDir));
+        }
+        LOGGER.info("[ModReloader] game directory = {} (JBR detection roots: game dir + 3 ancestors)",
+                FMLPaths.GAMEDIR.get());
         Capabilities.probe();
         logRuntime();
     }

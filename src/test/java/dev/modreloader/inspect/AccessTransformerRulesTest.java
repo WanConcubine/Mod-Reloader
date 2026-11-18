@@ -45,6 +45,23 @@ class AccessTransformerRulesTest {
     }
 
     @Test
+    void inlineCommentsDoNotBecomeMembersOrMethods() {
+        AccessTransformerRules rules = AccessTransformerRules.parse("""
+                public-f com/mojang/blaze3d/platform/NativeImage # NativeImage
+                public net/minecraft/client/Minecraft fps # fps
+                public net/minecraft/client/Minecraft addCustomNbtData(Lnet/minecraft/world/item/ItemStack;)V # add
+                """);
+
+        assertEquals(3, rules.ruleCount());
+        assertTrue(rules.rules().get(0).classLevel(), rules.rules().get(0).toString());
+        assertEquals("fps", rules.rules().get(1).member());
+        assertEquals("addCustomNbtData", rules.rules().get(2).member());
+        assertEquals("(Lnet/minecraft/world/item/ItemStack;)V",
+                rules.rules().get(2).descriptor());
+        assertTrue(rules.rules().get(2).method());
+    }
+
+    @Test
     void datagenTargetsAreSeparatedFromRuntimeOnes() {
         AccessTransformerRules rules = AccessTransformerRules.parse(SAMPLE);
 

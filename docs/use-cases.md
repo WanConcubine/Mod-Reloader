@@ -103,6 +103,38 @@
 | 内容模组 | Ex Nihilo、Mekanism | T4 | 最高，但需要软重启 |
 | 性能模组 | Sodium / Lithium | T5 | 不做 |
 
+## 2.1 常见客户端工具：小地图 / 鼠标手势 / 前置库（2026-11-17 实测）
+
+这些是玩家最常“进游戏后才发现没装”的小工具，也是热加最该覆盖的形状。用
+[hotadd-test-pipeline.md](features/hotadd-test-pipeline.md) 的 L1 语料实测：
+
+| 模组 | 预测 tier | 前置 | L1 结果 | 说明 |
+|---|---|---|---|---|
+| Xaero's Minimap 26.6.0 | 皇后 | **JiJ 嵌套 mod** XaeroLib 1.7.3 | **PASS** | 6 个 mixin config、20 类 redefine、key 34→57、HUD `xaerohud:hud`、两个资源包 |
+| JourneyMap 6.0.9 | 妃 | **JiJ 嵌套 mod** commonnetworking | 干净拒绝 `ACCESS_TRANSFORMER` | 前置 container 正常；39 条 AT / 26 个运行期目标 |
+| Mouse Tweaks 2.26.1（鼠标手势） | 妃 | 无 | **PASS（JBR）**；无 JBR 则 `JBR_REQUIRED` | 给 `AbstractContainerScreen` 加接口，点名拒绝 |
+| Searchables → Controlling | 妃 / 皇后 | **外部 required** Searchables | Searchables PASS；Controlling 干净拒绝 `ACCESS_TRANSFORMER` | 前置满足 ≠ 能加 |
+| AppleSkin 3.0.9 | 嫔 | 无 | **PASS** | HUD/提示条 |
+| Balm 21.0.67 | 贵妃 | **JiJ 嵌套 mod** kuma_api | **PASS** | 前置库本身也带嵌套 mod |
+| Jade 15.10.6 | 妃 | 无 | 干净拒绝 `ACCESS_TRANSFORMER` | 57 条 AT |
+| JEI 19.70.0.469 | 贵妃 | **JiJ 嵌套 mod** MezzConfig | 干净拒绝 `ACCESS_TRANSFORMER` | 34 条 AT；前置 container 正常 |
+
+**三种“前置”**（pipeline 静态检查分别处理）：
+
+1. **外部 required mod**（Controlling → Searchables、XaeroPlus → Xaero's World Map）：必须先热加，顺序错就是 `MISSING_DEPENDENCY`。
+2. **JiJ 纯库**（jecharacters → PinIn）：只进 module path，不需要 container。
+3. **JiJ 嵌套 mod**（Xaero's → XaeroLib、JourneyMap → commonnetworking、Balm → kuma_api）：
+   2026-11-17 起热加也会建 `ModContainer` 与资源包；这是这一轮补上的最大缺口。
+
+**JBR + late AT（实验性，2026-11-17）**：上表的 Jade/JEI/Controlling 在 stock JVM 上仍是 AT 拒绝；
+JBR 下加 `-PlateAt=true` 可把它们的 AT 在加载前应用到已加载类（Jade 57/57、JEI 34/34、Controlling 1/1，L1 PASS）。
+JourneyMap 的 AT 也能应用，但随后卡在 `RegisterShadersEvent` 注册审计。见 [late-at.md](features/late-at.md)；
+不要把“能把 AT 打进去”写成“模组功能已验证”。
+
+**对玩家的含义**：Xaero's Minimap 与 Mouse Tweaks 已经能热加；但 **AT 仍然必须重启**
+（Jade/JEI/JourneyMap/Controlling），同一个“小地图/输入”类别里也有能加和不能加的区别。
+JBR 只解决“已加载类 + 布局变更”（Mouse Tweaks 是典型）。见 [jbr-support.md](features/jbr-support.md) 的决策树。
+
 ## 3. 好场景的判据
 
 一个场景值得优先做，通常满足：

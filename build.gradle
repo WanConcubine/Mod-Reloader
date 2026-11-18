@@ -14,6 +14,11 @@ base {
 // the "no enhanced redefinition" path that a stock JVM also takes. Used to verify
 // that mixins into not-yet-loaded classes and layout-preserving changes still work.
 def noJbr = (providers.gradleProperty('noJbr').orNull ?: '').toBoolean()
+// `-PnoFocus=true`: load the dev-only agent that creates the window without
+// taking focus. Automated runs should use it; interactive runs can omit it.
+def noFocusMode = (providers.gradleProperty('noFocus').orNull ?: '').toBoolean()
+// `-PlateAt=true`: experimental late access transformers via JBR redefinition.
+def lateAtMode = (providers.gradleProperty('lateAt').orNull ?: '').toBoolean()
 
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(21)
@@ -26,6 +31,11 @@ sourceSets {
     dev {
         compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
         runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
+    }
+    // Dev-only JVM agent that prevents the game window from taking focus.
+    // Not part of the mod jar, not in the `mods` block.
+    noFocus {
+        java.srcDir 'src/noFocus/java'
     }
 }
 
@@ -50,6 +60,8 @@ repositories {
     }
 }
 
+def asmJar = file("${gradle.gradleHomeDir}/lib/asm-9.7.jar")
+
 dependencies {
     // MixinRuntime (modId `mr`) is optional and reached only through reflection
     // (hotadd/MixinRuntimeApi), so nothing here compiles against it: the jar is
@@ -57,12 +69,19 @@ dependencies {
 
     // Plain JUnit tests, no game: language-file parity and failure-key coverage.
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+
+    // The no-focus agent is tiny but needs ASM to rewrite Window.<init>.
+    // Use the ASM that ships with the Gradle runtime: resolving the same
+    // artifact from a remote maven repo stalls this network for minutes.
+    noFocusCompileOnly files(asmJar)
+    testImplementation sourceSets.noFocus.output
+    testImplementation files(asmJar, file("${gradle.gradleHomeDir}/lib/asm-tree-9.7.jar"))
 }
 
 // `check` also compiles the dev harnesses (not shipped), so a change that only
 // breaks src/dev still fails the build.
 tasks.named('check') {
-    dependsOn 'compileDevJava'
+    dependsOn 'compileDevJava', 'compileNoFocusJava'
 }
 
 tasks.named('test') {
@@ -238,6 +257,23 @@ neoForge {
                 // Managed relaunch: build the real plan + prove the script/spawn path
                 // starts a JVM, without restarting the game.
                 systemProperty 'modreloader.verifyRelaunchPlan', 'true'
+            }
+            if (providers.gradleProperty('verifyJbrFlow').orNull) {
+                // End-to-end player path: stock JVM -> provision JBR -> relaunch ->
+                // hot-add the queued JBR-tier jars in the replacement JVM.
+                systemProperty 'modreloader.verifyJbrFlow',
+                        providers.gradleProperty('verifyJbrFlow').get()
+            }
+            if (providers.gradleProperty('verifyRedefineProbe').orNull) {
+                // Isolate JBR's redefine limits from Mixin: ASM-added field/method/
+                // interface on the failing classes, then restore.
+                systemProperty 'modreloader.verifyRedefineProbe',
+                        providers.gradleProperty('verifyRedefineProbe').get()
+            }
+            if (providers.gradleProperty('mixinDebug').orNull) {
+                // Mixin's own verbose/export diagnostics for one hot-add run.
+                systemProperty 'mixin.debug.verbose', 'true'
+                systemProperty 'mixin.debug.export', 'true'
             }
             if (providers.gradleProperty('verifyMixinFixture').orNull) {
                 // Non-JBR mixin path: a mixin into a class that is not loaded yet must
@@ -416,7 +452,22 @@ tasks.withType(JavaCompile).configureEach {
 // dedicated server has its own fei-tier hot-add path, and without the flag
 // ZeroCore2's `Slot` redefine failed there while the same add succeeded on the
 // client (status known issue 22).
-def jbrJava = file("${System.getProperty('user.home')}/Library/Java/JavaVirtualMachines/jbr-21.jdk/Contents/Home/bin/java")
+tasks.register('noFocusAgentJar', Jar) {
+    archiveFileName = 'modreloader-no-focus-agent.jar'
+    destinationDirectory = layout.buildDirectory.dir('noFocus')
+    manifest {
+        attributes(
+                'Premain-Class': 'dev.modreloader.nofocus.NoFocusAgent',
+                'Can-Retransform-Classes': 'true'
+        )
+    }
+    from sourceSets.noFocus.output
+    from { zipTree(asmJar) }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+def jbrJavaOverride = providers.gradleProperty('jbrJava').orNull
+def jbrJava = file(jbrJavaOverride ?: "${System.getProperty('user.home')}/Library/Java/JavaVirtualMachines/jbr-21.jdk/Contents/Home/bin/java")
 
 def useJbr = { JavaExec task ->
     if (noJbr) {
@@ -435,5 +486,25 @@ def useJbr = { JavaExec task ->
                 'fei-tier (mixin) hot-add will fail', jbrJava, task.name)
     }
 }
-tasks.named('runClient', JavaExec).configure { useJbr(it) }
-tasks.named('runServer', JavaExec).configure { useJbr(it) }
+tasks.named('runClient', JavaExec).configure { task ->
+    useJbr(task)
+    if (lateAtMode) {
+        task.systemProperty 'modreloader.lateAt', 'true'
+        task.logger.lifecycle('{} enables experimental late AT (-Dmodreloader.lateAt=true)', task.name)
+    }
+    if (noFocusMode) {
+        dependsOn 'noFocusAgentJar'
+        def agentJar = layout.buildDirectory.file('noFocus/modreloader-no-focus-agent.jar')
+        task.jvmArgs "-javaagent:${agentJar.get().asFile.absolutePath}".toString()
+        task.systemProperty 'modreloader.noFocus', 'true'
+        // The early splash is a separate GLFW window that can activate first.
+        task.systemProperty 'fml.earlyprogresswindow', 'false'
+        task.logger.lifecycle('{} uses the no-focus agent (window stays out of focus)', task.name)
+    }
+}
+tasks.named('runServer', JavaExec).configure { task ->
+    useJbr(task)
+    if (lateAtMode) {
+        task.systemProperty 'modreloader.lateAt', 'true'
+    }
+}

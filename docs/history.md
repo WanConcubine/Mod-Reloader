@@ -553,3 +553,843 @@ jei               old=GUIFEI  new=GUIFEI
 - **未验证**：真实“新窗口起来、旧进程退出”的端到端（会退出客户端，不适合自动 harness），Windows/PCL2 的进程树行为尤其未知；
   B 只影响本次会话，长期要在启动器里选 JBR。A′ 只是自动化“重启”那一步，**不会替玩家把 jar 放进 `mods/`**——
   所以它适用于“玩家已装好 jar、只差重启”以及“用 JBR 重启”两种场景。
+
+## 2026-11-17（deepseek-flash）测试流水线 + JiJ 嵌套 mod/资源包 + 小地图/鼠标手势 L1
+
+所有者反馈：热加能力值得怀疑和补强，需要测试流水线；常用模组（鼠标手势、小地图）与“很多模组带前置”；
+以及玩家频繁遇到的 JBR 问题。这一轮把三件事都落到了可复现的证据上。
+
+### 1. 兼容性测试流水线 v0（`tools/pipeline/`）
+
+- 语料 `corpus.json`：11 个真实 jar，pinned `version` + `file` + `sha256`；`fetch` 只解析精确版本（不取 latest），
+  jar 落 `/tmp/modreloader-corpus`，不进仓库。
+- 场景表达“前置”：`jars` 顺序 + `mods.toml` 的 **required** 依赖闭包（忽略 platform/optional）；
+  `check` 报“依赖在 corpus 但不在场景”“顺序反了”“`run/mods` 已加载”“JiJ 提供”四类；负向场景用
+  `requires_absent` 防止环境把 `MISSING_DEPENDENCY` 变成 PASS。
+- expectation 是一等结果：`pass` / `refuse` + 精确 `FailureKind` / `unknown`；**干净拒绝也是 PASS**。
+- `run` 调 `-PverifyCompat`，解析 `[CompatCheck] START/RESULT/DONE`，写 `run.log` + `report.json` + `report.md`；
+  `overall_verdict` 要求 `DONE n/n` 且 exit 0，否则 `INCOMPLETE`（防“RESULT ok=true 后崩溃”被当 PASS）。
+- 单测 12 个（解析/顺序/负向/语料），`tools/pipeline/README.md` 与 [hotadd-test-pipeline.md](features/hotadd-test-pipeline.md)。
+
+证据（每行都是 pipeline report）：
+
+| 场景 | 结果 |
+|---|---|
+| `minimap`（Xaero's Minimap 26.6.0） | **PASS**：`ok=true`、`isLoaded=true`；嵌套 `xaerolib 1.7.3` container；6 mixin config、20 类 redefine；key 34→57；HUD 25→26；`mod/xaerolib`+`mod/xaerominimap`；`DONE 1/1` |
+| `mouse-gestures`（Mouse Tweaks 2.26.1） | **PASS**：`ok=true`、`isLoaded=true`、`redefined AbstractContainerScreen` |
+| `mouse-gestures-nojbr` | **PASS**：`ok=false kind=JBR_REQUIRED`，点名 `AbstractContainerScreen` 加接口 |
+| `input`（Searchables → Controlling） | **PASS**：Searchables PASS；Controlling 前置已满足但 1 条 AT 干净拒绝 |
+| `missing-dependency`（只加 Controlling） | **PASS**：`kind=MISSING_DEPENDENCY`，消息带 `searchables [1.0.1,)` |
+| `tooltip-at`（Jade） | **PASS**：`kind=ACCESS_TRANSFORMER`（57 条规则 / 39 个运行期目标） |
+| `minimap-journeymap` | **PASS**：commonnetworking（JiJ）container 正常；JourneyMap 39 条 AT / 26 个运行期目标拒绝 |
+| `hud`（AppleSkin） | **PASS**：`ok=true`、`isLoaded=true` |
+| `library`（Balm） | **PASS**：`ok=true`、`isLoaded=true`，`hot-added [kuma_api, balm]`（Balm 也 JiJ 嵌套了一个 mod） |
+| `minimap-addon`（World Map/Minimap → XaeroPlus） | 未完成：World Map 在标题屏走自己的 `loadLater` 崩溃；留给 L2 |
+| `recipe-at`（JEI） | 已量到 `ACCESS_TRANSFORMER`（嵌套 MezzConfig 0.6.10 有 mods.toml）；expectation 修正后复跑 |
+
+### 2. 分析器两个假阴性（否则流水线会“误报缺前置/没元数据”）
+
+- **hybrid jar loader**：JourneyMap 1.21.1 同时有 `fabric.mod.json`（`journeymap-wrongloader` 哨兵）和
+  `META-INF/neoforge.mods.toml`；原顺序先 Fabric，导致 modId/依赖/mixin 全读错。`_detect_loader` 改为 NeoForge 优先。
+- **`[[mods]]` 后的子表**：XaeroPlus 的 `[mods."lithium:options"]` 把 `mods` list 覆盖成 dict，modId 变 unknown。
+  `tomlmini._navigate` 现在把子表挂到最后一个数组元素。
+- 证据：`journeymap` → `journeymap`（不是 wrongloader）、XaeroPlus → `xaeroplus`；analyzer 18 个单测。
+- 顺带把“嵌套纯库没有 mods.toml”从错误降为可忽略（JourneyMap 的 pngj）。
+
+### 3. JiJ 嵌套 mod 的 container（“前置”里的硬骨头）
+
+Xaero's Minimap 依赖的 `xaerolib`、JourneyMap 依赖的 `commonnetworking`、Balm 依赖的 `kuma_api`
+都不是外部 jar，而是 `META-INF/jarjar` 里的嵌套 **mod**（有 mods.toml）。普通启动由
+`JarJarDependencyLocator` 建 `ModContainer`；热加原先只把嵌套 jar 放进 module path，required 依赖因此
+`MISSING_DEPENDENCY`。
+
+- 新增 `hotadd/NestedMods`：对每个 `declaresMod` 的嵌套 jar 建 `ModFile`/`ModFileInfo`/`ModInfo`
+  （`JarModsDotTomlModFileReader` + identifyMods/identifyLanguage/compileContent/setScanResult），
+  嵌套 AT 直接按 `ACCESS_TRANSFORMER` 拒绝；嵌套 mod 的 mixin 配置并入外层注册。
+- `HotAddEngine`：先 `ModListInjector.rebuild` 嵌套 containers，再外层；`ModuleInjector` 只把**纯库**当 extraJars，
+  嵌套 mod 走 `newFiles`；`ModNotice` 只通知外层。
+- `FMLCommonSetupEvent` 改为 `FmlEvents.finishAll`：**所有 container 先同步执行 listener，再统一跑 enqueued 任务**。
+  逐 container 跑会让 XaeroLib 在自己的队列里 freeze 包注册表，外层 World Map 再注册就 `IllegalStateException`。
+- `ModListInjector` 同步 `LoadingModList`（`modFiles/sortedList/fileById/modDependencies`）：Xaero 在 client setup 里
+  `FMLLoader.getLoadingModList().getModFileById("xaeroworldmap")`，不同步就是 NPE。
+- `ClientResourcePacks.injectAll`：外层 + 嵌套 `ModFileInfo` 的 pack 一次加入、只重载一次。只注入外层时
+  XaeroLib 的 `shaders/core/xaerolib/*.json` 找不到；实测两个 pack 同时选中后
+  `Successfully reloaded the XaeroLib shaders!`。
+
+### 4. JBR 玩家指南 + 诊断
+
+- 新 [jbr-support.md](features/jbr-support.md)：决策树、启动器步骤、故障表（flag 加到非 JBR 会让游戏起不来、
+  Java 17 vs 21、arch、macOS quarantine、`JAVA_HOME` 不决定启动器 Java）、FAQ、优先级。
+- `JbrSupport.diagnose()` + `/modreloader jbr`：打印 `java.home`/vendor/flag/已安装 JBR/下一步；`-PjbrJava=` 可覆盖
+  build.gradle 的 JBR 路径。命令仅编译通过，**未真机执行**；真实能力探针仍是待办。
+- Mouse Tweaks 的 JBR/noJBR 对照作为文档证据：JBR 下 `ok=true`；无 flag 下 `JBR_REQUIRED` 点名
+  `AbstractContainerScreen`，不是“有 mixin 就拒”。
+
+### 5. 边界 / 未做
+
+- L1 只到标题屏：Xaero's World Map 的 `OldFormatSupport.loadVanillaStates` 在标题屏崩（`ok=true` 之后），
+  需要 L2 进世界；pipeline 把它判 `INCOMPLETE`，不写成热加失败。
+- L2（进世界后的 HUD/按键/配置/截图）未实现；当前 `PASS` 只证明引擎路径 + `isLoaded`，不证明小地图真的画出来。
+- 嵌套 mod 的 `data/` 没有单独注入；嵌套 AT 仍拒绝；嵌套 `GAMELIBRARY`（无 mods.toml）没有 container 语义。
+- JBR 仍是 vendor+参数启发式；「装进 mods/ 并重启」降级路径未做；真实 JBR 探针未做。
+- 并发跑两个 dev client 会抢 `run/`，给 pipeline 加了 `.run.lock` 拒绝。
+
+## 2026-11-17（deepseek-flash）无焦点 L1：自动化不再抢前台
+
+所有者反馈：连续 `runClient` 抢前台焦点，要求做无焦点，并问自动化会不会带来意想不到的 bug。
+
+- **原因**：`-PverifyCompat` 的 L1 每个场景都起一个真实 GLFW 客户端；GLFW 默认
+  `GLFW_FOCUS_ON_SHOW=true`，窗口显示时成为前台 App。连续跑 10 个场景就是 10 次抢焦点。
+- **方案**：dev-only JVM agent（`src/noFocus/java/dev/modreloader/nofocus/NoFocusAgent`）：
+  - `premain` 注册 `ClassFileTransformer`，只处理 `com/mojang/blaze3d/platform/Window`；
+  - 在 `<init>` 里**紧跟 `GLFW.glfwDefaultWindowHints()`** 插入
+    `GLFW.glfwWindowHint(GLFW_FOCUS_ON_SHOW, GLFW_FALSE)`（131084, 0）；
+  - `glfwDefaultWindowHints()` 会重置 hint，所以必须在它之后；窗口仍然可见（截图仍有内容）。
+  - 不开 `-PnoFocus` 时 agent 根本不加载；不在 mod jar / `mods` block 里。
+- **Gradle**：`-PnoFocus=true` → `runClient` 依赖 `noFocusAgentJar`，
+  加 `-javaagent:.../modreloader-no-focus-agent.jar`、`-Dmodreloader.noFocus=true`、
+  `-Dfml.earlyprogresswindow=false`（early splash 是另一个可能抢焦点的 GLFW 窗口）。
+  agent 需要的 ASM 直接用 Gradle 自带 `asm-9.7.jar`，不联网解析（远程 maven 曾让构建卡 3 分钟）。
+- **pipeline**：`run` 默认 `-PnoFocus=true`；`--visible` 是交互/焦点敏感场景的逃生口；
+  `report.json` 记录 `no_focus` / `window_focused` / `focus_ok`。`CompatCheck` 在标题屏稳定后打印
+  `[CompatCheck] window focused=<bool> (noFocus=<bool>)`；如果请求 no-focus 但 `focused=true`，
+  整体 verdict 是 `FOCUS_STOLEN`（fail-closed），不会静默认为跑完。
+- **证据**（`python3 tools/pipeline/run.py run --scenario hud --mods-dir /tmp/modreloader-corpus`，JBR 21，macOS）：
+  `[no-focus] agent active`、`[no-focus] patched com/mojang/blaze3d/platform/Window`、
+  `[CompatCheck] window focused=false (noFocus=true)`、`RESULT appleskin ok=true isLoaded=true`、
+  `DONE 1/1`、`verdict: PASS`。纯单测 `NoFocusAgentTest` 用合成字节码断言 hint 插在
+  `glfwDefaultWindowHints` 之后，不需要游戏/GLFW；`./gradlew noFocusAgentJar` 可单独产出 agent。
+- **自动化的风险（写进 [no-focus.md](../features/no-focus.md)）**：
+  - 无焦点会改变运行环境：`pauseOnLostFocus` 可能让单人世界暂停；HUD/小地图等可能按焦点跳过渲染；
+    真实输入/截图在无焦点下不可靠 → L2/输入/截图用 `--visible`；
+  - agent 依赖 `Window` 类/构造器形状；升级 MC 后先跑 no-focus 冒烟，pipeline 有 `FOCUS_STOLEN` 兜底；
+  - early splash 的焦点无法从主窗口状态检测（已用 `fml.earlyprogresswindow=false` 关闭）；
+  - 只实测 macOS；Windows/Linux 未验；
+  - 自动化仍然会起完整游戏：`.run.lock`、超时、一次一个场景仍是必需的。
+- **未做**：逐秒前台 App 监测（这次只断言 GLFW `focused=false`）；L2 的可见/无焦点双路径；
+  Windows/Linux 冒烟。
+
+## 2026-11-17（deepseek-flash）late AT：AT 不是绝对硬边界，但仍是 JBR-only 实验
+
+所有者问「对待 AT 我们真的无能为力吗」。旧结论（matrix §8）是：AT 只在类加载时由 FML 应用，
+晚 AT 量到 0/6 后关闭。这个结论只覆盖了「在类加载时打 AT」；漏掉了 **对已加载类改访问标志** 这条路。
+
+### 1. 先做最小 JVM 证明
+
+合成 `Target`（私有 static final 字段 + 私有方法）与按 public 编译的 `Caller`：
+
+- Temurin 21（stock）：`UnsupportedOperationException: class redefinition failed: attempted to change the schema (add/remove fields)`；
+- JBR 21 + `-XX:+AllowEnhancedClassRedefinition`：**接受**；`before field=private static final method=private static final`
+  → `after field=public static method=public static`，`Caller.call()` 返回 `hidden:7`。
+
+结论：**JVM 不是不能改访问标志，是 stock JVM 不允许；JBR 允许。**
+
+### 2. 实现 `hotadd/LateAccessTransformers`
+
+`-Dmodreloader.lateAt=true` / Gradle `-PlateAt=true`（默认关闭）：
+
+- 解析 `META-INF/accesstransformer.cfg`；`AccessTransformerRules` 补了 **行尾 `# comment`** 解析
+  （JourneyMap 的 `public-f ... NativeImage # NativeImage` 之前会被当成 member `#`）；
+- 对每个目标：`Class.forName(name,false,loader)`（只加载不初始化）→ `ClassBytes.of` 捕获**当前字节**
+  （保留 NeoForge/Mixin）→ ASM 只改 access/final → `redefineClasses`（在 mod 类加载前）；
+- 每目标登记回滚；规则匹配不到成员时跳过并 warn（FML 也容忍旧条目；JourneyMap 的 `heightMap` 已过期）；
+- 任一目标 JBR 拒绝 → `FailureKind.ACCESS_TRANSFORMER` 带具体原因，不走「AT 硬边界」文案。
+
+### 3. 实测（L1，macOS，JBR 21，`-PnoFocus=true`）
+
+| jar | 规则/目标 | 结果 |
+|---|---|---|
+| Jade 15.10.6 | 57 / 39 | 39 applied，0 skipped；`ok=true`、`isLoaded=true`；5 个插件 bootstrap 全成功 |
+| JEI 19.70.0.469 | 34 / 16 | 16 applied；`hot-added [mezz_config, jei]` |
+| Controlling 19.0.5 | 1 / 1 | 先加 Searchables 后 `ok=true` |
+| JourneyMap 6.0.9 | 39 / 26 | 21 applied，5 skipped；AT 不再是拒绝点；随后 `CLIENT_REGISTRATION`（`RegisterShadersEvent`）拒绝 |
+
+回滚：Jade + `-PlateAt=true -PfailAfterModList=true` → 39 个目标全部 `rollback: late AT ... ok`，
+`ok=false stage=MODLIST`，没有 `ROLLBACK_PARTIAL`。
+
+### 4. 这意味着什么 / 不意味着什么
+
+- **stock JVM 上 AT 仍是硬边界**；JBR 上 late AT 是 opt-in 实验，默认拒绝行为不变。
+- 只覆盖 **access/final**；不改方法体/字段/签名。去 final 不会撤销已编译的常量内联。
+- 进程级全局：改的是已加载的 Minecraft/NeoForge 类；成功后不自动还原（AT 语义），失败回滚。
+- 目标会提前加载（`initialize=false`），可能有类加载副作用；没做规模浸泡。
+- 不解决其它启动期边界：JourneyMap 过了 AT 仍卡在 `RegisterShadersEvent` 注册审计。
+- 没有 L2 功能验证（Jade tooltip / JEI 界面 / 真正交互）；Mekanism/AE2/guideme/ExtremeReactors2 未跑；
+  Windows/Linux 未测；多 mod AT 冲突、嵌套 AT、连续 add 未测。
+- 因此文档/状态改成「AT 不再是绝对硬边界，但仍是 JBR-only 实验」，不要写成「AT 已解决」。
+
+## 2026-11-17（deepseek-flash）JBR 使用指引 + 本机检查脚本
+
+所有者要“如何使用 JBR”的指引。之前的 [jbr-support.md](../features/jbr-support.md) 混合了玩家步骤、技术边界和产品路线，
+不适合直接给玩家/整合包作者/服主看，于是拆成两篇：
+
+- 新增 [docs/guides/jbr.md](../guides/jbr.md)：先判断需不需要 JBR；5 分钟快速路径；官方下载与 `jbrsdk`/`jbr` 选择；
+  macOS/Windows/Linux 安装；PCL2/HMCL/Prism/官方/Modrinth/CurseForge 的 Java 路径与 JVM 参数位置；
+  `-XX:+AllowEnhancedClassRedefinition` 只能加在游戏 JVM、且 stock JVM 加了会起不来；验证（`java -version`、
+  `/modreloader jbr`、启动日志）；常见错误表；专用服；撤销；FAQ；以及 JBR 在本项目里具体解锁什么
+  （布局变更热加 + 实验性 late AT）和不解决什么（stock AT、一次性事件、注册表回滚等）。
+- 新增 `tools/jbr_check.py`：只读地扫常见安装根目录里的 JBR 21，打印 `bin/java`、版本/实现者、下一步；
+  `--java <path>` 只检查指定二进制。它看不到启动器实际选的 JVM 和游戏 JVM 参数，所以文档明确要求以启动日志为准。
+- 本机实测（macOS，JBR 21.0.11）：脚本找到
+  `.../jbr-21.jdk/Contents/Home/bin/java`、`version: 21.0.11, implementor: JetBrains s.r.o.`，返回 0；
+  `--java` 指定同一路径也返回 0。
+- 文档互链：README 的文档表改为 `[JBR 使用指引]`（步骤）+ `[JBR 技术/路线]`（jbr-support.md）；
+  jbr-support.md 顶部指向 guide；AGENTS 目录增加 `docs/guides/`，§2 增加 `python3 tools/jbr_check.py`。
+- 没有启动游戏；这轮只是文档 + 只读脚本。
+
+## 2026-11-17（deepseek-flash）GUI：AT 模块的“加载”按钮变灰却不给原因（修）
+
+所有者贴图问「为什么加载按钮不可点击」：弹窗对 Mekanism 10.7.19（`~/Downloads/Mekanism-1.21.1-10.7.19.85.jar`）
+显示「贵妃级注册表内容：实验性热加（仅新增）」——听上去可加载——但 `加载` 是禁用的。
+
+- 根因：`ModInspection.canHotLoad` 把 `accessTransformers` 当硬门禁（FML 只在类加载时应用 AT，
+  热加无法给已加载/原版成员放宽访问），而 `ModReloaderI18n.blockReason` **没有 AT 分支**，
+  于是落到最后的 `preflight.guifei_loadable` 文案。引擎 `VALIDATE` 的拒绝顺序（`HotAddEngine`
+  约 216 行）本来就把 AT 放在 tier 之前，`/modreloader why` 也说得对——只有弹窗的文案错了。
+- 证据：该 jar 的 `META-INF/accesstransformer.cfg` 有 120 行规则，目标含 `KeyMapping`/`EditBox`/
+  `AbstractContainerScreen` 等运行期类（不是 datagen-only），所以 `AccessTransformerRules.datagenOnly()`
+  也救不了它。
+- 修法：`canHotLoad` / `blockReason` 增加 `allowLateAccessTransformers` 参数，与 `-Dmodreloader.lateAt=true`
+  对齐（开着 late AT 时按钮才可用，否则禁用并显示新的 `preflight.access_transformer` 文案，文案直说
+  “把 jar 放进 mods/ 后重启”）；`ModReloaderScreen`、`LoadController`、`/modreloader scan` 都传这个开关；
+  `FailureAnalyzer.preflight` 对 AT 给出 `failure.access_transformer.suggestion`。
+- 验证：新增 `ModInspectionTest`（4 个断言：贵妃+AT 默认拒、lateAt 放行；嫔级同样受 AT 门禁；
+  贵妃仍需 REGISTRY_ADAPTATION；alreadyLoaded/HUANGHOU 不受 lateAt 影响）→
+  `./gradlew test` BUILD SUCCESSFUL；`LangKeysTest` 3 项仍 PASS（两种语言键/占位符一致）。
+- **没有起客户端**：按钮是否变灰、文案是否显示仍未在游戏内看过（按 AGENTS §3.17 不擅自开窗）；
+  下次 `-PnoFocus=true` 跑一次 watcher GUI 场景即可收尾。
+
+## 2026-11-17（deepseek-flash）分级校准第二把尺：方向性门禁 + 运行期差分（抓到 JourneyMap 漏估）
+
+所有者问「如何确保对模组分级特点分析正确」。原校准（§3）只比 tier 字符串、只覆盖“跑到了 tier”的 jar。
+这轮把“正确”拆成两件可测的事，并各补了一把尺：
+
+- **方向性门禁**（`tools/analyzer/calibrate.py`）：用 `TIER_RANK` 把 mismatch 分成 `under / over / unknown`。
+  漏估（对用户说“可加载”然后崩）与 `T?` 永远退出 1；过估默认也失败，`--allow-overestimate` 才放过（CI 用）。
+  新增 `tests/test_calibrate.py` 8 个用例（`direction` / `exit_code`）。
+- **运行期差分**：同一 jar 过 `inspect/ModInspector` 与 Python 分析器。运行期 tier 取自
+  `tools/pipeline/reports/*/report.json` 的 `RESULT ... tier=`（dev harness 打印），不用手写 TSV。
+  9 个 jar：修复前 6 一致 / 3 不一致，其中 **JourneyMap 是漏估**（运行期 `FEI`、分析器 `PIN`）。
+- 根因是 `mixin` 配置条目**相对 `package`**：JourneyMap 写 `client.GuiMixin` / `server.ChunkMapAccessor`，
+  旧代码 `if "." in entry` 就当全限定名 → 26 个 mixin 全落空 → `mixin_class_count=0` → `PIN`。
+  修法：`mixins._qualify` 先按 jar 里类**是否真的存在**选候选（`package.entry` 优先、裸 `entry` 次之）。
+  新增 `tests/test_mixins_package.py` 4 个用例。修复后 JourneyMap → `HUANGHOU`（26 mixin / 25 target），
+  差分 **7 一致 / 2 过估**（Controlling、JourneyMap 的 render-core 策略差异，方向安全，保留并记录）。
+- 顺带确认一个结构性问题：`HotAddEngine.VALIDATE` **没有 tier 门禁**，tier 只挡 UI；因此存在「UI 会拒、引擎能加」，
+  实例是 Xaero's Minimap（两边都判 `HUANGHOU`，流水线 `minimap` 场景 `ok=true`）。结论：tier 是解释，不是可热加性本身。
+- 回归：分析器单测 30 个 PASS；`calibrate.py --allow-overestimate` 全语料
+  `labelled 11 / matches 10 / under 0 / over 1`（唯一过估是已知的 ZeroCore2）→ 退出 0；不带 flag 退出 1。
+- 文档：`docs/features/analyzer-calibration.md` 新增 §7（差分方法、决策层矩阵缺口、优先级），§5 补退出码语义；
+  `status.md` 已知问题 5 补实测数字。
+
+## 2026-11-17（deepseek-flash）托管重启的低门槛收尾：late AT 参数、待重试 jar、实验性警告 + 参数位置 bug
+
+所有者要求「内置降低玩家操作门槛，并加警告」。落地的是 P0 三件事，外加一个修了才成立的 bug：
+
+- **AT 场景的 JBR 重启会开 late AT**：`Relauncher.jbrFlags(true)` 在 `-XX:+AllowEnhancedClassRedefinition` 之外
+  加 `-Dmodreloader.lateAt=true`；由 `RelaunchFlags`（纯函数）决定，`RelaunchFlagsTest` 4 个用例钉住组合。
+- **重启后不用再找 jar**：失败时把 jar 记为「失败指纹」会让下次会话看不见它，所以重启前
+  `WATCHER_CONFIG.clearFailed(jar)` + 写 `modreloader/pending-add.txt`；`ClientBootstrap.resumePending` 在标题屏
+  消费该文件、后台扫描、**预选**该 jar 并打开列表（只预选，不自动加载）；jar 已在启动时加载则只弹「无需重试」。
+  `PendingAddTest` 3 个用例。
+- **警告**：确认屏新增 `relaunch.jbr.late_at_warning`（进程级/全局/不还原、JBR 21 + L1、只对可信 jar、
+  其它门禁仍可能拒、仅本次会话），失败屏在按钮上方加 `failure.jbr_late_at_hint`，watcher 列表在 late AT 下的
+  AT jar 显示 `preflight.access_transformer_late`（顺序与 `canHotLoad` 对齐，避免又出现「文字说能加、按钮是灰的」）。
+- **真 bug**：`saveAndRestart` 原来把新增 JVM 参数追加在命令行**末尾**。JVM 在主类处停止解析选项，所以
+  `-XX:+AllowEnhancedClassRedefinition`、`-Dmodreloader.relaunched`、`-D...waitForPid` 全成了程序参数——
+  子进程没有 enhanced redefinition，`awaitPreviousProcess()` 也读不到自己的 pid 标记。旧 harness 只看
+  脚本/进程能起来 + 命令行里出现标记，所以没抓到。修法：`RelaunchScripts.withJvmFlags` 插到主类之前，
+  识别 `-cp/-p/--module-path/--add-modules/--patch-module` 的独立取值与 `-jar/--module` 形态；
+  `RelaunchScriptsTest` 新增 4 个命令行用例。
+- 回归：`./gradlew build` 通过；`RelaunchFlagsTest` / `PendingAddTest` / `RelaunchScriptsTest` / `LangKeysTest` 全 PASS。
+- **未验证**：没有起客户端，所以「点按钮 → 新 JVM 起来 → 自动选中 → late AT 生效」全链路仍未真机跑过
+  （按 AGENTS §3.17 不擅自开窗）；Windows/PCL2 的进程树行为也仍未验。
+
+## 2026-11-17（deepseek-flash）没有 JBR 时的游戏内指引
+
+问题：`JbrSupport.hint()` 只有一句“install JBR 21 and select it in the launcher”，没有链接、没有步骤、
+也没有“不装 JBR 怎么办”的兜底；而 watcher 里 AT jar 的「加载」是灰的，玩家根本走不到失败屏，等于死路。
+
+- 新增 `ui/JbrGuideScreen`：四步（下载 21.0.x → 启动器指向 `<JBR>/bin/java` → 加
+  `-XX:+AllowEnhancedClassRedefinition` → 重启并 `/modreloader jbr` 验证）+「打开下载页」按钮
+  （官方 GitHub Releases）+ **兜底**“放 mods/ 重启，按正常模组加载”。同时显示本机检测到的 JBR 路径。
+- 入口：① 失败屏在本机无 JBR 时把「用 JBR 重启」换成「如何安装 JBR」（有 JBR 仍是原按钮）；
+  ② watcher 列表在“有需要 JBR 的候选 + 本机无 JBR”时，底部多一个「如何安装 JBR」；
+  ③ `/modreloader jbr` 的诊断行补下载地址、参数与兜底。
+- `FailureAnalyzer.Report` 增加 `jbrHelps`（AT / 布局变更 / FEI 且有 MixinRuntime），避免在不相关的
+  失败上弹 JBR 指引；只有 `!available() && installation().isEmpty()` 才显示安装入口。
+- 顺手修了失败屏第二排按钮**互相重叠**的布局 bug（「保存并重启」与「用 JBR 重启」原本都在 `y-24`、
+  横向叠 40px）：现在并排居中、放不下时上下堆叠。
+- 回归：`./gradlew build` 通过，57 个单测 PASS（含 LangKeys 中英键/占位符一致）。
+- **未验证**：没有起客户端，指引页/按钮的实际渲染与点击未在游戏内看过（按 AGENTS §3.17 不擅自开窗）。
+
+## 2026-11-17（deepseek-flash）Stage-0：不靠 JBR 自己“实现 AT”的可行性（access-rewrite-poc）
+
+所有者问“能不能实现子集/这些魔法方法”，于是做了独立 fixture（无游戏、无 JBR）：
+
+- 机制：**不改目标类**，改写**调用方**（被热加 mod 的字节码）。`GETFIELD C.f:Desc` → `INVOKESTATIC C.access$N(C)Desc`，
+  `NEW; DUP; args; INVOKESPECIAL` → `args; INVOKESTATIC C.access$M(args)C`；访问器描述符与调用点**同栈形状**
+  （无装箱、无需重算 StackMapTable），内部是缓存的 `MethodHandle.invokeExact`，用 `privateLookupIn` 解析。
+- fixture：`stub/demo/Target`（编译期 AT 展开版）→ `ModCode` 直接访问私有构造器/字段/方法；运行期加载**真身**
+  `src/demo/Target`（全 private）+ 改写后的 ModCode。
+- 结果（macOS/JDK 21.0.12/ASM 9.10.1，`./build.sh`）：control（不洗字节码）→ `IllegalAccessError`；
+  改写后 `run()=7,12,19,7,27`；目标类字段/方法/构造器仍是 private；边界 `Target.Hidden`（package-private 嵌套类）→
+  `IllegalAccessError`；热循环 0.59 vs 0.82 ns/call（同量级，`invokeExact` 被内联）。
+- 结论：**AT 的字段/方法/构造器子集在 stock JVM 可实现**；**class-level 的 package-private 类型无解**
+  （JVM 解析类型时按包检查，改写调用点救不了）。语料 376 条 AT 规则里 337 条（89%）是字段/方法，
+  但大模组几乎都带 class-level（Jade 4、AE2 6、Mekanism 8+2 ctor、JourneyMap 7、JEI 2+1 ctor）→ 这些 jar 仍要重启/JBR。
+- 未做：接真实模组、`invokedynamic`/方法引用、super 调用、写 final、描述符里的 package-private 类型、未加载目标/module 开放性检测。
+- 文档：`experiments/access-rewrite-poc/README.md`（含覆盖/不可覆盖矩阵与下一步）；`AGENTS.md` 目录、`status.md` 已知问题 23 各补一条。
+
+## 2026-11-17（deepseek-flash）决定不做“改写调用方模拟 AT”（ADR-0014）
+
+所有者看完成本/覆盖面后判定「意义不大，大多数模组仍然无法热加载」，据此关闭这条线：
+
+- 新增 [ADR-0014](../decisions/0014-no-caller-rewrite-for-at.md)（Accepted）：Stage-0 已证明字段/方法/构造器子集可行，
+  但 class-level（package-private 嵌套类型）无解，而 Jade/AE2/Mekanism/JourneyMap/JEI 都带 class-level ——
+  **按 jar 算覆盖面太小**，不足以抵消“改写第三方字节码”的长期风险。
+- 实验目录保留为证据（README 顶部标“已否决，不接进运行时”），`AGENTS.md` 目录行改成“已否决（ADR-0014）”；
+  `status.md` 已知问题 23 的 Stage-0 段落改为“否决 + 原因”。ADR 索引（`docs/decisions/README.md`）补一行。
+- 不变的部分：AT 模组继续走“放 mods/ 重启”（S2）；JBR late AT 仍是 JBR 实例/开发 harness 的实验开关（默认关闭），
+  不再作为玩家默认路径；热加的真实覆盖面仍是“无 AT 的嫔/妃 + 贵妃 add-only + datapack + 命令/payload 重放”。
+
+## 2026-11-17（deepseek-flash）人机工作模式：模组白名单分级
+
+所有者定了接下来的协作方式：他拿常用模组在真实实例里热加，遇到阻碍/bug 反馈；agent 负责分析、修复、记录。
+分桶（**stock 与 JBR 分开判**）：
+
+- **stock**：一等 T1（可热加、无 bug）/ 二等 T2（可热加、有 bug，优先修，修好升 T1，修不好留 T2 并记录 bug）/
+  三等 T3（默认判不可热加、但分析后实际可热加；agent 处理后成功 → 转 T2）/ 黑名单（分析确认结构性不可热加）；
+- **JBR**：J1（可热加、无 bug）/ J2（可热加、有 bug）；
+- 黑名单是**按 JVM** 的，所以“stock 黑名单 + JBR 一等”是合法组合。
+
+落地：
+- 新增 [mod-whitelist.md](features/mod-whitelist.md)：分工、六个桶、流转规则、TSV 字段、**反馈格式**（mod/版本/jar/sha256/
+  stock 还是 JBR/触发方式/现象或日志/“能加但功能不对”的具体表现）、为什么这样分；
+- 新增数据表 [whitelist/mods.tsv](whitelist/mods.tsv)（目前只有表头，等实测）；
+- `AGENTS.md` 加硬规则 18“白名单只记实测”+ 目录两行；`glossary.md` 加六个术语；`status.md` 下一步加一行。
+- 已有 harness 证据（EasyLAN、lanserverproperties、ZeroCore2、jecharacters、AppleSkin、众星捧月等）**不直接入表**：
+  它们多数跑在 JBR dev client 上，不能当 stock 一等。
+
+## 2026-11-17（deepseek-flash）白名单第一步：stock JVM 自动化首轮
+
+所有者要“恢复非 JBR 环境先自动化跑一跑”。做法与结果：
+
+- 环境：`JAVA_HOME=~/.gradle/jdks/.../eclipse_adoptium-21...` + `-PnoJbr=true -PnoFocus=true`，
+  `-PverifyCompat=<jar>[,<jar>...]` 一次启动批量跑；日志确认 `JVM Eclipse Adoptium 21.0.12.1; enhancedRedefinition=false`。
+  **注意**：只加 `-PnoJbr=true` 而不换 `JAVA_HOME` 时，JavaExec 仍用 Gradle 守护进程的 JVM（本机是 JBR），
+  只是不加 enhanced 参数——不是真正的 stock，已写进 AGENTS §2 与 whitelist 文档 §4.5。
+- 首轮（10 个真实 jar，标题屏）：
+  - **候选 T1**：EasyLAN（PIN, ok）、AppleSkin（PIN, ok）、Searchables（FEI, ok）；
+  - **stock 结构性拒绝（BLACK）**：MouseTweaks（JBR_REQUIRED）、Controlling/Jade/JEI/JourneyMap（ACCESS_TRANSFORMER）、
+    xaerominimap/xaeroworldmap/balm（JBR_REQUIRED）；
+  - 无结论：XaeroPlus（依赖顺序，地图先被拒）、mezz_config 0.7.1（无 mods.toml 的 GAMELIBRARY，不是普通 mod）。
+- 写入 [whitelist/mods.tsv](whitelist/mods.tsv) 11 行：T1 行 `state=candidate`（harness 过，待所有者实例确认），
+  BLACK 行 `state=verified` 且 bug 列写结构性原因 + 替代（重启/JBR）。`state` 枚举新增 `candidate`。
+- 文档：whitelist 文档加 §4.5“如何复跑”（stock / JBR 两条命令、RESULT 判据、标题屏 vs 世界的差别）；
+  `status.md` 白名单行更新。
+- 未做：JBR 对照（同批）、世界里加（更严格）、功能级验证（L1 只证明构造/加载）。
+
+## 2026-11-17（deepseek-flash）白名单的人读视图
+
+所有者问“这个白名单怎么读”。原始数据是 TSV（机器友好、人不友好），所以补了视图与校验：
+
+- 新增 `tools/whitelist.py`：
+  - `render` 按环境（stock/JBR）+ 桶（T1/T2/T3/J1/J2/BLACK）分组打印 Markdown，带总览计数与“怎么读”图例；
+  - `render --write` 生成 `docs/whitelist/README.md`（不手改，避免与 TSV 漂移）；
+  - `check` 校验表头/列数/jvm/bucket/state/tier/日期/同 mod 同环境重复，退出码可用于 CI。
+- 新增 `tools/tests/test_whitelist.py`（4 个用例：分组顺序、跨环境桶非法、重复行、未知 state）→ 全 PASS。
+- 文档互链：mod-whitelist.md §4 指向视图、§4.6 给读法与命令；AGENTS 目录加 `tools/whitelist.py`。
+- 当前视图：stock T1×3（EasyLAN/AppleSkin/Searchables，均 candidate）、BLACK×8；JBR 暂无行。
+
+## 2026-11-17（deepseek-flash）白名单 JBR 首轮 + 一个真 bug（Jade J2）
+
+同一批模组在 JBR 上跑两轮：plain（`-PnoFocus=true`）和 late AT（`+ -PlateAt=true`，覆盖 AT 模组）。
+多 jar 连加会因前一个 jar 的状态互相影响、且一次崩溃会中断后面的 jar，所以失败/可疑的 jar 都单独重跑。
+
+- **J1（JBR 可热加、harness 未见 bug，全部 candidate）**：Mouse Tweaks（redefined `AbstractContainerScreen`）、
+  Xaero's Minimap（含 JiJ xaerolib）、Balm（含 JiJ kuma_api）、Controlling（late AT 1 rule/1 target）、
+  JEI（late AT 34 rule，`hot-added [mezz_config, jei]`，嵌套 MezzConfig 正常）。
+- **J2**：Jade（late AT 57 rule/39 target，`ok=true`）——多 jar 批次里约 1 秒后 `Rendering overlay` 崩，
+  `AssertionError: Missing config translation: config.jade.plugin_*`（crash-2026-11-17_20.13.47-client.txt）；
+  **单跑未复现** → 记 J2、`state=fixing`，先查是否 config/资源加载时序。教训：`RESULT ok=true` 不等于没 bug。
+- **JBR BLACK**：JourneyMap（`CLIENT_REGISTRATION`，`RegisterShadersEvent` 未重放）、
+  Xaero's World Map（`CONSTRUCT`：`Attempted to register a config channel too late` + `XaeroWorldMapCore` CNFE；
+  可能是运行时可修的缺口，先记 BLACK + 重启替代）。
+- 数据：[whitelist/mods.tsv](whitelist/mods.tsv) 现在 19 行（stock 11 + JBR 8）；视图 `python3 tools/whitelist.py render --write` 重新生成；
+  `check` 通过（stock T1=3/T2=0/T3=0/BLACK=8；jbr J1=5/J2=1/BLACK=2）。
+- `status.md` 下一步加两条待修：Jade J2 崩溃、Xaero's World Map config channel。
+
+## 2026-11-17（deepseek-flash）白名单扩到 dogfood 常用模组（stock + JBR）
+
+第二轮把 `Ex-Nihilo-Satellitium/run/mods` 里的常用模组也跑了（stock 一批、JBR+lateAt 一批）：
+
+- **stock T1（候选）**：Rhino（PIN, ok）、JECharacters（PIN, ok，coremod 晚注入）。
+- **ZeroCore2**：stock `JBR_REQUIRED`（布局 mixin 改已加载类）→ stock BLACK；JBR plain `ok=true` → J1（候选）。
+- **CraftTweaker**：stock `ACCESS_TRANSFORMER`（20 条）→ BLACK；JBR+lateAt 在 CONSTRUCT 失败：
+  `An error occurred while registering villager trade converters` → `Attempting to instantiate registry
+  crafttweaker:transformer_serializer after NewRegistryEvent was fired`（自定义 registry 太晚）→ JBR BLACK（替代：重启）。
+- **ExtremeReactors2**：两次都 `MISSING_DEPENDENCY`（需要 ZeroCore2 先热加；两次都没先加载）→ 无结论，未入表。
+- 数据：TSV 25 行（stock 15 + JBR 10）；`check`：stock T1=5/T2=0/T3=0/BLACK=10，JBR J1=6/J2=1/BLACK=3；
+  视图重新生成。
+- 待修/待判：Jade J2 崩溃（多 jar 连加复现、单跑不复现）；Xaero's World Map 的 config channel；
+  CraftTweaker 的 `NewRegistryEvent`（看起来是运行时可补的事件重放缺口，不是绝对边界）。
+
+## 2026-11-17（deepseek-flash）修掉 Jade J2：hot-add 的 reload 竞态（白名单里第一个 T2）
+
+Jade 在 JBR+lateAt 下 `RESULT ok=true`，但多 jar 连加约 1 秒后崩：
+`AssertionError: Missing config translation: config.jade.plugin_*` → `Rendering overlay`
+（crash-2026-11-17_20.13.47-client.txt）。
+
+根因（从 stack trace 读出）：
+
+1. 每个 hot-add 都会 `mc.reloadResourcePacks()`；这些 reload 会**重叠**（Controlling 的 reload 跑了 20 s，
+   CompatCheck 3 s 后就加了 Jade）。
+2. 旧 reload 完成时，vanilla `LoadingOverlay.render` 会调用 `screen.init(...)` 重新初始化当前 Screen
+   （`LoadingOverlay.java:145`）；这会 post `ScreenEvent.Init`。
+3. 此时 Jade 的监听器已经注册（构造期），但 Jade 的 `assets/jade/lang/*` 还没被“包含 jade 的那次 reload”加载，
+   于是它的配置翻译断言失败，崩在渲染线程。
+
+修法（`client/ClientResourcePacks`）：
+
+- 新增 `requestReload(mc, label)`：reload 在跑时只置 `dirty`，完成后再补一次；**串行化**且合并多次请求；
+- 整条链期间把 `mc.screen` 置空（`hiddenScreen`），让 vanilla 的完成回调不 re-init Screen；
+- 链的最后一次 reload 完成后再 `setScreen(hidden)`（日志：`screen restored after resource reload: TitleScreen`）。
+- 回滚路径也走同一个入口。
+
+验证：复跑原顺序 `Searchables → Controlling → Jade → JEI`（JBR+lateAt）：
+**4 个 jar 全 `ok=true`、0 次 `Missing config translation`、0 崩溃**，日志出现
+`resource reload already running; queued another for [mod/jade]` 与 `screen restored ... TitleScreen`；
+第二次复跑同样干净。白名单 Jade 行从 J2 升 J1（`state=candidate`，等所有者实例复验）。
+副作用：hot-add 的资源重载期间当前 Screen 会暂时隐藏（标题屏/暂停屏），重载结束后恢复；世界中本来没有 Screen，无影响。
+
+## 2026-11-17（deepseek-flash）众星捧月进 stock 一等
+
+所有者指示：**众星捧月（Ex Nihilo: Satellitium 1.5.0）加入一等白名单**，JBR 增强稍后自己测。
+
+- 直接按指示入表（owner 实测优先），同时用 stock harness 复核了一遍：
+  `-PnoJbr=true` + Temurin 21 → `RESULT exnihilosatellitium-1.21.1-1.5.0.jar predicted=GUIFEI ok=true stage=NONE kind=NONE`。
+- 行内容：`stock / T1 / GUIFEI / verified`，证据写“owner 2026-11-17 实际可用 + stock harness ok=true”，
+  并注明贵妃级的语义（注册表 add-only、存档会绑定该 mod、不可回滚）。
+- 白名单 26 行：stock T1×6 / BLACK×10；JBR J1×7 / J2×0 / BLACK×3。JBR 行等所有者测完再补。
+
+## 2026-11-17（deepseek-flash）GAMELIBRARY 被误报“没有声明任何 mod”
+
+所有者热加独立分发的 `mezz_config-1.21.1-neoforge-0.7.1-standalone.jar`，UI 说“jar 没有声明任何 mod”。
+
+- 事实：这个 jar **没有 mods.toml**，只有 `META-INF/MANIFEST.MF` 里的 `FMLModType: GAMELIBRARY`。
+  它是**库**，不是模组；FML 把它当 game library 加载，不建 ModContainer，而热加需要容器
+  （module + ModList + 生命周期），所以本质上不可热加（status 已知问题 32 的同一类）。
+- 之前的提示有两处误导：字符串“jar declares no mods”（像是一个坏掉的模组），以及 `FailureKind.NOT_A_MOD`
+  的“不是 NeoForge 模组（没有 mods.toml）”（也没说清是库）。
+- 改法：
+  - `ModInspector.isGameLibrary(jar)` 读 manifest 的 `FMLModType`；
+  - 预检与 `HotAddEngine` 都走它，返回新的 `FailureKind.LIBRARY`；
+  - 新文案 `failure.library.summary/suggestion` 与 `preflight.library`：明确“这是库，不是模组；热加需要 mod 容器，
+    放进 mods/ 重启，或由依赖它的模组自带（JiJ）”；
+  - `FailureKeys` 映射、`FailureAnalyzer.restartIsTheFix`（库的修复就是重启）与 preflight 的 suggestion 同步。
+- 验证：stock harness 复跑 mezz_config 0.7.1 → `kind=LIBRARY`、`msg=library jar (FMLModType: GAMELIBRARY), not a mod`；
+  `./gradlew build` 通过（LangKeysTest 覆盖新 key 的中英一致性）。
+- 结论给所有者：**这类库直接放 `mods/` 重启**；如果是为了 JEI，不需要单独加（JEI 自带 mezz_config）。
+
+## 2026-11-17（deepseek-flash）JBR 检测：扫游戏目录/父目录，只认 Java 21
+
+所有者把 JBR 解压到和 `.minecraft` 同层，`/modreloader jbr` 却报未找到。
+
+- 根因：`JbrSupport.installRoots()` 只扫 per-OS 固定目录（macOS `~/Library/Java/JavaVirtualMachines`、
+  Windows `Program Files/Java` 等），游戏目录与它的父目录不在列表里；`installation()` 本身每次调用都会重算，
+  并没有缓存——不是“不实时”，是根本没扫到。
+- 改法：
+  - `JbrSupport.includeDirectory(dir)`（启动时由 `ModReloader` 调 `FMLPaths.GAMEDIR`）把**游戏目录**和**父目录**
+    加入优先扫描根；解压到 `.minecraft` 同层或里面都能找到；
+  - 扫描仍每次实时执行，运行中解压也能被下一次 `/modreloader jbr` 看到；
+  - 只接受 **Java 21**（release 文件 `JAVA_VERSION=21.x`）：当前 release 页默认是 JBR 25，Minecraft 1.21.1 不认；
+    21 与 25 并存时优先 21。
+- 测试：新增 `JbrSupportTest` 5 个用例（游戏目录内 / 父目录 / 21 优先 / 只有 25 时忽略 / 无 release 忽略），
+  `./gradlew build` 与单测 PASS。
+- 文档：guides/jbr.md 第 2 步写明“可解压到 .minecraft 同层/里面，只认 Java 21”。
+
+## 2026-11-17（deepseek-flash）把“JBR 解压到哪”教清楚
+
+检测改成扫游戏目录 + 父目录之后，玩家侧还需要知道“到底放哪”。三个入口同步：
+
+- **玩家指南** [guides/jbr.md](guides/jbr.md) 新增 §1.2「把 JBR 放在哪」：判断标准是“看 `mods/` 在哪”，
+  给出“放在实例目录里面 / 旁边”两种放法和官方启动器、PCL2、HMCL、Prism/Modrinth 的实例目录示例，
+  明确“不要放进 mods/”“只认 Java 21（25 不行）”“检测是实时的，但启动器仍要重启一次”。
+- **游戏内「如何安装 JBR」**：第 2 步改成“解压到游戏目录（有 mods/ 的那一层）里面或它旁边；不要放进 mods/”。
+- **`/modreloader jbr`**：未找到时多打印一行 where to put it（游戏目录/旁边，不放进 mods/）。
+- 修正 i18n 里的换行转义（`\\n` 被写成了字面量），LangKeysTest 通过；`./gradlew build` 通过。
+
+## 2026-11-17（deepseek-flash）JBR 检测再补：祖辈目录、嵌套解压、显式覆盖
+
+所有者换新构建后仍报未找到。补了三种常见布局：
+
+- **版本隔离**：launcher 的 gameDir 可能是 `.minecraft/versions/<ver>`，而 JBR 放在 `.minecraft` 旁边。
+  `includeDirectory` 现在取游戏目录 + 最多 3 层祖辈（不扫文件系统根），并额外加 `user.dir`。
+- **zip 多套一层**：`jbr-21.0.11-windows-x64/jbr-21.0.11/release` 这种，扫描会向下找一层
+  （只对名字含 `jbr`/`java` 的目录展开，避免扫爆）。
+- **显式覆盖**：`-Dmodreloader.jbr=<JBR 目录或 bin/java>`；`/modreloader jbr` 会回显该值。
+- `JbrSupportTest` 扩到 8 个用例（游戏目录内/旁、祖辈、嵌套 wrapper、21 优先、25 忽略、显式覆盖、无 release）。
+- 新 jar：`build/libs/modreloader-1.21.1-0.1.0.jar`（23:37，sha256 前缀 `5244baeeb1e112c7`）。
+
+## 2026-11-17（deepseek-flash）Windows 上“检测到 JBR 却不能重启”：argv 兜底
+
+所有者反馈“检测到了但什么也不能做”。根因不是检测，而是 **Windows 上
+`ProcessHandle.current().info().arguments()` 经常为空**，于是 `Relauncher.blocker()` 报
+“the launcher did not expose the game's command line”，失败界面只剩“手动重启”。
+
+- 新增 `Relauncher.currentArguments()`：先走 ProcessHandle；Windows 为空时用
+  `powershell Get-CimInstance Win32_Process ... CommandLine`，失败再试 `wmic process ... get commandline`；
+  解析用新增的纯函数 `RelaunchScripts.splitWindowsCommandLine`（引号/反斜杠规则），并丢掉 argv[0]（java 路径）。
+- `blocker()` 与 `saveAndRestart()` 都改用 `currentArguments()`；Windows 脚本仍走原来的引号规则。
+- 单测：`splitWindowsCommandLine` 覆盖带空格路径、`-Dfoo=a b`、转义引号；`./gradlew build` 通过。
+- 效果：Windows + JBR 已检测到时，失败界面会重新出现「用 JBR 重启」，点击后带
+  `-XX:+AllowEnhancedClassRedefinition`（AT 场景再加 `-Dmodreloader.lateAt=true`）重启，
+  并预选待重试的 jar。PowerShell/WMIC 都被禁用时仍回退手动重启。
+
+## 2026-11-17（deepseek-flash）重启失败的真因：.cmd 被 cmd 按 OEM 代码页重读
+
+所有者提供 latest.log：JBR 检测其实成功了（`A JBR 21 install was found at
+C:\Dstick\[模组热重载测试]\jbr-21.0.11-windows-x64-b1163.125`），游戏目录是版本隔离的
+`.minecraft\versions\1.21.1-NeoForge_21.1.266`，祖先扫描也覆盖到了。
+
+失败在启动方式：生成的 `.cmd` 路径含 `[模组热重载测试]`（中文+方括号），cmd 用系统 OEM 代码页重读，
+报 `系统找不到指定的路径`。加 `chcp 65001` 并不能可靠解决所有 cmd 版本。
+
+- 改为**直接 `ProcessBuilder` 启动 JVM**：没有 shell、没有代码页、Unicode 路径原样传递；
+  `directory(gameDir)`；Windows 优先 `javaw.exe`（无控制台）；stdout/stderr 写
+  `modreloader/relaunch/relaunch-*.log`；子进程照旧等旧 PID（`awaitPreviousProcess`）。
+- 成功判定仍靠子进程自己写的 `started-<pid>.txt`（Windows 读不到别人的命令行）。
+- `.cmd` 生成保留给 dev harness（`-PverifyRelaunchPlan`），产品路径不再用它。
+- 新 jar：`build/libs/modreloader-1.21.1-0.1.0.jar`（23:54，sha256 前缀 `c41d9c07a0c567ad`）。
+
+## 2026-11-17（deepseek-flash）重启后 JVM 报 `--add-opens requires modules to be specified`
+
+所有者截图：子进程 JVM 弹 `Error: --add-opens requires modules to be specified`。
+
+- 根因：PCL 的启动命令行把 `--add-opens java.base/java.lang=ALL-UNNAMED` 写成**空格分隔**；
+  `RelaunchScripts.withJvmFlags` 的“带独立取值的选项”清单里没有 `--add-opens`，
+  于是把 `java.base/...` 当成主类，把 `-Dmodreloader.*` 插到了选项和它的值之间。
+- 修法：清单补 `--add-opens` / `--add-exports` / `--add-reads`（`=` 形式仍是单 token，不受影响）。
+- 单测：新增 `jvmFlagsStayAfterAddOpensValue`（空格形式 + `=` 形式）。
+- 这也证明直接 `ProcessBuilder` 启动已经生效（JVM 起来了，只是参数被插错），`.cmd`/编码问题不复存在。
+
+## 2026-11-18（deepseek-flash）重启子进程 `InvalidPathException`：命令行里的中文被读成 `?`
+
+所有者给的 `relaunch-*.log`：
+
+```
+Error occurred during initialization of boot layer
+java.nio.file.InvalidPathException: Illegal char <?> at index 11:
+C:\Dstick\[????????????]\.minecraft\libraries/cpw/mods/bootstraplauncher/...
+```
+
+- 根因：Windows 兜底用 PowerShell 读 `Win32_Process.CommandLine`，但 PowerShell 的 stdout
+  是 OEM 代码页（中文 Windows 为 GBK），我们按 UTF-8 解码 → 中文目录变成 `?`；再用 ProcessBuilder
+  传给子 JVM，模块路径就不存在了。
+- 修法：PowerShell 命令里强制 `[Console]::OutputEncoding = UTF8`；WMIC 兜底改用
+  `native.encoding` / `sun.jnu.encoding` 解码（WMIC 无法强制 UTF-8）。
+- 与上一轮的 `--add-opens requires modules to be specified` 是两个独立的参数 bug，均已修。
+- 新 jar：`build/libs/modreloader-1.21.1-0.1.0.jar`（00:06，sha256 前缀 `28ca6b2377a67fc7`）。
+
+## 2026-11-18（deepseek-flash）弹窗“AT 不可用”和 JBR 白名单看起来矛盾
+
+所有者截图：stock 下 Jade/JEI 显示“带 access transformer，热加载无法应用”，但白名单里它们是 JBR J1。
+
+- 这不是矛盾，是**环境不同**：白名单的 J1 行证据写的是 `JBR+lateAt`，而当前会话是 Microsoft JDK、
+  `enhanced=false`、`lateAt=off`；AT 只在启动时生效，除非显式开实验性 late AT。
+- UI 缺陷：弹窗只讲 AT，不讲“当前在哪个环境判的”。修：
+  - 弹窗底部加一行 `JVM：<vendor> · 增强重定义：on/off · late AT：on/off`；
+  - AT 的拒绝文案补上“或改用 JBR 21 并加 -Dmodreloader.lateAt=true（实验性，仅本次会话）”；
+  - 白名单视图的读法补一句“J1/J2 里的 AT 模组需要 JBR + lateAt，只开 enhanced 不够”。
+- `./gradlew build` 通过；视图重新生成。
+
+## 2026-11-18（deepseek-flash）玩家侧零折腾（ADR-0015）：删掉玩家路径上的 JBR
+
+所有者定调：装 JBR 已经是权宜之计，不允许再把“让玩家折腾”当作解法；宁可老实重启。
+
+- 新增 [ADR-0015](../decisions/0015-player-side-zero-tinkering.md)（Accepted）。
+- 玩家 UI 收口：
+  - `LoadFailureScreen` 只保留「保存并重启」；删掉「用 JBR 重启」「如何安装 JBR」以及 JBR 提示行；
+  - watcher 列表删掉「如何安装 JBR」入口；
+  - 删除 `JbrGuideScreen` 与 `RelaunchConfirmScreen`；
+  - `preflight.access_transformer` 文案回到“把 jar 放进 mods/ 后重启”，不再提 JBR/参数。
+- JBR/late AT 保留给整合包作者、管理员与 dev harness（`-PlateAt`、`/modreloader jbr` 诊断仍在）；
+  `guides/jbr.md` 顶部改为“面向整合包作者/管理员/进阶，普通玩家不需要读”。
+- `AGENTS.md` §2 的 JBR 行同步为“玩家侧零折腾”。`status.md` 加“玩家侧原则”小节。
+- `./gradlew build` 通过；视图与白名单不受影响。
+
+## 2026-11-18（deepseek-flash）纠正 ADR-0015：不是删能力，而是自动化
+
+所有者指出我把“别让玩家折腾”执行成了“删掉玩家侧 JBR 能力”，这是逃避。已回退：
+
+- 恢复 `JbrGuideScreen`、`RelaunchConfirmScreen` 与失败界面的「用 JBR 重启 / 如何安装 JBR」、
+  watcher 列表的 JBR 指引；JBR 重启仍然自动带 `-XX:+AllowEnhancedClassRedefinition`
+  和 `-Dmodreloader.lateAt=true`。
+- 重写 [ADR-0015](../decisions/0015-player-side-zero-tinkering.md)：玩家侧**零手工**，但能力由运行时
+  自动准备（已存在→一键重启；缺失→自动下载/整合包预置；失败才退回重启）；不把装 JBR/填参数写成玩家任务。
+- AGENTS/status 同步；`./gradlew build` 通过。
+- 下一步（未做）：JBR 自动下载（平台识别、官方来源、校验、解压、失败回滚）——这是“能帮就帮”的真正落点。
+
+## 2026-11-18（deepseek-flash）一键自动准备 JBR（下载 + SHA-512 + 解压 + 重启）
+
+所有者要求“能帮就帮”，不要把装 JBR 推给玩家。实现（未在 Windows 真机跑过下载全链路）：
+
+- `JbrProvisioner`：平台/架构 → 固定 JBR 21.0.11（b1163.125）资产；
+  官方 `cache-redirector.jetbrains.com/intellij-jbr/` 下载；SHA-512 校验（值取自官方 `.checksum`）；
+  zip 用 `ZipInputStream`、tar.gz 用 `tar -xzf`；解压后定位 `release`+`bin/java`，装到 `gameDir/jbr-21.0.11/`；
+  失败清理；Windows 不支持 aarch64 以外的其它平台时明确报错。
+- `JbrSetupScreen`：一次点击 → 后台下载（状态行）→ 成功后用新 JBR + `jbrFlags(true)` 重启；
+  失败保留游戏并给出重试/手动入口；关闭窗口则不会自动重启。
+- 失败界面/监听列表在缺 JBR 时改为「自动准备 JBR」，手动安装降为次级入口。
+- 校验：本机下载 macOS aarch64 资产 94,837,906 字节，SHA-512 与固定值一致；
+  tar 顶层为 `jbr-21.0.11-osx-aarch64-b1163.125/Contents/Home`，`findHome` 深度 3 可覆盖。
+- 单测：`JbrProvisionerTest`（5 个资产各有 128 位 SHA-512、官方 URL、安装目录、平台支持）。
+- 未验证：Windows 真机下载/解压/重启全链路（资产哈希来自官方 checksum，未在 Windows 实跑）。
+
+## 2026-11-18（deepseek-flash）白名单扩样：14 个常用模组 stock + JBR
+
+所有者要求继续下载常用热门模组做自动化分类，实例复测稍后。jar 仍只落 `/tmp/modreloader-corpus`。
+
+- 语料：`tools/pipeline/corpus.json` 新增 14 个条目（Modrinth 精确版本 + sha256 锁定）：
+  Cloth Config、Architectury、GeckoLib、Curios、Patchouli、Embeddium、ModernFix、FerriteCore、
+  Simple Voice Chat、Farmer's Delight、Waystones、Comforts、Moonlight、Supplementaries；
+  新增 5 个 scenario（`popular-libs/perf/misc/moonlight/balm`），`check` OK。
+- 方法：stock = Temurin 21 + `-PnoJbr=true`（日志 `enhancedRedefinition=false`）；
+  JBR = 默认 JBR，AT 批次加 `-PlateAt=true`；全部 `-PnoFocus=true`，每批一次客户端，
+  CompatCheck 逐 jar 记 `RESULT`。
+- 结果（数据见 [whitelist/mods.tsv](whitelist/mods.tsv)，现 54 行）：
+  - stock 新晋 T1：Simple Voice Chat（`ok=true isLoaded=true`）。
+  - stock 新增 BLACK：Cloth Config（3 AT）、Architectury（311）、GeckoLib（27）、Curios（16）、
+    Embeddium（19）、ModernFix（74）、Farmer's Delight（16）为 AT；Patchouli / FerriteCore /
+    Waystones / Comforts 为 `JBR_REQUIRED` 布局 mixin；Moonlight（嵌套 AT）；
+    Supplementaries（`JAR_IN_JAR` ClassCastException）。
+  - JBR 新晋 J1（`candidate`）：Cloth Config、Curios、Patchouli、Embeddium、Simple Voice Chat、Comforts；
+    Balm 复核仍通过。
+  - JBR BLACK：Architectury（`RegisterShadersEvent`）、Farmer's Delight
+    （`RegisterRecipeBookCategoriesEvent`）、GeckoLib/FerriteCore/ModernFix（redefine `ClassFormatError`）、
+    Waystones（post-construct 事件失败）、Moonlight（嵌套 AT）、Supplementaries（JiJ）。
+- 新发现（已写入 [status.md](status.md) 已知问题 34–36）：
+  ModernFix 失败后残留 method-level mixin，下一 tick `NoClassDefFoundError` 崩溃；
+  Waystones 失败但注册表已 +44 方块 / +55 物品；late AT 不覆盖 JiJ 嵌套 AT，
+  Supplementaries 的 JiJ 读取仍有 ClassCastException。
+- 备注：Waystones/Comforts 的 stock 行是在 `run/mods` 预置 Balm 后测的（Balm 在 stock 不能热加），
+  测完已移除预置 jar；JBR 批次按 `Balm → Waystones → Comforts` 顺序热加。
+
+## 2026-11-18（deepseek-flash）玩家文案去参数名（P0-文案）
+
+按 ADR-0015“玩家只感知用 JBR 重启一次，不感知 per-mod 参数”清理玩家可见文案：
+
+- i18n（zh_cn/en_us 各 14 个 key）：`gui.env`、`jbr_guide.body`、`gui.failure.jbr_late_at_hint`、
+  `relaunch.jbr.body`、`relaunch.jbr.late_at_warning`、`preflight.jbr`、`preflight.suggestion.jbr`、
+  `failure.jbr_required.suggestion`、`preflight.access_transformer`、
+  `preflight.access_transformer_late_off`、`preflight.access_transformer_late`、
+  `toast.resume.late_at`、`jbr_setup.body`、`failure.access_transformer.suggestion`；
+  不再出现 `-XX`、`-Dmodreloader`、`lateAt`，统一说“用 JBR 重启一次 / 自动准备 JBR，所需能力自动启用”。
+- 代码：`ModReloaderScreen` 的 `gui.env` 去掉 late AT 开关一列；`JbrSupport.hint()/diagnose()`
+  改为指向失败界面的「用 JBR 重启 / 自动准备 JBR」，不再教玩家改启动器或加参数；
+  `HotAddEngine` / `LateAccessTransformers` 的 AT 失败消息同步去掉参数名。
+- 回归：`LangKeysTest.playerCopyDoesNotExposeJvmFlags` 扫描两份语言文件禁止三个参数名；
+  `./gradlew test`、`./gradlew build` 通过。
+- 保留：`guides/jbr.md`（包作者/管理员）与本机诊断中的 JVM 路径仍是技术信息；
+  `relaunch.jbr.late_at_warning` 保留“改写已加载类访问标志”的风险说明，但不再给开关名。
+
+## 2026-11-18（deepseek-flash）修两个“失败后不干净”的缺口（待真机复跑）
+
+白名单扩样暴露的两个产品失败点，先离线定根因并修：
+
+- **ModernFix 半应用 mixin**：回滚原来先还原类、后摘 mixin config；还原时 config 仍活跃，
+  Mixin agent 又把 `onClientTick` 注入写回 `Minecraft`，随后模块回滚让 `ModernFixClient` 不可见，
+  下一 tick `NoClassDefFoundError`（`crash-2026-11-18_09.39.40-client.txt`）。
+  修法：`MixinSupport.register` 把 config 移除动作放到回滚栈最后入栈（LIFO 先执行），
+  再还原类字节；顺序成为“摘 config → 还原类 → 卸 module”。
+- **Supplementaries JiJ ClassCastException**：嵌套的 MixinSquared 带 `mods.toml` 但
+  `FMLModType: GAMELIBRARY`，`NestedMods` 把它当 mod 强转 `ModFileInfo` 失败。
+  修法：`JarInJar` 按 `FMLModType` 把嵌套 GAMELIBRARY 归为库（只进 module path），
+  并读取其 manifest `MixinConfigs` 交给 Mixin；`NestedMods` 对非 `ModFileInfo` 给明确错误。
+- 单测：`JarInJarTest` 新增 4 个用例（普通 mod / 带 mods.toml 的 GAMELIBRARY / 无元数据 / manifest mixins）；
+  `./gradlew test`、`./gradlew build` PASS。
+- **未验证**：两处都需要一次真机客户端复跑（ModernFix 回滚后应继续存活；Supplementaries 需
+  Moonlight 预置在 run/mods 才能越过依赖检查）。嵌套 AT（Moonlight/codecui）仍未覆盖，
+  Waystones 半注册、CraftTweaker 自定义 registry、Xaero's World Map config channel 仍在缺口清单。
+
+## 2026-11-18（deepseek-flash）JBR 玩家路径端到端：macOS dev PASS（PCL2/Windows 未验证）
+
+场景：不懂电脑的玩家、官方 Temurin（stock）、想热加 JBR 一等模组。目标是把“自动准备 JBR →
+找到它 → JBR 重启 → 新进程热加”整条产品路径跑通。本机是 macOS arm64，**PCL2 是 Windows 启动器，
+无法真实运行**；本次验证的是 launcher-agnostic 路径。
+
+- 新增 dev harness `-PverifyJbrFlow=<jar,...>`（`src/dev/.../JbrPlayerFlowCheck`，分两阶段，
+  阶段由当前 JVM 决定，不需要额外开关）：
+  - **Phase 1（stock）**：假装机器上没有 JBR（临时改 `user.home`，只扫游戏目录）→ 先加一个 J1 模组，
+    确认被 `JBR_REQUIRED` 拒绝 → `JbrProvisioner.install` 真实下载、SHA-512、解压 →
+    `JbrSupport.installation()` 找到刚解压的运行时 → 写 `pending-add` 与 jar 清单 →
+    `Relauncher.saveAndRestart(..., jbrFlags(true))`。
+  - **Phase 2（JBR）**：新进程 `JBR=true, enhancedRedefinition=true` → 逐个热加清单里的 jar，
+    写 `run/modreloader/jbr-flow-result.txt`，然后退出。
+- 实测（2026-11-18 10:48–10:50）：
+  - stock 父进程：Mouse Tweaks 被 `JBR_REQUIRED` 拒绝；下载 90.44 MB，SHA-512 校验、解压
+    `run/jbr-21.0.11`（167 MB）均成功；replacement JVM 启动，父进程退出。
+  - 子进程：`MouseTweaks ok=true isLoaded=true`、`balm ok=true isLoaded=true`、
+    `cloth_config ok=true isLoaded=true`（late AT 3 rule/3 target 应用）；`RESULT: PASS`。
+  - 另外用 JDK 21 jshell 验证：`JbrSupport.includeDirectory(run)` 后
+    `installation()` 返回 `run/jbr-21.0.11`（Temurin 下也能找到刚解压的 JBR）。
+- 证据：`/tmp/jbrflow-parent.log`、`run/modreloader/jbr-flow-result.txt`、
+  `run/modreloader/relaunch/relaunch-1794970188766.log`。
+- **未覆盖**：PCL2/Windows 的启动器 argv、`javaw`、GUI 按钮点击（harness 调用的是
+  `JbrSetupScreen` 背后的同一组方法，没有真的点按钮）、真实 redefine 探针。
+  已知问题 37 只更新为“macOS dev 端到端 PASS”，不写成 Windows/PCL2 已验证。
+
+## 2026-11-18（deepseek-flash）复跑两个缺口修复：PASS
+
+命令：`./gradlew runClient -PnoFocus=true -PlateAt=true -PverifyCompat=modernfix,supplementaries`
+（不预装 Moonlight，只看 JiJ 是否越过；日志 `/tmp/wl-verify-fixes2.log`）。
+
+- **ModernFix**：回滚顺序已变为 `remove mixin config modernfix... ok` →
+  `restore class net.minecraft.client.Minecraft ok`；`RESULT ok=false kind=MIXIN_CONFIG` 仍按预期拒绝，
+  但客户端不再崩，继续跑到 `DONE 2/2`。已知问题 34 收口。
+- **Supplementaries**：不再 `JAR_IN_JAR`；日志出现
+  `jar-in-jar: 2 nested jar(s) -> modules [mixinsquared.forge, sable.companion.common]; containers [sablecompanion]`，
+  mixin configs 包含 `mixinsquared.forge.init.mixins.json`；随后在 VALIDATE 返回
+  `MISSING_DEPENDENCY`（需要 Moonlight）。JiJ 修复验证通过，已知问题 36 的 JiJ 一半收口。
+- Moonlight 预装到 `run/mods` 会触发 dev 启动崩（`codecui.Schema` ClassNotFound，已知问题 39），
+  因此本次没有验证 Supplementaries + Moonlight 的完整功能；不据此判定模组不可用。
+- 白名单：ModernFix JBR 行改为“回滚已干净、客户端不再崩”；Supplementaries 两行 state=fixing，
+  写明“JiJ 已修，待 Moonlight 可用后重测”。视图已重新生成。
+
+## 2026-11-18（deepseek-flash）重放配方书分类事件（Farmer's Delight）
+
+- 新增 `client/RecipeBookCategoryReplay`：`RecipeBookManager` 的三个 map 都是 `HashMap`
+  （aggregate view 只是 `unmodifiableMap` 包装），按当前条目复制成
+  `ImmutableList` 副本，对新容器发 `RegisterRecipeBookCategoriesEvent`，再 `putAll` 合并。
+- 注册审计：`RegisterRecipeBookCategoriesEvent` 从 `crash` 移入 `covered`；`RegAuditCheck`
+  的负向夹具改用仍未重放的 `RegisterShadersEvent`；`RegistrationAuditTest` 同步。
+- 夹具：`experiments/client-fixture` 增加 `registerBookCategories(CRAFTING, …)`；
+  热加夹具实测 `recipe book categories replayed: 1 new, 4 aggregate / 1 type / 0 lookup`，
+  `AddCmdCheck RESULT: PASS`。
+- Farmer's Delight：注册审计不再拒绝，但在 JBR+lateAt 下改为卡在
+  `redefine SecondaryPoiSensor: ClassFormatError: null`（`kind=MIXIN_CONFIG`）。
+  这是已知问题 40 的共同阻碍，不是配方书重放的问题；白名单 JBR 行已更新。
+- 单测 / 构建 PASS。
+
+## 2026-11-18（deepseek-flash）定位 ClassFormatError：Mixin agent 二次 transform（MixinAgentGuard）
+
+接上一轮：Farmer's Delight 等模组在 JBR+lateAt 下 `redefineClasses` 报
+`ClassFormatError: null`。排查过程：
+
+1. 新增 `-PverifyRedefineProbe`：对失败类用纯 ASM 做 identical / 加 public/private/static/final
+   字段、public/private 方法、接口、invokedynamic、SourceDebugExtension、注解、synthetic、
+   多方法组合，再 `redefineClasses` 并恢复。结果全部 OK → **不是 JBR 加成员的能力问题**。
+2. `MixinSupport` 在 redefine 失败时 dump original/mixed 字节到 `run/modreloader/mixin-failures/`；
+   对比发现 mixed 加了 MixinExtras 的 bridge 方法、`BootstrapMethods`、`SourceDebugExtension`，
+   本身结构校验通过。
+3. 对照组：Farmer's Delight 正常装进 `run/mods` 启动无报错 → 问题在热加路径。
+4. 打开 `-PmixinDebug=true` 后看到真正的栈：
+   `redefineClasses0 → MixinAgent$Transformer.transform → MixinTransformer.transformClassBytes`；
+   日志同时有 `Critical injection failure ... Scanned 0 target(s). No refMap loaded.`。
+   即：JBR redefine 触发 Mixin agent，把我们**已经手动混入**的字节**再 transform 一次**，
+   第二遍 WrapOperation 失败，agent 返回错误字节 → `ClassFormatError`。
+
+修法：新增 `hotadd/MixinAgentGuard`：
+
+- 从 `MixinAgent.instrumentation` 取 Mixin 自己的 `Instrumentation`（我们自附加拿到的实例
+  transformer 列表是空的）；
+- 在 redefine 窗口内把 agent 的 `MixinAgent$Transformer` 换成 delegating wrapper：
+  只对本次目标类在 `classBeingRedefined != null` 时返回 `null`（不再 transform），其它类正常委托；
+  结束后移除 wrapper 并恢复原 transformer；
+- 第一版恢复时误用了我们自己的 `Instrumentation`，wrapper 残留，导致后续模组仍双重 transform；
+  已改为保存 `owner` 并用它恢复。
+
+实测（JBR+lateAt）：
+
+- Farmer's Delight：`ok=true isLoaded=true`，blocks 1060→1192 / items 1333→1518。
+- GeckoLib、FerriteCore：`ok=true isLoaded=true`。
+- ModernFix 单独：`ok=true isLoaded=true`；MouseTweaks 对照：`ok=true`。
+- 同批 `GeckoLib → FerriteCore → ModernFix`：ModernFix 卡在
+  `redefine net.minecraft.world.entity.Entity: ClassFormatError` + `ROLLBACK_PARTIAL`
+  → 记为已知问题 41（同目标类叠加，单加可绕过）。
+- 白名单：Farmer's Delight / GeckoLib / FerriteCore → JBR J1（candidate），
+  ModernFix → J2（单加 PASS、同批有 bug，state=fixing）。
+- 单测 / `./gradlew test` PASS。
+
+## 2026-11-18（deepseek-flash）同批叠加修复：手动 transform 只保留新 config
+
+`GeckoLib→FerriteCore→ModernFix→MouseTweaks` 批次里 ModernFix 曾失败：
+`redefine net.minecraft.world.entity.Entity: ClassFormatError` + `ROLLBACK_PARTIAL`，
+而 ModernFix 单独热加 PASS。
+
+- 根因：`MixinSupport` 的 `transformClassBytes` 会应用处理器里**全部 active config**；
+  第二次热加时，前面模组的 config 也被套到新目标上，其中一些注入点已不匹配，
+  产生坏字节/重复注入。
+- 修法：手动 transform 期间把 processor 的 active/pending config 临时过滤为
+  **本次新增的配置名**，`applyTargets` 结束后恢复原列表；JBR redefine 期间的
+  Mixin agent 仍由 `MixinAgentGuard` 暂停。
+- 实测：4 模组批次全部 `ok=true isLoaded=true`，`DONE 4/4`（日志 `/tmp/wl-batch-isolated.log`）。
+- 白名单：ModernFix 从 J2 升 JBR J1（candidate）；JBR 计数 J1×17 / J2×0 / BLACK×7。
+- 边界：若两个模组真正改同一个类，当前仍以原类字节为基底，尚未专门验证“同目标叠加”。
+
+## 2026-11-18（deepseek-flash）复盘 + 文档/记忆整理（不改产品行为）
+
+所有者要求复盘并整理文档与记忆。本轮只改文档，不改代码行为。
+
+- 新增 [retro/2026-11-18-jbr-saga.md](../retro/2026-11-18-jbr-saga.md)：时间线、我犯的错（把“别让玩家折腾”执行成删 JBR、
+  擅自决定、不诊断就换构建、把未验证说成可用、忽视感受）、7 个技术根因与修法、ADR-0015 最终版、未完成项。
+- `AGENTS.md` 新增 §7「与所有者协作」五条硬约定（改玩家可见能力/产品方向先问；不交付未验证构建；
+  修 bug 可直接做但取舍先给方案；情绪优先；不删除历史），目录树补 `docs/retro/`。
+- `status.md`：JBR 行改为「检测 + 一键准备」（官方下载/SHA-512/解压/自动带参数，Windows 全链路未验）；
+  托管重启行改为直接 `ProcessBuilder` + 子进程标记 + argv 兜底；玩家侧原则改为“零手工、不删能力”；
+  已知问题新增 37（Windows 全链路未验）/38（只覆盖 5 平台、Intel mac 无资产）；下一步 P1-新同步。
+- `features/jbr-support.md`：状态/决策树/自动安装章节/能力表/优先级更新；`features/managed-relaunch.md`：
+  机制改为直接起 JVM、补 `--add-opens`/编码/标记/冻结，验证清单补 `JbrProvisionerTest` 与 macOS 资产哈希；
+  `guides/jbr.md` 顶部改为“玩家点自动准备即可”。
+- 验证：`./gradlew build`（含 4 个 `JbrProvisionerTest`）通过；`python3 tools/whitelist.py check` 通过。
+
+## 2026-11-18（deepseek-flash）补充两条产品边界：安装/解压上限 + 统一能力模型
+
+所有者明确：
+
+1. **JBR 可产品化，但安装/解压以外不能再折腾**：玩家最多下载/安装/解压 JBR；之后运行时找到并接管，
+   不改启动器 Java、不填参数；能自动下载/解压时连这一步也不要求。
+2. **玩家不关心 per-mod 参数**：他只感知“用 JBR 重启后，需要 JBR 的模组就能热加”；
+   不区分 `-XX…` 与 `lateAt`，界面不展示开关名。
+
+已落文档：
+
+- `decisions/0015`：决策改为四条（安装/解压上限、统一能力、不删能力、参数只留内部证据），
+  后果补“玩家可见文案不得出现开关名”“降级是重启而不是加步骤”；
+- `status.md`：玩家侧原则改写，并新增 **P0-文案**（玩家界面去参数名，附待改 key 列表）；
+- `features/jbr-support.md`：新增 §1.1 玩家模型；能力表标注“内部视角”；
+- `features/managed-relaunch.md`：确认屏只讲“重启一次”，开关名留在内部；
+- `features/mod-whitelist.md`：「额外参数」标注为内部证据，不是玩家界面；
+- `guides/jbr.md`：顶部加“玩家侧只有一句”，能力表标注包作者视角；
+- `AGENTS.md` §2：加产品不变量；复盘补 §4.1。
+
+验证：`./gradlew build` 通过；`python3 tools/whitelist.py check` 通过。**本轮未改玩家可见文案（列为 P0-文案）。**
+
+## 2026-11-18（deepseek-flash）确保自动准备 JBR 可用：校验/解压实测 + 硬化
+
+所有者要求“自动准备 JBR 能力保留，但要确保可用”。本轮做了可验证的部分：
+
+- 资产核对：Windows x64 zip **94,352,754 字节**，SHA-512 前缀 `845fc37fa1af3435…` 与固定值一致；
+  macOS aarch64 tar **94,837,906 字节**，SHA-512 前缀 `ecc474537e8e0bc6…` 一致。
+- 结构核对：Windows zip 顶层 `jbr-21.0.11-windows-x64-b1163.125/`，含 `release` 与 `bin/java.exe`；
+  用真实 zip 跑 `JbrProvisioner.installArchive` → `isRuntimeHome` 通过（临时测试，已删除）。
+- 硬化：`installArchive` 拆分（先校验再解压）；`verify` 独立；zip 解压后恢复 `bin/*` 可执行位；
+  `isRuntimeLayout`（看布局）与 `isRuntimeHome`（POSIX 再要求 +x；Windows 认 `java.exe` 存在）分离；
+  HTTP 连接 20s/请求 10min 超时；下载失败清 `.part`；空下载拒绝；成功后清 archive/unpack 缓存；
+  `JbrSetupScreen` 用 `drawWordWrap` 显示错误。
+- 新增 `JbrProvisionerArchiveTest`（3 个）：平铺 zip、mac bundle（`Contents/Home`）、SHA-512 匹配/拒绝；
+  现有 `JbrProvisionerTest` 4 个；共 7 个。
+- **仍未验证**：Windows 真机 `javaw` 启动、PowerShell/WMIC 读取命令行；这是唯一剩下的硬项。
+
+## 2026-11-18（deepseek-flash）产品原则：重启 = 产品失败（切到 JBR 除外）
+
+所有者定调：**玩家为切到 JBR 重启一次不算失败；JBR 就位后仍因某个模组要求重启，是产品失败。**
+
+- `decisions/0015`：决策新增第 4 条（重启=产品失败，切 JBR 除外），第 3 条的“放 mods/ 重启”改为最后手段/失败信号；
+- `AGENTS.md` §2 产品不变量补该条；`status.md` 玩家侧原则补该条，并在下一步新增 **P0-新：消除“JBR 后仍需重启”的缺口**；
+- `features/mod-whitelist.md`：增加规则 2（只重启即缺口），重排编号；T3→BLACK 不再把“重启”写成正常替代路径；
+- `features/jbr-support.md` §2.1 第 4 步标注为最后手段/产品失败；
+- `guides/jbr.md` 顶部把“放 mods/ 重启”改为失败信号；
+- `retro` 新增 §4.2。
+- 未改代码/文案；`./gradlew build` 通过。

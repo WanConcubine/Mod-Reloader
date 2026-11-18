@@ -20,8 +20,14 @@ import java.util.stream.Collectors;
  * shows the raw detail instead of inventing a reason.
  */
 public final class FailureAnalyzer {
+    /**
+     * @param restartRecommended the documented fix is "restart with the jar in mods/"
+     * @param jbrHelps           JBR enhanced redefinition would actually help this
+     *                           failure (AT, layout change) — the UI offers the
+     *                           install guide only in that case
+     */
     public record Report(Component title, Component summary, Component suggestion, String detail,
-                         boolean restartRecommended) {
+                         boolean restartRecommended, boolean jbrHelps) {
         public String clipboardText() {
             return title.getString() + "\n\n" + summary.getString() + "\n\n"
                     + suggestion.getString() + "\n\n" + detail;
@@ -76,8 +82,10 @@ public final class FailureAnalyzer {
         lines.add(I18n.get("modreloader.detail.log",
                 Path.of("logs/latest.log").toAbsolutePath()));
 
+        boolean jbrHelps = result.kind() == HotAddEngine.FailureKind.ACCESS_TRANSFORMER
+                || result.kind() == HotAddEngine.FailureKind.JBR_REQUIRED;
         return new Report(title, summary, suggestion, String.join("\n", lines),
-                restartIsTheFix(result));
+                restartIsTheFix(result), jbrHelps);
     }
 
     public static Report preflight(ModInspection inspection) {
@@ -86,9 +94,16 @@ public final class FailureAnalyzer {
         Component summary = ModReloaderI18n.blockReason(inspection);
         Component suggestion;
         if (!inspection.ok()) {
-            suggestion = Component.translatable("modreloader.preflight.suggestion.invalid");
+            String error = inspection.error() == null ? "" : inspection.error();
+            suggestion = Component.translatable(error.contains("GAMELIBRARY")
+                    ? "modreloader.failure.library.suggestion"
+                    : "modreloader.preflight.suggestion.invalid");
         } else if (inspection.alreadyLoaded()) {
             suggestion = Component.translatable("modreloader.preflight.suggestion.restart");
+        } else if (inspection.accessTransformers()) {
+            // The engine refuses these before touching anything on a stock JVM; the
+            // preflight screen is where a user learns that a restart is the fix.
+            suggestion = Component.translatable("modreloader.failure.access_transformer.suggestion");
         } else if (inspection.tier() == ModInspection.Tier.GUIFEI) {
             suggestion = Component.translatable("modreloader.preflight.suggestion.guifei");
         } else if (inspection.tier() == ModInspection.Tier.HUANGHOU) {
@@ -116,9 +131,16 @@ public final class FailureAnalyzer {
         }
         lines.add(I18n.get("modreloader.detail.jbr", JbrSupport.describe()));
         lines.add(I18n.get("modreloader.detail.mixinruntime", MixinRuntimeSupport.describe()));
+        // A preflight rejection needs the JBR guide when an AT or a mixin layout
+        // change is what stands in the way; a missing dependency is not JBR's problem.
+        boolean mixinTier = inspection.tier() == ModInspection.Tier.FEI
+                || (inspection.tier() == ModInspection.Tier.GUIFEI && inspection.mixins());
+        boolean jbrHelps = inspection.accessTransformers()
+                || (mixinTier && MixinRuntimeSupport.available() && !JbrSupport.available());
         return new Report(title, summary, suggestion, String.join("\n", lines),
                 inspection.alreadyLoaded() || inspection.tier() == ModInspection.Tier.HUANGHOU
-                        || (inspection.tier() == ModInspection.Tier.FEI && !JbrSupport.available()));
+                        || (inspection.tier() == ModInspection.Tier.FEI && !JbrSupport.available()),
+                jbrHelps);
     }
 
     /**
@@ -128,7 +150,7 @@ public final class FailureAnalyzer {
      */
     private static boolean restartIsTheFix(HotAddEngine.Result result) {
         return switch (result.kind()) {
-            case JBR_REQUIRED, ACCESS_TRANSFORMER, CLIENT_REGISTRATION, COREMOD,
+            case JBR_REQUIRED, ACCESS_TRANSFORMER, CLIENT_REGISTRATION, COREMOD, LIBRARY,
                     UNSUPPORTED_TIER, MIXIN_CONFIG, REDEFINE, ROLLBACK_PARTIAL -> true;
             default -> false;
         };

@@ -34,17 +34,54 @@ import java.util.zip.ZipFile;
 public final class AccessTransformerRules {
     public static final String ENTRY = "META-INF/accesstransformer.cfg";
 
+    /**
+     * One parsed rule. A rule with {@code member == null} widens the class
+     * itself; otherwise it targets a field (no descriptor) or a method
+     * (descriptor included in the member token).
+     */
+    public record Rule(String modifier, String targetClass, String member, String descriptor) {
+        public boolean classLevel() {
+            return member == null;
+        }
+
+        public boolean method() {
+            return member != null && descriptor != null;
+        }
+
+        public boolean removeFinal() {
+            return modifier.endsWith("-f") || modifier.endsWith("+f");
+        }
+
+        public int accessFlag() {
+            String base = modifier.replace("-f", "").replace("+f", "");
+            return switch (base) {
+                case "public" -> 0x0001;
+                case "protected" -> 0x0004;
+                case "private" -> 0x0002;
+                default -> 0;
+            };
+        }
+    }
+
     /** target class name (dotted) -> number of rules that mention it. */
     private final Map<String, Integer> rulesPerTarget;
     private final int ruleCount;
+    private final List<Rule> rules;
 
-    private AccessTransformerRules(Map<String, Integer> rulesPerTarget, int ruleCount) {
+    private AccessTransformerRules(Map<String, Integer> rulesPerTarget, int ruleCount,
+                                   List<Rule> rules) {
         this.rulesPerTarget = Collections.unmodifiableMap(rulesPerTarget);
         this.ruleCount = ruleCount;
+        this.rules = List.copyOf(rules);
+    }
+
+    /** Parsed rules, in file order. */
+    public List<Rule> rules() {
+        return rules;
     }
 
     public static AccessTransformerRules empty() {
-        return new AccessTransformerRules(Map.of(), 0);
+        return new AccessTransformerRules(Map.of(), 0, List.of());
     }
 
     /** Total rules (a class may have several). */
@@ -133,10 +170,20 @@ public final class AccessTransformerRules {
     /** Parses the AT file content; never throws on malformed lines. */
     public static AccessTransformerRules parse(String text) {
         Map<String, Integer> targets = new LinkedHashMap<>();
+        List<Rule> parsed = new ArrayList<>();
         int rules = 0;
         for (String line : text.split("\\R")) {
             String trimmed = line.trim();
             if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                continue;
+            }
+            // NeoForge ATs allow trailing comments: `public ... field # reason`.
+            // Splitting on whitespace alone would treat the `#` as a member name.
+            int comment = trimmed.indexOf('#');
+            if (comment >= 0) {
+                trimmed = trimmed.substring(0, comment).trim();
+            }
+            if (trimmed.isEmpty()) {
                 continue;
             }
             String[] parts = trimmed.split("\\s+");
@@ -144,14 +191,27 @@ public final class AccessTransformerRules {
                 continue;
             }
             // <modifier> <class> [member]; modifiers end with -f for "and final".
+            String modifier = parts[0];
             String className = parts[1].replace('/', '.');
             if (className.isEmpty()) {
                 continue;
             }
             rules++;
             targets.merge(className, 1, Integer::sum);
+            if (parts.length < 3) {
+                parsed.add(new Rule(modifier, className, null, null));
+                continue;
+            }
+            String memberToken = parts[2];
+            int paren = memberToken.indexOf('(');
+            if (paren < 0) {
+                parsed.add(new Rule(modifier, className, memberToken, null));
+            } else {
+                parsed.add(new Rule(modifier, className,
+                        memberToken.substring(0, paren), memberToken.substring(paren)));
+            }
         }
-        return new AccessTransformerRules(targets, rules);
+        return new AccessTransformerRules(targets, rules, parsed);
     }
 
     /**

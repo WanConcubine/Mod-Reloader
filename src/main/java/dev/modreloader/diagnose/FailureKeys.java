@@ -24,6 +24,7 @@ public final class FailureKeys {
         return switch (kind) {
             case MISSING_FILE -> "missing_file";
             case NOT_A_MOD -> "not_a_mod";
+            case LIBRARY -> "library";
             case INVALID_METADATA -> "invalid_metadata";
             case ALREADY_LOADED -> "already_loaded";
             case MISSING_DEPENDENCY -> "missing_dependency";

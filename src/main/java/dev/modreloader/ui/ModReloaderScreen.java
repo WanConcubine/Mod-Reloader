@@ -1,6 +1,8 @@
 package dev.modreloader.ui;
 
 import dev.modreloader.ModReloader;
+import dev.modreloader.inspect.JbrSupport;
+import dev.modreloader.inspect.ModInspection;
 import dev.modreloader.watch.ModWatcherConfig;
 import dev.modreloader.watch.ModsFolderWatcher;
 import net.minecraft.client.gui.GuiGraphics;
@@ -39,9 +41,32 @@ public final class ModReloaderScreen extends Screen {
     private boolean showingIgnored;
 
     public ModReloaderScreen(List<ModsFolderWatcher.Candidate> candidates) {
+        this(candidates, null);
+    }
+
+    /**
+     * @param preselect jar to select on open — the one a managed relaunch was
+     *                  retrying, so the user does not have to find it again
+     */
+    public ModReloaderScreen(List<ModsFolderWatcher.Candidate> candidates, Path preselect) {
         super(Component.translatable("modreloader.gui.new_mods.title"));
         this.candidates = new ArrayList<>(candidates);
-        this.selected = candidates.isEmpty() ? -1 : 0;
+        this.selected = indexOf(preselect);
+    }
+
+    private int indexOf(Path preselect) {
+        if (candidates.isEmpty()) {
+            return -1;
+        }
+        if (preselect != null) {
+            Path wanted = preselect.toAbsolutePath().normalize();
+            for (int i = 0; i < candidates.size(); i++) {
+                if (candidates.get(i).path().toAbsolutePath().normalize().equals(wanted)) {
+                    return i;
+                }
+            }
+        }
+        return 0;
     }
 
     private List<ModWatcherConfig.IgnoredEntry> ignoredEntries() {
@@ -92,13 +117,44 @@ public final class ModReloaderScreen extends Screen {
                     .bounds(x + (BUTTON_WIDTH + GAP) * 2, y, BUTTON_WIDTH, 20).build());
         }
 
-        // Secondary row: the only view switch, so it cannot be mistaken for an action.
-        addRenderableWidget(Button.builder(Component.translatable(showingIgnored
-                                ? "modreloader.gui.ignored_back"
-                                : "modreloader.gui.ignored_list", ignoredEntries().size()),
-                        pressed -> toggleIgnored())
-                .bounds(width / 2 - 80, height - 30, 160, 20).build());
+        // Secondary row: the view switch, plus the JBR guide when this screen is
+        // exactly where the player is blocked (AT/layout mod, no usable JBR).
+        boolean jbrHelp = !showingIgnored && !JbrSupport.available()
+                && candidates.stream().anyMatch(ModReloaderScreen::needsJbr);
+        if (jbrHelp) {
+            int total = 140 + 6 + 140;
+            int left = Math.max(4, width / 2 - total / 2);
+            addRenderableWidget(Button.builder(Component.translatable(
+                            "modreloader.gui.ignored_list", ignoredEntries().size()),
+                            pressed -> toggleIgnored())
+                    .bounds(left, height - 30, 140, 20).build());
+            addRenderableWidget(Button.builder(Component.translatable("modreloader.jbr_setup.short"),
+                            pressed -> {
+                                if (minecraft != null) {
+                                    Path pending = selected >= 0 && selected < candidates.size()
+                                            ? candidates.get(selected).path() : null;
+                                    minecraft.setScreen(new JbrSetupScreen(this, pending));
+                                }
+                            })
+                    .bounds(left + 146, height - 30, 140, 20).build());
+        } else {
+            addRenderableWidget(Button.builder(Component.translatable(showingIgnored
+                                    ? "modreloader.gui.ignored_back"
+                                    : "modreloader.gui.ignored_list", ignoredEntries().size()),
+                            pressed -> toggleIgnored())
+                    .bounds(width / 2 - 80, height - 30, 160, 20).build());
+        }
         refresh();
+    }
+
+    /** A candidate whose add would need JBR's enhanced redefinition. */
+    private static boolean needsJbr(ModsFolderWatcher.Candidate candidate) {
+        ModInspection inspection = candidate.inspection();
+        if (inspection.accessTransformers()) {
+            return true;
+        }
+        return inspection.tier() == ModInspection.Tier.FEI
+                || (inspection.tier() == ModInspection.Tier.GUIFEI && inspection.mixins());
     }
 
     private Component rowLabel(int index) {
@@ -129,7 +185,8 @@ public final class ModReloaderScreen extends Screen {
         }
         if (loadButton != null) {
             loadButton.active = selected >= 0 && selected < candidates.size()
-                    && candidates.get(selected).inspection().canHotLoad(registryContentHotAdd());
+                    && candidates.get(selected).inspection()
+                            .canHotLoad(registryContentHotAdd(), lateAccessTransformers());
         }
         if (ignoreButton != null) {
             ignoreButton.active = selected >= 0 && selected < candidates.size();
@@ -142,6 +199,14 @@ public final class ModReloaderScreen extends Screen {
     private static boolean registryContentHotAdd() {
         return dev.modreloader.capability.Capabilities.available(
                 dev.modreloader.capability.Capabilities.Capability.REGISTRY_ADAPTATION);
+    }
+
+    /**
+     * Advanced/pack setups only: the experimental late-AT switch. Players are
+     * never asked to set it; the packaged runtime decides.
+     */
+    private static boolean lateAccessTransformers() {
+        return dev.modreloader.hotadd.LateAccessTransformers.enabled();
     }
 
     private void loadSelected() {
@@ -187,6 +252,11 @@ public final class ModReloaderScreen extends Screen {
         renderBackground(guiGraphics, mouseX, mouseY, partialTick);
         super.render(guiGraphics, mouseX, mouseY, partialTick);
         guiGraphics.drawCenteredString(font, title, width / 2, 20, 0xFFFFFF);
+        String vendor = System.getProperty("java.vendor", "?");
+        guiGraphics.drawCenteredString(font, Component.translatable("modreloader.gui.env",
+                        vendor,
+                        dev.modreloader.inspect.JbrSupport.available() ? "on" : "off"),
+                width / 2, height - 12, 0x808080);
 
         if (showingIgnored) {
             renderIgnored(guiGraphics);
@@ -210,7 +280,8 @@ public final class ModReloaderScreen extends Screen {
             var candidate = candidates.get(selected);
             MutableComponent text = ModReloaderI18n.summary(candidate.inspection()).copy();
             text.append(Component.literal("\n"))
-                    .append(ModReloaderI18n.blockReason(candidate.inspection(), registryContentHotAdd()));
+                    .append(ModReloaderI18n.blockReason(candidate.inspection(),
+                            registryContentHotAdd(), lateAccessTransformers()));
             MultiLineLabel label = MultiLineLabel.create(font, width - 60, text);
             label.renderLeftAligned(guiGraphics, 30,
                     TOP + Math.min(candidates.size(), MAX_ROWS) * ROW_HEIGHT + 14, 11, 0xCCCCCC);

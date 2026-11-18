@@ -1,6 +1,10 @@
 # 热加兼容性矩阵（真实模组语料，首轮）
 
 > 状态：**首轮，2026-11-16**。样本：本机 `../Ex-Nihilo-Satellitium/run/mods` 的 9 个真实 NeoForge 1.21.1 模组。
+> **2026-11-17 更新**：手工矩阵已升级为 [hotadd-test-pipeline.md](hotadd-test-pipeline.md)（pinned 语料 + required 前置闭包 + L1 报告）。
+> 本表保留为首轮历史；小地图/鼠标手势/前置库的新结果以 pipeline 文档与 `tools/pipeline/reports/` 为准。
+> **同日 AT 结论修正**：→ [late-at.md](late-at.md)。「AT 是硬边界」只对 **stock JVM** 和“类加载时应用”成立；
+> JBR 的 enhanced redefinition 可以改已加载类的 access/final，Jade/JEI/Controlling 已 L1 PASS（JBR-only、opt-in、未做 L2）。
 > 目的：把「别的模组会不会误打误撞成功」从推理变成实测，并找出下一个框架缺口。
 > 关联：[status.md](../status.md)、[t4-registry-hotadd.md](t4-registry-hotadd.md)、[dogfood-gameplay.md](dogfood-gameplay.md)。
 
@@ -183,3 +187,16 @@ is a datagen class, which a playing game never loads); access transformers only 
 
 复现：`./gradlew runClient -PverifyAtSpike=<jar>[,<jar>]`。它会像 `-PverifyAddCommand` 那样新建一个世界来取「进世界」那组数字
 （会留下一个 `run/saves` 里的测试存档），除读类和读 jar 外不做任何写操作。
+
+
+## 9. 2026-11-17 修正：AT 并非绝对不可晚到
+
+§1/§3/§8 的结论基于「在类加载时应用 AT」：6 个 jar 的 AT 目标大多已加载，所以那条路 0/6。
+但 JBR 的 `-XX:+AllowEnhancedClassRedefinition` 允许对已加载类做 **access/final 标志重定义**：
+
+- stock JDK 21：拒绝（`attempted to change the schema`）；
+- JBR 21 + flag：接受 `private → public`、去掉 `final`，按 public 编译的调用方随后可直接访问。
+
+实现与实测见 [late-at.md](late-at.md)：Jade 57 规则/39 目标全应用并 `ok=true`，JEI 34/34，
+Controlling 1/1，Jade 失败回滚 39/39 ok；JourneyMap 过了 AT 但被 `RegisterShadersEvent` 注册审计挡住。
+它仍限 JBR、opt-in、access/final、L1；不要把 §8 的“0/6”继续当成“AT 无能为力”。

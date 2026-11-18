@@ -85,6 +85,7 @@ public final class ClientRegistrationReplay {
         replayClientExtensions(container);
         int reloadListeners = replayClientReloadListeners(container);
         replayTooltipComponentFactories(container);
+        RecipeBookCategoryReplay.replay(container);
         GuiLayerReplay.replay(container);
         ItemDecoratorReplay.replay(container);
         return reloadListeners;

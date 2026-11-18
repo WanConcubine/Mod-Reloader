@@ -2,7 +2,7 @@
 
 让 Minecraft 模组在游戏运行时**安全地增删 / 更新 / 热重载**。
 
-> 状态（2026-11-16，细节以 [docs/status.md](docs/status.md) 为准）：**分析器 v0 已可运行**；**A0（嫔级）已验证**；**A1.2（妃级/Mixin + 布局变更）主路径已在 NeoForge 1.21.1 dev client 验证**：热加 `lanserverproperties` 后进世界打开 Open to LAN。**A1.2 失败回滚已跑通**（post-ModList / post-pack 强制失败，恢复 ModList/module/config/类/资源包；post-ModList 重试 add 成功）。构造后事件监听器自 2026-11-16 起可回滚（`EventBusSnapshot`，只覆盖已注册监听器；构造器其它副作用仍不可撤销），存档回读目前只有专用服内容路径（客户端内保存→重开未做）。**mods/inbox 监听 + 预检 + toast/弹窗 + 失败分析初版已跑通**（EasyLAN 检测→加载、坏 jar 失败屏、贵妃级实验性加载与警告）。**双端**：dedicated server 能热加嫔级，命令靠重放生效，payload 适配 E1/E2/E3（含跨进程）已验证。**贵妃级注册表内容（实验性 add-only）已跑通**：方块/物品热加、放置存盘、重启读档 PASS；客户端资源包/创造栏已在单人验证；真实 dogfood（众星捧月 1.5.0）注册层 + datapack 配方/战利品/标签都热加通过；多人 id 同步见 2026-11-16 段。**工程侧**：引擎与两端解耦（`PlatformHooks`）、启动有 `Capabilities` 锚点守卫、`dev/` 不进发布 jar、29 个无游戏 Java 单测。**2026-11-16 后续**：HUD 层/物品装饰重放（含首个客户端夹具）、「晚注入 AT」逐 jar 判死（0/6）、WORLDGEN 改写为「标题屏热加 + 新世界」、datapack 删除实测不可行、/modreloader why、分析器真机校准 + AT 维度、构造后 listener 回滚、服务端+客户端同时妃级、data 重载竞态修复。皇后级与软重启尚未开始；已知/未验证项见 [status](docs/status.md)。
+> 状态（2026-11-17，细节以 [docs/status.md](docs/status.md) 为准）：**分析器 v0 已可运行**；**A0（嫔级）已验证**；**A1.2（妃级/Mixin + 布局变更）主路径已在 NeoForge 1.21.1 dev client 验证**：热加 `lanserverproperties` 后进世界打开 Open to LAN。**A1.2 失败回滚已跑通**（post-ModList / post-pack 强制失败，恢复 ModList/module/config/类/资源包；post-ModList 重试 add 成功）。构造后事件监听器自 2026-11-16 起可回滚（`EventBusSnapshot`，只覆盖已注册监听器；构造器其它副作用仍不可撤销），存档回读目前只有专用服内容路径（客户端内保存→重开未做）。**mods/inbox 监听 + 预检 + toast/弹窗 + 失败分析初版已跑通**（EasyLAN 检测→加载、坏 jar 失败屏、贵妃级实验性加载与警告）。**双端**：dedicated server 能热加嫔级，命令靠重放生效，payload 适配 E1/E2/E3（含跨进程）已验证。**贵妃级注册表内容（实验性 add-only）已跑通**：方块/物品热加、放置存盘、重启读档 PASS；客户端资源包/创造栏已在单人验证；真实 dogfood（众星捧月 1.5.0）注册层 + datapack 配方/战利品/标签都热加通过；多人 id 同步见 2026-11-16 段。**工程侧**：引擎与两端解耦（`PlatformHooks`）、启动有 `Capabilities` 锚点守卫、`dev/` 不进发布 jar、42 个无游戏 Java 单测。**2026-11-16 后续**：HUD 层/物品装饰重放（含首个客户端夹具）、旧「类加载时晚注入 AT」逐 jar 判死（0/6；2026-11-17 的 JBR late AT 是另一条路，见 [late-at](docs/features/late-at.md)）、WORLDGEN 改写为「标题屏热加 + 新世界」、datapack 删除实测不可行、/modreloader why、分析器真机校准 + AT 维度、构造后 listener 回滚、服务端+客户端同时妃级、data 重载竞态修复。皇后级与软重启尚未开始；已知/未验证项见 [status](docs/status.md)。**2026-11-17**：兼容性测试流水线 v0（`tools/pipeline`）+ JiJ 嵌套 mod/资源包（Xaero's Minimap 自带 XaeroLib 也能热加）；L1 实测覆盖小地图/鼠标手势/前置链；[测试流水线](docs/features/hotadd-test-pipeline.md) / [JBR 使用指引](docs/guides/jbr.md) / [无焦点 L1](docs/features/no-focus.md) / [late AT](docs/features/late-at.md)。
 > 短期目标是把工具做出来给社区用，论文/研究输出留到以后。
 >
 > **先读顺序**：[AGENTS.md](AGENTS.md) → [docs/status.md](docs/status.md)。状态只写在 status.md。
@@ -241,12 +241,17 @@ sodium                     0.8.13+mc… fabric   HUANGHOU 0.85  needs full resta
 | [贵妃级注册表热加](docs/features/t4-registry-hotadd.md) | 方块/物品 add-only 热加：unfreeze/RegisterEvent 重放/BlockState id、证据与限制 |
 | [贵妃级 datapack 热加载](docs/features/t4-datapack-hotadd.md) | 注入 pack + 原版 `/reload`：配方/战利品/标签/机器数据、真实合成与掉落、边界 |
 | [众星捧月玩法验收](docs/features/dogfood-gameplay.md) | 热加后真实交互（锤/筛/合成/创造栏）；抓到并修掉创造页签崩溃 |
-| [热加兼容性矩阵](docs/features/hotadd-compatibility-matrix.md) | 9 个真实模组实测：AT 是硬边界、JiJ 已补、2 个干净通过 |
+| [热加兼容性矩阵](docs/features/hotadd-compatibility-matrix.md) | 9 个真实模组实测：stock JVM 上 AT 是硬边界、JiJ 已补、2 个干净通过 |
+| [late AT](docs/features/late-at.md) | JBR-only 实验：改已加载类的 access/final；Jade/JEI/Controlling L1 通过 |
 | [LAN Doctor 规格](docs/features/lan-doctor.md) | B 路线 fallback：状态 / offline / republish / 地址 |
 | [决策记录](docs/decisions/README.md) | ADR-0001..0009：目标、分层、顺序、论文、双端、注册表与 datapack 适配 |
 | [调研报告](docs/research-hot-mod-reload.md) | 启动流水线、JVM/Mixin/注册表约束、Hotwire 与 NHMJ 解剖 |
 | [项目定位与路线图](docs/roadmap.md) | 长期路线与调研背景；短期以 status/ADR 为准 |
 | [分析器 v0](tools/analyzer/README.md) | 用法、Tier 定义、信号提取、已知限制 |
+| [测试流水线](docs/features/hotadd-test-pipeline.md) | 语料/前置闭包/L1 报告；小地图/鼠标手势的首批结果 |
+| [JBR 使用指引](docs/guides/jbr.md) | 从下载到启动器配置、验证、常见错误的完整步骤 |
+| [JBR 技术/路线](docs/features/jbr-support.md) | 决策树、失败文案、能力探针与产品路线 |
+| [无焦点 L1](docs/features/no-focus.md) | dev-only JVM agent：客户端窗口不抢前台；风险与用法 |
 | [自附加 PoC](experiments/self-attach-poc/README.md) | 进程内拿到 `Instrumentation`，验证「改方法体成功 / 加方法被拒」 |
 
 ## 仓库结构

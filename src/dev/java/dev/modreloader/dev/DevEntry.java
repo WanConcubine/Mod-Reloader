@@ -69,6 +69,15 @@ public final class DevEntry {
         if (Boolean.getBoolean("modreloader.verifyRelaunchPlan")) {
             RelaunchCheck.start();
         }
+        String verifyJbrFlow = System.getProperty("modreloader.verifyJbrFlow", "").trim();
+        if (!verifyJbrFlow.isEmpty()) {
+            JbrPlayerFlowCheck.start(verifyJbrFlow);
+        }
+        String verifyRedefineProbe =
+                System.getProperty("modreloader.verifyRedefineProbe", "").trim();
+        if (!verifyRedefineProbe.isEmpty()) {
+            RedefineProbeCheck.start(verifyRedefineProbe);
+        }
         if (Boolean.getBoolean("modreloader.verifyMenu")) {
             MenuEntryCheck.start();
         }

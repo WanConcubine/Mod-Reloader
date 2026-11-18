@@ -8,6 +8,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;
+import org.lwjgl.glfw.GLFW;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -72,6 +73,12 @@ public final class CompatCheck {
                     TIMEOUT_TICKS / 20, index, JARS.size());
             finish();
             return;
+        }
+        if (totalTicks == TITLE_SETTLE_TICKS) {
+            long handle = net.minecraft.client.Minecraft.getInstance().getWindow().getWindow();
+            int focused = GLFW.glfwGetWindowAttrib(handle, GLFW.GLFW_FOCUSED);
+            ModReloader.LOGGER.info("[CompatCheck] window focused={} (noFocus={})",
+                    focused == GLFW.GLFW_TRUE, Boolean.getBoolean("modreloader.noFocus"));
         }
         if (totalTicks < TITLE_SETTLE_TICKS) {
             return;

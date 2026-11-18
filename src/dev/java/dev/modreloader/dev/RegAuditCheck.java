@@ -31,23 +31,24 @@ import java.util.zip.ZipOutputStream;
  *       startup-only event to replay next; it never hot-adds anything, so jars
  *       with access transformers or a broken dependency can be included.</li>
  *   <li><b>Fatal path</b>: a synthetic mod jar whose class references
- *       {@code RegisterRecipeBookCategoriesEvent} must be refused by
+ *       {@code RegisterShadersEvent} must be refused by
  *       {@link HotAddEngine} with {@link HotAddEngine.FailureKind#CLIENT_REGISTRATION}
  *       before anything is injected. A second jar references only an event we do
  *       not replay yet ({@code RegisterDimensionSpecialEffectsEvent}, a "silent" gap) and
  *       must <em>not</em> be graded fatal; it is never added, only graded.
- *       ({@code RegisterGuiLayersEvent} was that exemplar until 2026-11-16, when
- *       the HUD-layer replay made it "covered".)</li>
+ *       (Earlier exemplars: {@code RegisterGuiLayersEvent} until 2026-11-16 and
+ *       {@code RegisterRecipeBookCategoriesEvent} until 2026-11-18, both moved to
+ *       "covered" when their replays landed.)</li>
  * </ol>
  *
  * <p>{@code -PverifyRegAudit=<jar>[,<jar>...]}.
  */
 public final class RegAuditCheck {
     private static final int TITLE_SETTLE_TICKS = 100;
-    // Particle providers moved to "covered" on 2026-11-16 (replay landed); the recipe
-    // book categories event is still a crash-level gap.
+    // Recipe book categories moved to "covered" on 2026-11-18; shaders are still
+    // a crash-level gap and remain the negative exemplar.
     private static final String CRASH_EVENT =
-            "net/neoforged/neoforge/client/event/RegisterRecipeBookCategoriesEvent";
+            "net/neoforged/neoforge/client/event/RegisterShadersEvent";
     private static final String SILENT_EVENT =
             "net/neoforged/neoforge/client/event/RegisterDimensionSpecialEffectsEvent";
 

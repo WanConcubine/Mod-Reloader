@@ -1,7 +1,9 @@
 package dev.modreloader.client;
 
 import dev.modreloader.ModReloader;
+import dev.modreloader.Platform;
 import dev.modreloader.command.ReloaderCommands;
+import dev.modreloader.hotadd.LateAccessTransformers;
 import dev.modreloader.hotadd.MixinProbe;
 import dev.modreloader.hotadd.PlatformHooks;
 import dev.modreloader.inspect.MixinRuntimeSupport;
@@ -17,6 +19,7 @@ import net.neoforged.neoforge.common.NeoForge;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Client-only wiring: the tick loop that starts the watcher, desktop toasts, the
@@ -28,6 +31,7 @@ public final class ClientBootstrap {
     private static boolean watcherStarted;
     private static int probeTicks;
     private static boolean probeDone;
+    private static boolean pendingChecked;
 
     private ClientBootstrap() {
     }
@@ -37,6 +41,9 @@ public final class ClientBootstrap {
             return;
         }
         installed = true;
+        // Tell the old JVM we are alive *before* waiting for it (it waits for this
+        // marker; on Windows it cannot read our command line).
+        Relauncher.signalStarted();
         // Relaunched process: wait for the old JVM before writing the instance dir.
         Relauncher.awaitPreviousProcess();
         PlatformHooks.install(new ClientPlatformHooks());
@@ -64,6 +71,16 @@ public final class ClientBootstrap {
                                 MixinRuntimeSupport.name()));
             }
         }
+        // A managed relaunch left the jar the user was retrying; after the title
+        // screen is up again, reopen the prompt on it (once per session).
+        if (!pendingChecked) {
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft != null && minecraft.level == null
+                    && minecraft.screen instanceof TitleScreen) {
+                pendingChecked = true;
+                resumePending(minecraft);
+            }
+        }
         String probe = System.getProperty("modreloader.probe", "").trim();
         if (!probe.isEmpty() && !probeDone && ++probeTicks >= 100) {
             probeDone = true;
@@ -85,6 +102,67 @@ public final class ClientBootstrap {
         } catch (Throwable t) {
             ModReloader.LOGGER.error("[ModReloader] cannot install dev harnesses", t);
         }
+    }
+
+    /**
+     * Re-open the prompt on the jar a relaunch was retrying.
+     *
+     * <p>The scan is done off-thread (it inspects every jar in the watched
+     * folders), and the screen is only set if the client is still at the title
+     * screen. The pending file is consumed once, so a crash cannot resurrect a
+     * stale retry forever.
+     */
+    private static void resumePending(Minecraft minecraft) {
+        Path gameDir = minecraft.gameDirectory.toPath();
+        Optional<Path> pending = PendingAdd.read(gameDir);
+        if (pending.isEmpty()) {
+            return;
+        }
+        Thread thread = new Thread(() -> {
+            Optional<Path> jar = PendingAdd.take(gameDir);
+            if (jar.isEmpty()) {
+                return;
+            }
+            ModsFolderWatcher watcher = ModReloader.WATCHER;
+            List<ModsFolderWatcher.Candidate> candidates =
+                    watcher == null ? List.of() : watcher.scanNow();
+            int index = indexOf(candidates, jar.get());
+            Platform.runOnMainThread(() -> {
+                Minecraft client = Minecraft.getInstance();
+                if (client == null || client.level != null
+                        || !(client.screen instanceof TitleScreen)) {
+                    return;
+                }
+                if (index < 0) {
+                    // The jar is in mods/ and loaded at startup, or it vanished:
+                    // the retry is not needed / not possible.
+                    ModReloaderToasts.info(
+                            Component.translatable("modreloader.toast.resume.loaded.title"),
+                            Component.translatable("modreloader.toast.resume.loaded.message",
+                                    jar.get().getFileName().toString()));
+                    return;
+                }
+                ModReloaderToasts.info(
+                        Component.translatable("modreloader.toast.resume.title"),
+                        Component.translatable(LateAccessTransformers.enabled()
+                                        ? "modreloader.toast.resume.late_at"
+                                        : "modreloader.toast.resume.message",
+                                jar.get().getFileName().toString()));
+                client.setScreen(new ModReloaderScreen(candidates, jar.get()));
+            });
+        }, "modreloader-pending");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private static int indexOf(List<ModsFolderWatcher.Candidate> candidates, Path jar) {
+        Path wanted = jar.toAbsolutePath().normalize();
+        for (int i = 0; i < candidates.size(); i++) {
+            if (candidates.get(i).path().toAbsolutePath().normalize().equals(wanted)) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /** Detection callback: in world → toast only; at the title screen → the prompt. */

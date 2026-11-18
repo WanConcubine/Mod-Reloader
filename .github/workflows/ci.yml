@@ -31,6 +31,18 @@ jobs:
         working-directory: tools/analyzer
         run: python3 -m unittest discover -s tests -v
 
+  pipeline:
+    name: Pipeline (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Pipeline unit tests (no jars, no game)
+        working-directory: tools/pipeline
+        run: python3 -m unittest discover -s tests -v
+
   runtime:
     name: Runtime (Gradle)
     runs-on: ubuntu-latest

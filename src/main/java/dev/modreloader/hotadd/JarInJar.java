@@ -61,10 +61,12 @@ public final class JarInJar {
      * @param file         the extracted file on disk
      * @param jar          the extracted jar as a {@link SecureJar}
      * @param moduleName   the automatic (or declared) module name of {@code jar}
-     * @param declaresMod  the nested jar ships a mods.toml: classes only, no container
+     * @param declaresMod  the nested jar is a real mod (mods.toml and not
+     *                     {@code FMLModType: GAMELIBRARY}): classes only, no container
+     * @param manifestMixins mixin configs named by {@code MixinConfigs} in its manifest
      */
     public record Nested(String declaredPath, Path file, SecureJar jar, String moduleName,
-                         boolean declaresMod) {
+                         boolean declaresMod, List<String> manifestMixins) {
     }
 
     /**
@@ -76,6 +78,21 @@ public final class JarInJar {
 
         public List<SecureJar> secureJars() {
             return nested.stream().map(Nested::jar).toList();
+        }
+
+        /** Nested jars that are not real mods: they only need to be on the module path. */
+        public List<SecureJar> libraryJars() {
+            return nested.stream().filter(n -> !n.declaresMod()).map(Nested::jar).toList();
+        }
+
+        /**
+         * Mixin configs declared in the manifest of nested libraries. A game
+         * library has no {@code ModFile}, so its configs would otherwise never be
+         * registered with Mixin.
+         */
+        public List<String> libraryMixinConfigs() {
+            return nested.stream().filter(n -> !n.declaresMod())
+                    .flatMap(n -> n.manifestMixins().stream()).toList();
         }
     }
 
@@ -136,7 +153,8 @@ public final class JarInJar {
                 }
                 Path file = materialize(bytes, fileNameOf(path));
                 SecureJar secureJar = SecureJar.from(JarContents.of(file));
-                nested.add(new Nested(path, file, secureJar, secureJar.name(), declaresMod(file)));
+                nested.add(new Nested(path, file, secureJar, secureJar.name(), declaresMod(file),
+                        manifestMixinConfigs(file)));
             }
         }
         return new Result(List.copyOf(nested), List.copyOf(skipped));
@@ -194,7 +212,17 @@ public final class JarInJar {
         return file;
     }
 
-    private static boolean declaresMod(Path jarFile) {
+    /**
+     * A nested jar is a mod only when it ships a mods.toml and is not a
+     * {@code GAMELIBRARY}: those have a {@code DefaultModFileInfo} instead of a
+     * {@code ModFileInfo} and no ModContainer, so treating them as mods fails at
+     * the nested-mod registration step (measured with Supplementaries' bundled
+     * MixinSquared).
+     */
+    static boolean declaresMod(Path jarFile) {
+        if (dev.modreloader.inspect.ModInspector.isGameLibrary(jarFile)) {
+            return false;
+        }
         try (ZipFile zip = new ZipFile(jarFile.toFile())) {
             for (String toml : MODS_TOML) {
                 if (zip.getEntry(toml) != null) {
@@ -204,6 +232,32 @@ public final class JarInJar {
             return false;
         } catch (IOException broken) {
             return false;
+        }
+    }
+
+    /** {@code MixinConfigs} from the manifest, split on commas; empty when absent. */
+    static List<String> manifestMixinConfigs(Path jarFile) {
+        try (ZipFile zip = new ZipFile(jarFile.toFile())) {
+            ZipEntry manifest = zip.getEntry("META-INF/MANIFEST.MF");
+            if (manifest == null) {
+                return List.of();
+            }
+            try (InputStream in = zip.getInputStream(manifest)) {
+                String raw = new java.util.jar.Manifest(in).getMainAttributes().getValue("MixinConfigs");
+                if (raw == null || raw.isBlank()) {
+                    return List.of();
+                }
+                List<String> configs = new ArrayList<>();
+                for (String part : raw.split(",")) {
+                    String name = part.trim();
+                    if (!name.isEmpty()) {
+                        configs.add(name);
+                    }
+                }
+                return List.copyOf(configs);
+            }
+        } catch (IOException broken) {
+            return List.of();
         }
     }
 

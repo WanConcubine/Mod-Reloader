@@ -100,9 +100,9 @@ public final class ClientPlatformHooks implements PlatformHooks {
     }
 
     @Override
-    public void injectResourcePack(ModFile modFile, ModFileInfo fileInfo, Set<String> modIds,
-                                   Rollback rollback) {
-        ClientResourcePacks.inject(modFile, fileInfo, modIds, rollback, lastReloadListeners);
+    public void injectResourcePacks(java.util.List<ModFileInfo> fileInfos, Set<String> modIds,
+                                    Rollback rollback) {
+        ClientResourcePacks.injectAll(fileInfos, modIds, rollback, lastReloadListeners);
     }
 
     @Override

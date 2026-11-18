@@ -9,6 +9,8 @@ import net.neoforged.fml.event.lifecycle.FMLLoadCompleteEvent;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodType;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Constructs a hot-added mod and replays the client lifecycle events it missed.
@@ -52,17 +54,39 @@ public final class FmlEvents {
 
     /** Common setup, client setup/key mappings and load-complete. */
     public static void finish(ModContainer container) throws Throwable {
-        DeferredWorkQueue commonQueue = queue(container, "common");
-        container.acceptEvent(new FMLCommonSetupEvent(container, commonQueue));
-        commonQueue.runTasks();
+        finishAll(List.of(container));
+    }
 
-        // Client-only events: a dedicated server must not replay these, so the
-        // side hook decides instead of the engine.
-        PlatformHooks.get().acceptClientLifecycle(container);
+    /**
+     * Runs the post-construct lifecycle for several containers in startup order.
+     *
+     * <p>All {@code FMLCommonSetupEvent} listeners run before any enqueued task
+     * does. That matters for nested mods: XaeroLib registers packet handlers in
+     * its own synchronized common-setup listener and freezes the registry in an
+     * enqueued task; running the nested container's queue first (the old
+     * one-container-at-a-time loop) froze the registry before Xaero's World Map
+     * could register its own handlers.
+     */
+    public static void finishAll(List<ModContainer> containers) throws Throwable {
+        List<DeferredWorkQueue> commonQueues = new ArrayList<>();
+        for (ModContainer container : containers) {
+            DeferredWorkQueue commonQueue = queue(container, "common");
+            container.acceptEvent(new FMLCommonSetupEvent(container, commonQueue));
+            commonQueues.add(commonQueue);
+        }
+        for (DeferredWorkQueue commonQueue : commonQueues) {
+            commonQueue.runTasks();
+        }
 
-        DeferredWorkQueue completeQueue = queue(container, "complete");
-        container.acceptEvent(new FMLLoadCompleteEvent(container, completeQueue));
-        completeQueue.runTasks();
+        for (ModContainer container : containers) {
+            // Client-only events: a dedicated server must not replay these, so the
+            // side hook decides instead of the engine.
+            PlatformHooks.get().acceptClientLifecycle(container);
+
+            DeferredWorkQueue completeQueue = queue(container, "complete");
+            container.acceptEvent(new FMLLoadCompleteEvent(container, completeQueue));
+            completeQueue.runTasks();
+        }
     }
 
     private static DeferredWorkQueue queue(ModContainer container, String phase) {

@@ -14,3 +14,7 @@ run/
 
 # 编译依赖 MixinRuntime，不随仓库分发（见 docs/status.md 已知问题 12）
 libs/
+
+# pipeline run artifacts (logs/reports are evidence, not source)
+tools/pipeline/reports/
+tools/pipeline/.run.lock

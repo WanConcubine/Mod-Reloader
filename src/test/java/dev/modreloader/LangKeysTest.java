@@ -46,6 +46,19 @@ class LangKeysTest {
     }
 
     @Test
+    void playerCopyDoesNotExposeJvmFlags() throws IOException {
+        // ADR-0015: players see "restart once on JBR", never the flags themselves.
+        for (String language : new String[]{"en_us", "zh_cn"}) {
+            for (Map.Entry<String, String> entry : load(language).entrySet()) {
+                for (String token : new String[]{"-XX", "-Dmodreloader", "lateAt"}) {
+                    assertFalse(entry.getValue().contains(token),
+                            language + " " + entry.getKey() + " exposes JVM flag " + token);
+                }
+            }
+        }
+    }
+
+    @Test
     void everyFailureKindHasBothMessages() throws IOException {
         Map<String, String> en = load("en_us");
         Map<String, String> zh = load("zh_cn");

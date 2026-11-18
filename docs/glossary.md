@@ -77,6 +77,7 @@
 | **Retransform** | 重新跑一遍 ClassFileTransformer，再定义类。 |
 | **Class unloading** | 只有定义类的 ClassLoader 不可达时，类才可能被卸载。 |
 | **JBR** | JetBrains Runtime；`-XX:+AllowEnhancedClassRedefinition` 可增删方法/字段。 |
+| **stock JVM** | **能力定义，不是厂商**：任何没有 JBR 增强重定义的普通 JDK 21（Oracle、Temurin、Microsoft、Zulu 都算）；JBR 不加 flag 也按 stock 能力算。Minecraft 1.21.1 本身要求 Java 21，stock 与 JBR 的区别只在能否 redefine 已加载类。 |
 | **DCEVM** | 另一套增强类重定义 JVM（Java 11 之前常用）。 |
 | **Self-attach** | 进程内自己加载 java agent 拿 `Instrumentation`（本项目 PoC 已验证）。 |
 
@@ -114,9 +115,18 @@
 | **One-shot replay（一次性事件重放）** | 把启动期只发生一次的事件（命令、payload、`RegisterEvent`）在热加后重新投递；按容器重放，避免全局重放导致已加载 mod 的监听器再跑一遍。 |
 | **单向提交（commit-only）** | 贵妃级适配的失败模型：注册表条目无法撤销，提交前尽量预检，提交后失败只能把运行时标记为不可信并要求重启。 |
 | **Registry window（注册表窗口）** | 贵妃级热加的 unfreeze → construct → RegisterEvent 重放 → 清空 state id → freeze 这一段；窗口内失败可以恢复冻结状态，freeze 之后不可回滚。 |
-| **Access transformer（AT）** | NeoForge/Forge 的 `META-INF/accesstransformer.cfg`：放宽 private/final 成员的可见性，**只在类加载时**由 FML 应用。热加不应用它，所以带 AT 的模组是**变更前拒绝**的硬边界；分析器现在也解析它（`at_rules`/`at_targets`，默认表格 `AT` 列）。「晚注入 AT」已逐 jar 判死（0/6 可行）。 |
+| **Access transformer（AT）** | NeoForge/Forge 的 `META-INF/accesstransformer.cfg`：放宽 private/final 成员的可见性，**只在类加载时**由 FML 应用。**stock JVM 上热加不应用它，默认变更前拒绝**；2026-11-17 起 JBR 可用实验性 late AT 改已加载类的 access/final（Jade/JEI/Controlling L1，见 [late-at.md](features/late-at.md)）。旧「类加载时晚注入」量测 0/6 仍成立，但不再是“AT 无能为力”的证明。 |
 | **ServerThreadHop** | 把一段**必须在服务器线程**上跑的关键区投递过去并等完成（`isSameThread`/无服务器时直跑；超时回退 + warn；原子 claim 防重复）。用于贵妃级的「清 BlockState id + freeze」——那张表区块序列化也在读。见 [features/t4-registry-hotadd.md](features/t4-registry-hotadd.md) §11。 |
 | **EventBusSnapshot（游戏总线监听器回滚）** | 构造前快照 `NeoForge.EVENT_BUS` 的 owner→监听器实例，失败回滚时**按实例**从所有 dispatch list 摘除并修剪 owner 表（`IEventBus#unregister(owner)` 只能按 owner，碰不到被追加到已有 owner 的监听器）。`Capabilities.EVENT_BUS_ROLLBACK` 守卫。见 [features/a1-mixin-hotadd.md](features/a1-mixin-hotadd.md) §10。 |
 | **Datapack 预注册（preregister）** | 标题屏热加时把包先放进 `ResourcePackLoader.modResourcePacks`，让**下一次世界加载**的 `populatePackRepository` 带上它；这是维度/生物群系这类 WORLDGEN 内容唯一能生效的时机（`ServerStartedEvent` 之后已经太晚）。 |
 | **`/modreloader why`** | 只读诊断命令：按引擎 VALIDATE 顺序输出 tier / 内容形状 / AT 组成 / 依赖 / 注册审计 / 结论（`inspect/HotAddWhy`）。返回 1 表示诊断跑过，不表示能热加。 |
 | **校准（calibrate）/ ground truth** | 用真机 harness 的结论给分析器打标签（`tools/analyzer/calibration/ground-truth.tsv` 只存 jar 文件名），`calibrate.py` 逐 jar 对比 tier 预测并统计一致/mismatch。首轮 11 个标注、10 个一致。 |
+
+## 模组白名单分级
+
+- **一等（T1）**：stock JVM 可热加、无可复现 bug。
+- **二等（T2）**：stock JVM 可热加，但有已记录的 bug；修好升一等，修不动留在二等。
+- **三等（T3）**：默认判不可热加、但分析认为实际可热加；agent 处理后按结果转 T2 或黑名单。
+- **JBR 一等 / 二等（J1/J2）**：同上，但只在 JBR（enhanced redefinition）下成立。
+- **黑名单（BLACK）**：分析确认结构性不可热加；按 JVM 分别记录，必须写原因与替代路径。
+- 规则与数据：[features/mod-whitelist.md](features/mod-whitelist.md) / [whitelist/mods.tsv](whitelist/mods.tsv)。

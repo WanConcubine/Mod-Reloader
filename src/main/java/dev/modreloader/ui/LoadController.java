@@ -27,7 +27,8 @@ public final class LoadController {
             return;
         }
         var inspection = candidate.inspection();
-        if (!inspection.canHotLoad(Capabilities.available(Capabilities.Capability.REGISTRY_ADAPTATION))) {
+        if (!inspection.canHotLoad(Capabilities.available(Capabilities.Capability.REGISTRY_ADAPTATION),
+                dev.modreloader.hotadd.LateAccessTransformers.enabled())) {
             minecraft.setScreen(new LoadFailureScreen(null, candidate,
                     FailureAnalyzer.preflight(inspection)));
             return;

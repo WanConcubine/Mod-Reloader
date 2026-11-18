@@ -110,13 +110,22 @@ public final class ReloaderCommands {
                                         .append(Component.literal(" · "))
                                         .append(ModReloaderI18n.blockReason(candidate.inspection(),
                                                 dev.modreloader.capability.Capabilities.available(
-                                                        dev.modreloader.capability.Capabilities.Capability.REGISTRY_ADAPTATION)))
+                                                        dev.modreloader.capability.Capabilities.Capability.REGISTRY_ADAPTATION),
+                                                dev.modreloader.hotadd.LateAccessTransformers.enabled()))
                                         .append(Component.literal(" "))
                                         .append(Component.translatable("modreloader.command.scan.hint",
                                                 candidate.path().getFileName().toString()));
                                 ctx.getSource().sendSuccess(() -> line, false);
                             }
                             return candidates.size();
+                        }))
+                .then(Commands.literal("jbr")
+                        .executes(ctx -> {
+                            for (String line : dev.modreloader.inspect.JbrSupport.diagnose()) {
+                                ctx.getSource().sendSuccess(
+                                        () -> Component.literal(line), false);
+                            }
+                            return 1;
                         }))
                 .then(Commands.literal("probe")
                         .then(Commands.argument("jar", StringArgumentType.greedyString())

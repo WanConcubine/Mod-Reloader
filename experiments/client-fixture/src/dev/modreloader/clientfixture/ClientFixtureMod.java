@@ -1,13 +1,18 @@
 package dev.modreloader.clientfixture;
 
+import net.minecraft.client.RecipeBookCategories;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.inventory.RecipeBookType;
 import net.minecraft.world.item.Items;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.event.RegisterItemDecorationsEvent;
+import net.neoforged.neoforge.client.event.RegisterRecipeBookCategoriesEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.List;
 
 /**
  * Client-side fixture for the startup-only client registration events.
@@ -36,6 +41,7 @@ public final class ClientFixtureMod {
     public ClientFixtureMod(IEventBus modBus) {
         modBus.addListener(ClientFixtureMod::onRegisterGuiLayers);
         modBus.addListener(ClientFixtureMod::onRegisterItemDecorations);
+        modBus.addListener(ClientFixtureMod::onRegisterRecipeBookCategories);
         LOGGER.info("[ClientFixture] constructed; listeners attached");
     }
 
@@ -43,6 +49,15 @@ public final class ClientFixtureMod {
         event.registerAboveAll(HUD_LAYER, (graphics, partialTick) ->
                 graphics.fill(0, 0, 2, 2, 0x80FF00FF));
         LOGGER.info("[ClientFixture] registered GUI layer {}", HUD_LAYER);
+    }
+
+    private static void onRegisterRecipeBookCategories(RegisterRecipeBookCategoriesEvent event) {
+        // A new RecipeBookType entry is the cheapest observable registration: the
+        // map starts empty for vanilla types, so the replay must report +1.
+        event.registerBookCategories(RecipeBookType.CRAFTING,
+                List.of(RecipeBookCategories.CRAFTING_MISC));
+        LOGGER.info("[ClientFixture] registered recipe book categories for {}",
+                RecipeBookType.CRAFTING);
     }
 
     private static void onRegisterItemDecorations(RegisterItemDecorationsEvent event) {

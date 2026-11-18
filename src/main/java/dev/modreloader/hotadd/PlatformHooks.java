@@ -34,8 +34,12 @@ public interface PlatformHooks {
     /** Client: replays {@code FMLClientSetupEvent} + {@code RegisterKeyMappingsEvent}. Server: no-op. */
     void acceptClientLifecycle(ModContainer container) throws Throwable;
 
-    /** Client: adds and selects the mod's resource packs. Server: logs that it is skipped. */
-    void injectResourcePack(ModFile modFile, ModFileInfo fileInfo, Set<String> modIds, Rollback rollback);
+    /**
+     * Client: adds and selects the packs of the outer mod and its nested mods in
+     * one reload. Server: logs that it is skipped.
+     */
+    void injectResourcePacks(java.util.List<ModFileInfo> fileInfos, Set<String> modIds,
+                             Rollback rollback);
 
     /**
      * Re-fires {@code RegisterCommandsEvent} so a hot-added mod's commands exist.

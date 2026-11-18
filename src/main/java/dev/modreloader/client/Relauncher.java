@@ -3,6 +3,7 @@ package dev.modreloader.client;
 import dev.modreloader.ModReloader;
 import dev.modreloader.inspect.JbrSupport;
 import net.minecraft.client.Minecraft;
+import net.neoforged.fml.loading.FMLPaths;
 import net.minecraft.client.server.IntegratedServer;
 
 import java.io.IOException;
@@ -47,14 +48,111 @@ public final class Relauncher {
     private Relauncher() {
     }
 
+    /**
+     * The arguments of this process, without the executable.
+     *
+     * <p>{@code ProcessHandle.current().info().arguments()} is empty for the
+     * current process on Windows in several JDKs, which used to make managed
+     * relaunch impossible there ("the launcher did not expose the game's
+     * command line"). Fall back to Win32_Process.CommandLine via PowerShell/WMIC,
+     * which does report it. The first token (the java executable) is dropped.
+     */
+    public static Optional<String[]> currentArguments() {
+        Optional<String[]> direct = ProcessHandle.current().info().arguments();
+        if (direct.isPresent() && direct.get().length > 0) {
+            return direct;
+        }
+        if (!isWindows()) {
+            return Optional.empty();
+        }
+        Optional<String> raw = windowsCommandLine();
+        if (raw.isEmpty()) {
+            return Optional.empty();
+        }
+        List<String> parsed = RelaunchScripts.splitWindowsCommandLine(raw.get());
+        if (!parsed.isEmpty() && looksLikeJavaExe(parsed.get(0))) {
+            parsed.remove(0);
+        }
+        return parsed.isEmpty() ? Optional.empty() : Optional.of(parsed.toArray(String[]::new));
+    }
+
+    private static boolean looksLikeJavaExe(String token) {
+        String lower = token.toLowerCase(Locale.ROOT);
+        return lower.endsWith("java.exe") || lower.endsWith("javaw.exe")
+                || lower.endsWith("/java") || lower.endsWith("\\java");
+    }
+
+    private static Optional<String> windowsCommandLine() {
+        long pid = ProcessHandle.current().pid();
+        // The command line contains Unicode paths. PowerShell's console output is
+        // in the OEM code page (GBK on a Chinese Windows), so reading it as UTF-8
+        // turned "C:\\Dstick\\[模组热重载测试]" into "[????????????]" and the child JVM
+        // failed with InvalidPathException. Force UTF-8 for PowerShell and decode
+        // WMIC (which cannot be forced) with the native charset.
+        Optional<String> viaPowerShell = runForCommandLine(new String[]{
+                "powershell", "-NoProfile", "-NonInteractive", "-Command",
+                "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; "
+                        + "(Get-CimInstance Win32_Process -Filter 'ProcessId=" + pid + "').CommandLine"},
+                java.nio.charset.StandardCharsets.UTF_8);
+        if (viaPowerShell.isPresent()) {
+            return viaPowerShell;
+        }
+        return runForCommandLine(new String[]{
+                        "wmic", "process", "where", "processid=" + pid, "get", "commandline", "/value"},
+                nativeCharset());
+    }
+
+    private static Optional<String> runForCommandLine(String[] command,
+                                                      java.nio.charset.Charset charset) {
+        try {
+            Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+            byte[] bytes = process.getInputStream().readAllBytes();
+            if (!process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                return Optional.empty();
+            }
+            if (process.exitValue() != 0) {
+                return Optional.empty();
+            }
+            String output = new String(bytes, charset).trim();
+            if (output.startsWith("CommandLine=")) {
+                output = output.substring("CommandLine=".length()).trim();
+            }
+            return output.isBlank() ? Optional.empty() : Optional.of(output);
+        } catch (Throwable ignored) {
+            return Optional.empty();
+        }
+    }
+
+    private static java.nio.charset.Charset nativeCharset() {
+        String name = System.getProperty("native.encoding",
+                System.getProperty("sun.jnu.encoding", "UTF-8"));
+        try {
+            return java.nio.charset.Charset.forName(name);
+        } catch (Throwable ignored) {
+            return java.nio.charset.StandardCharsets.UTF_8;
+        }
+    }
+
+    /**
+     * A launchable java binary. Windows has no POSIX execute bit, so a present
+     * java.exe is the contract there; on POSIX we still require +x.
+     */
+    public static boolean isRunnable(Path java) {
+        if (java == null || !Files.isRegularFile(java)) {
+            return false;
+        }
+        return isWindows() || Files.isExecutable(java);
+    }
+
     /** @return null when a relaunch is possible, otherwise why it is not */
     public static String blocker() {
-        Optional<String[]> arguments = ProcessHandle.current().info().arguments();
+        Optional<String[]> arguments = currentArguments();
         if (arguments.isEmpty() || arguments.get().length == 0) {
             return "the launcher did not expose the game's command line";
         }
         Path java = executable();
-        if (!Files.isExecutable(java)) {
+        if (!isRunnable(java)) {
             return "java executable not found: " + java;
         }
         if (isWindows() && !RelaunchScripts.windowsCanRepresent(stripRelaunchFlags(arguments.get()))) {
@@ -88,7 +186,7 @@ public final class Relauncher {
         if (minecraft == null) {
             return Optional.of("no client");
         }
-        if (!Files.isExecutable(java)) {
+        if (!isRunnable(java)) {
             return Optional.of("java executable not found: " + java);
         }
         String blocker = blocker();
@@ -114,24 +212,50 @@ public final class Relauncher {
         }
         // 2. Same JVM, same arguments, plus the marker the child waits on.
         List<String> arguments = stripRelaunchFlags(
-                ProcessHandle.current().info().arguments().orElse(new String[0]));
+                currentArguments().orElse(new String[0]));
         long pid = ProcessHandle.current().pid();
-        List<String> childArguments = new ArrayList<>(arguments);
-        childArguments.addAll(extraJvmArgs);
-        childArguments.add("-D" + RELAUNCHED + "=true");
-        childArguments.add("-D" + WAIT_FOR_PID + "=" + pid);
+        // Before the main class: the JVM stops parsing options there, so these
+        // must not be appended after it (they would become program arguments).
+        List<String> markers = new ArrayList<>(extraJvmArgs);
+        markers.add("-D" + RELAUNCHED + "=true");
+        markers.add("-D" + WAIT_FOR_PID + "=" + pid);
+        List<String> childArguments = RelaunchScripts.withJvmFlags(arguments, markers);
         Path gameDir = minecraft.gameDirectory.toPath();
         try {
-            Path script = writeScript(gameDir, java, childArguments, WAIT_SECONDS);
-            spawn(script, gameDir);
+            // Launch the JVM directly: a generated .cmd used to be needed to wait
+            // and to detach, but cmd.exe re-encodes the file in the OEM code page,
+            // so a game/JBR path with Chinese characters or brackets failed with
+            // "系统找不到指定的路径". ProcessBuilder passes Unicode paths natively;
+            // the child waits for this PID (awaitPreviousProcess) before writing
+            // the instance directory, so no shell-side delay is needed either.
+            Path relaunchDir = gameDir.resolve("modreloader").resolve("relaunch");
+            Files.createDirectories(relaunchDir);
+            Path log = relaunchDir.resolve("relaunch-" + System.currentTimeMillis() + ".log");
+            // javaw.exe on Windows: no console window for the replacement game.
+            Path javaExe = java;
+            if (isWindows()) {
+                Path javaw = java.resolveSibling("javaw.exe");
+                if (isRunnable(javaw)) {
+                    javaExe = javaw;
+                }
+            }
+            List<String> command = new ArrayList<>();
+            command.add(javaExe.toString());
+            command.addAll(childArguments);
+            Process child = new ProcessBuilder(command)
+                    .directory(gameDir.toFile())
+                    .redirectErrorStream(true)
+                    .redirectOutput(ProcessBuilder.Redirect.appendTo(log.toFile()))
+                    .start();
+            ModReloader.LOGGER.info("[ModReloader] replacement JVM spawned: pid={} java={} log={}",
+                    child.pid(), java, log);
             // 3. Prove a replacement JVM is actually running before this one leaves.
-            //    The spawned process is the script (or `cmd /c start`), so its own
-            //    liveness proves nothing on Windows; look for the marker instead.
-            if (!replacementStarted(pid)) {
+            //    On Windows the child's command line may be unreadable, so it writes
+            //    a marker itself as soon as it boots (Relauncher.signalStarted).
+            if (!awaitReplacement(gameDir, pid, 12)) {
                 return Optional.of("the replacement game did not start" + tail(gameDir));
             }
-            ModReloader.LOGGER.info("[ModReloader] replacement game started; exiting this process"
-                    + " (script {})", script);
+            ModReloader.LOGGER.info("[ModReloader] replacement game started; exiting this process");
         } catch (Throwable t) {
             ModReloader.LOGGER.error("[ModReloader] cannot start the replacement process", t);
             return Optional.of(t.getClass().getSimpleName() + ": " + t.getMessage());
@@ -272,9 +396,16 @@ public final class Relauncher {
 
     /** Flags a JBR replacement needs on top of the launcher's arguments. */
     public static List<String> jbrFlags() {
-        return JbrSupport.enhancedRedefinition()
-                ? List.of()
-                : List.of("-XX:+AllowEnhancedClassRedefinition");
+        return jbrFlags(false);
+    }
+
+    /**
+     * @param enableLateAt also add {@code -Dmodreloader.lateAt=true} so the new
+     *                     session can apply a hot-added mod's access transformers
+     *                     (experimental, JBR-only; the caller must have warned)
+     */
+    public static List<String> jbrFlags(boolean enableLateAt) {
+        return RelaunchFlags.jvmFlags(JbrSupport.enhancedRedefinition(), enableLateAt);
     }
 
     private static String tail(Path gameDir) {
@@ -307,17 +438,48 @@ public final class Relauncher {
      * child JVM starts after the script's wait, so give it a few seconds; a
      * launcher that kills the process tree never produces one.
      */
-    static boolean replacementStarted(long parentPid) {
-        String marker = "-D" + WAIT_FOR_PID + "=" + parentPid;
-        long deadline = System.currentTimeMillis() + 6000;
+    /**
+     * Marker the replacement JVM writes as soon as it boots.
+     *
+     * <p>Scanning other processes' command lines is not portable: Windows often
+     * reports them empty, which made a perfectly good relaunch look like a
+     * failure ("the replacement game did not start"). The marker is written by
+     * the child itself, so it works on every platform.
+     */
+    static Path startedMarker(Path gameDir, long parentPid) {
+        return gameDir.resolve("modreloader").resolve("relaunch")
+                .resolve("started-" + parentPid + ".txt");
+    }
+
+    /** Child side: called as early as possible when the relaunched JVM boots. */
+    public static void signalStarted() {
+        String raw = System.getProperty(WAIT_FOR_PID);
+        if (raw == null || raw.isBlank()) {
+            return;
+        }
+        try {
+            Path gameDir = FMLPaths.GAMEDIR.get();
+            Path marker = startedMarker(gameDir, Long.parseLong(raw.trim()));
+            Files.createDirectories(marker.getParent());
+            Files.writeString(marker, Long.toString(ProcessHandle.current().pid()),
+                    StandardCharsets.UTF_8);
+            ModReloader.LOGGER.info("[ModReloader] relaunched process: wrote {}", marker);
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn("[ModReloader] cannot write the relaunch marker", t);
+        }
+    }
+
+    private static boolean awaitReplacement(Path gameDir, long parentPid, int seconds) {
+        Path marker = startedMarker(gameDir, parentPid);
+        long deadline = System.currentTimeMillis() + seconds * 1000L;
         while (System.currentTimeMillis() < deadline) {
-            if (ProcessHandle.allProcesses().anyMatch(handle -> {
-                if (handle.pid() == parentPid) {
-                    return false;
-                }
-                String commandLine = handle.info().commandLine().orElse("");
-                return commandLine.contains(marker);
-            })) {
+            if (Files.isRegularFile(marker)) {
+                ModReloader.LOGGER.info("[ModReloader] replacement game started (marker {})", marker);
+                return true;
+            }
+            if (replacementVisible(parentPid)) {
+                ModReloader.LOGGER.info(
+                        "[ModReloader] replacement game started (command line of pid {})", parentPid);
                 return true;
             }
             try {
@@ -328,5 +490,12 @@ public final class Relauncher {
             }
         }
         return false;
+    }
+
+    /** Fallback for platforms that do expose other processes' command lines. */
+    private static boolean replacementVisible(long parentPid) {
+        String marker = "-D" + WAIT_FOR_PID + "=" + parentPid;
+        return ProcessHandle.allProcesses().anyMatch(handle -> handle.pid() != parentPid
+                && handle.info().commandLine().orElse("").contains(marker));
     }
 }

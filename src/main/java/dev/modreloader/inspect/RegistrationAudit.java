@@ -133,6 +133,8 @@ public final class RegistrationAudit {
             // replayed against the new container (Balm puts the listener on the
             // consuming mod's bus, so a targeted replay is what makes it work)
             "net.neoforged.neoforge.client.event.RegisterParticleProvidersEvent",
+            // client/RecipeBookCategoryReplay (copy of the live manager maps, then putAll)
+            "net.neoforged.neoforge.client.event.RegisterRecipeBookCategoriesEvent",
             // NetworkAdaptation / RegistryStage / CapabilityReplay
             "net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent",
             "net.neoforged.neoforge.registries.RegisterEvent",
@@ -166,7 +168,6 @@ public final class RegistrationAudit {
      * listener lives on the consuming mod's bus).
      */
     private static final Set<String> CRASH = Set.of(
-            "net.neoforged.neoforge.client.event.RegisterRecipeBookCategoriesEvent",
             "net.neoforged.neoforge.client.event.RegisterShadersEvent",
             "net.neoforged.neoforge.client.event.RegisterSpriteSourceTypesEvent");
 

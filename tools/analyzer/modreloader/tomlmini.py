@@ -115,6 +115,12 @@ def _navigate(root: Dict[str, Any], path: str) -> Tuple[Dict[str, Any], str]:
     node = root
     for part in parts[:-1]:
         nxt = node.get(part)
+        # `[[table]]` followed by `[table.sub]`: TOML attaches the sub-table to
+        # the last array element. Replacing the list with a dict would lose the
+        # `[[mods]]` entry (XaeroPlus ships `[mods."lithium:options"]`).
+        if isinstance(nxt, list) and nxt and isinstance(nxt[-1], dict):
+            node = nxt[-1]
+            continue
         if not isinstance(nxt, dict):
             nxt = {}
             node[part] = nxt

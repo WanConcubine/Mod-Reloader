@@ -57,14 +57,20 @@ public final class ModInspector {
             IModFile candidate = new JarModsDotTomlModFileReader()
                     .read(JarContents.of(jar), ModFileDiscoveryAttributes.DEFAULT);
             if (!(candidate instanceof ModFile modFile)) {
-                return failed(jar, "not a NeoForge mod jar (no mods.toml)");
+                return failed(jar, isGameLibrary(jar)
+                        ? "library jar (FMLModType: GAMELIBRARY) declares no mods; "
+                                + "hot-add needs a mod container"
+                        : "not a NeoForge mod jar (no mods.toml)");
             }
             if (!modFile.identifyMods()) {
                 return failed(jar, "cannot identify mods");
             }
             List<IModInfo> infos = modFile.getModInfos();
             if (infos.isEmpty()) {
-                return failed(jar, "jar declares no mods");
+                return failed(jar, isGameLibrary(jar)
+                        ? "library jar (FMLModType: GAMELIBRARY) declares no mods; "
+                                + "hot-add needs a mod container"
+                        : "jar declares no mods");
             }
             IModFileInfo rawFileInfo = modFile.getModFileInfo();
             if (!(rawFileInfo instanceof ModFileInfo fileInfo)) {
@@ -156,6 +162,32 @@ public final class ModInspector {
             ModReloader.LOGGER.warn("[ModReloader] preflight failed for {}", jar, t);
             return failed(jar, t.getClass().getSimpleName() + ": " + t.getMessage());
         }
+    }
+
+    /**
+     * A NeoForge "game library" (MANIFEST {@code FMLModType: GAMELIBRARY}) is a
+     * dependency jar, not a mod: it has no ModContainer, so it cannot be added by
+     * the hot-add pipeline. Detecting it lets the UI say that instead of the
+     * misleading "jar declares no mods" (mezz_config standalone).
+     */
+    public static boolean isGameLibrary(Path jar) {
+        try (ZipFile zip = new ZipFile(jar.toFile())) {
+            ZipEntry manifest = zip.getEntry("META-INF/MANIFEST.MF");
+            if (manifest == null) {
+                return false;
+            }
+            String text = new String(zip.getInputStream(manifest).readAllBytes(),
+                    java.nio.charset.StandardCharsets.UTF_8);
+            for (String line : text.split("\\R")) {
+                String lower = line.toLowerCase(Locale.ROOT);
+                if (lower.startsWith("fmlmodtype:") && lower.contains("gamelibrary")) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+            // Unreadable manifest: fall back to the generic message.
+        }
+        return false;
     }
 
     private static ModInspection failed(Path jar, String error) {

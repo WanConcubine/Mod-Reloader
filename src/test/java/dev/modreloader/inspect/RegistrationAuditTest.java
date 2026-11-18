@@ -40,7 +40,6 @@ class RegistrationAuditTest {
     @Test
     void eventsThatCrashWhenUsedAreFatal() {
         for (String event : List.of(
-                "net.neoforged.neoforge.client.event.RegisterRecipeBookCategoriesEvent",
                 "net.neoforged.neoforge.client.event.RegisterShadersEvent",
                 "net.neoforged.neoforge.client.event.RegisterSpriteSourceTypesEvent")) {
             RegistrationAudit.Report report = classify(true, event);
@@ -50,6 +49,17 @@ class RegistrationAuditTest {
             assertTrue(report.shortNames(RegistrationAudit.Severity.CRASH).contains(
                     event.substring(event.lastIndexOf('.') + 1)), event);
         }
+    }
+
+    @Test
+    void recipeBookCategoriesAreCoveredByTheReplay() {
+        // 2026-11-18: RecipeBookCategoryReplay copies the live manager maps, posts the
+        // event against the new container and merges the entries back.
+        RegistrationAudit.Report report = classify(true,
+                "net.neoforged.neoforge.client.event.RegisterRecipeBookCategoriesEvent");
+        assertEquals(RegistrationAudit.Severity.COVERED,
+                report.entries().get(0).severity());
+        assertFalse(report.fatal());
     }
 
     @Test

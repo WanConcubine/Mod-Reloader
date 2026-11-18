@@ -1,0 +1,699 @@
+{
+  "schema": 1,
+  "mc": "1.21.1",
+  "loader": "neoforge",
+  "notes": "Jars are not committed. `fetch` resolves the exact version_number below and pins sha256. ids are modIds so dependency edges line up with mods.toml.",
+  "entries": [
+    {
+      "id": "searchables",
+      "name": "Searchables",
+      "project": "searchables",
+      "version": "1.0.2",
+      "file": "Searchables-neoforge-1.21.1-1.0.2.jar",
+      "sha256": "ca193f0c69033d8f709f9e073a7c1ef4ea46714e5c2f94eb23ace12781c6aa68",
+      "modrinth_version_id": "iEE85X0w",
+      "groups": [
+        "input",
+        "library",
+        "common"
+      ],
+      "expect": {
+        "hotadd": "pass"
+      },
+      "notes": "Controlling 的前置；给 EditBox 加接口（布局变更）→ 需要 JBR。"
+    },
+    {
+      "id": "controlling",
+      "name": "Controlling",
+      "project": "controlling",
+      "version": "19.0.5",
+      "file": "Controlling-neoforge-1.21.1-19.0.5.jar",
+      "sha256": "cc525fb6b030d9e4d33176983f278919e17b33935e2ca568929bdfa98f2b44a0",
+      "modrinth_version_id": "FaNppCJJ",
+      "groups": [
+        "input",
+        "common"
+      ],
+      "expect": {
+        "hotadd": "refuse",
+        "kind": "ACCESS_TRANSFORMER"
+      },
+      "notes": "按键搜索 UI；required 依赖 searchables。19.0.5 自带 1 条 AT，所以即使前置已加载也只能干净拒绝（AT 是硬边界）。"
+    },
+    {
+      "id": "mousetweaks",
+      "name": "Mouse Tweaks",
+      "project": "mouse-tweaks",
+      "version": "1.21-2.26.1-neoforge",
+      "file": "MouseTweaks-neoforge-mc1.21-2.26.1.jar",
+      "sha256": "68e6f4201c5de97b77929a7215c9552495696ca6a3bf3ae4eacc34e135f6cc8b",
+      "modrinth_version_id": "9I21YYxf",
+      "groups": [
+        "mouse",
+        "common"
+      ],
+      "expect": {
+        "hotadd": "pass"
+      },
+      "notes": "玩家口中的“鼠标手势”：物品栏拖拽/滚轮。accessor 给 AbstractContainerScreen 加接口，无 JBR 应 JBR_REQUIRED。"
+    },
+    {
+      "id": "xaerominimap",
+      "name": "Xaero's Minimap",
+      "project": "xaeros-minimap",
+      "version": "neoforge-1.21.1-26.6.0",
+      "file": "xaerominimap-neoforge-1.21.1-26.6.0.jar",
+      "sha256": "d3398221b2262abfe2d394b588122e5b3fd2e4d8c4bf66a5fd357352fcf51b2e",
+      "modrinth_version_id": "irjR7dHk",
+      "groups": [
+        "minimap",
+        "common"
+      ],
+      "expect": {
+        "hotadd": "pass"
+      },
+      "notes": "最常用的小地图；客户端 HUD + 自己的配置/渲染，预期能暴露 HUD 层/按键/资源包缺口。"
+    },
+    {
+      "id": "xaeroworldmap",
+      "name": "Xaero's World Map",
+      "project": "xaeros-world-map",
+      "version": "neoforge-1.21.1-1.47.0",
+      "file": "xaeroworldmap-neoforge-1.21.1-1.47.0.jar",
+      "sha256": "6a42b6f01bd96b496e5fcc07d4541bad1a699d9ec8ad58ad40d5dcfe23a7d4c7",
+      "modrinth_version_id": "SnQ4SoDe",
+      "groups": [
+        "minimap",
+        "common"
+      ],
+      "expect": {
+        "hotadd": "unknown"
+      },
+      "notes": "小地图的姊妹模组；XaeroPlus 的 required 前置之一。"
+    },
+    {
+      "id": "xaeroplus",
+      "name": "XaeroPlus",
+      "project": "xaeroplus",
+      "version": "2.37.2+neoforge-1.21.1",
+      "file": "XaeroPlus-2.37.2+neoforge-1.21.1-WM1.47.0-MM26.6.0.jar",
+      "sha256": "f70518e0e752a43bbfdb1d290ff606735880c7483a01fd35f2fe6f4239cb60b9",
+      "modrinth_version_id": "g9hN7kiz",
+      "groups": [
+        "minimap",
+        "common"
+      ],
+      "expect": {
+        "hotadd": "unknown"
+      },
+      "notes": "required 依赖 Xaero's World Map + Minimap；用来测两个前置 + 一个 addon 的顺序。"
+    },
+    {
+      "id": "journeymap",
+      "name": "JourneyMap",
+      "project": "journeymap",
+      "version": "1.21.1-6.0.9+neoforge",
+      "file": "journeymap-neoforge-1.21.1-6.0.9.jar",
+      "sha256": "9bd7734542233d5281750572f17a9258449e826650c081e9a67dc426262c2fde",
+      "modrinth_version_id": "CtFE7hwT",
+      "groups": [
+        "minimap",
+        "common"
+      ],
+      "expect": {
+        "hotadd": "refuse",
+        "kind": "ACCESS_TRANSFORMER"
+      },
+      "notes": "另一个小地图实现（客户端+服务端、网络、世界数据），与 Xaero 的故障面不同。"
+    },
+    {
+      "id": "jade",
+      "name": "Jade",
+      "project": "jade",
+      "version": "15.10.6+neoforge",
+      "file": "Jade-1.21.1-NeoForge-15.10.6.jar",
+      "sha256": "276f1f65a20d04f536989c4f311949d770b52c440c23c2b904a08860f3c93810",
+      "modrinth_version_id": "eYz2YBGT",
+      "groups": [
+        "tooltip",
+        "common"
+      ],
+      "expect": {
+        "hotadd": "refuse",
+        "kind": "ACCESS_TRANSFORMER"
+      },
+      "notes": "已知 AT 硬边界；pipeline 把它当“干净拒绝”的回归，不是失败。"
+    },
+    {
+      "id": "appleskin",
+      "name": "AppleSkin",
+      "project": "appleskin",
+      "version": "3.0.9+mc1.21",
+      "file": "appleskin-neoforge-mc1.21-3.0.9.jar",
+      "sha256": "38b48dd6231341c9f964ce6e42c57ec866c6cc8f72bec938390a59bafb3922df",
+      "modrinth_version_id": "uAKA6Laj",
+      "groups": [
+        "hud",
+        "common"
+      ],
+      "expect": {
+        "hotadd": "pass"
+      },
+      "notes": "HUD/提示条；status 里用来验证过 tooltip 工厂与 HUD 层重放。"
+    },
+    {
+      "id": "jei",
+      "name": "Just Enough Items",
+      "project": "jei",
+      "version": "19.70.0.469",
+      "file": "jei-1.21.1-neoforge-19.70.0.469.jar",
+      "sha256": "9ab82d9bdbc8d9a08b80bc2023e1d886f6335b92f937d3afac878c9ea995dc33",
+      "modrinth_version_id": "1vC6z8wV",
+      "groups": [
+        "recipe",
+        "common"
+      ],
+      "expect": {
+        "hotadd": "refuse",
+        "kind": "ACCESS_TRANSFORMER"
+      },
+      "notes": "大型配方查看器；自己 JiJ 打包的 MezzConfig 0.6.10 有 mods.toml（会建嵌套 container），所以拒绝点是 34 条 AT。"
+    },
+    {
+      "id": "balm",
+      "name": "Balm",
+      "project": "balm",
+      "version": "21.0.67+neoforge-1.21.1",
+      "file": "balm-neoforge-1.21.1-21.0.67.jar",
+      "sha256": "eaae887582a67a02f55a970ec2d7353f1886a99924ed6144aa4d898266606c34",
+      "modrinth_version_id": "gMedgtzL",
+      "groups": [
+        "library",
+        "common"
+      ],
+      "expect": {
+        "hotadd": "pass"
+      },
+      "notes": "通用前置库；许多内容模组（Waystones 等）的首个热加对象。"
+    },
+    {
+      "id": "cloth-config",
+      "name": "Cloth Config API",
+      "project": "cloth-config",
+      "version": "15.0.140+neoforge",
+      "file": "cloth-config-15.0.140-neoforge.jar",
+      "sha256": "65e722e0d98431a07c45f8bdd8d529a217cc8c175fde1740248bd5c1b4f3c0d4",
+      "groups": [
+        "popular",
+        "library"
+      ],
+      "expect": {},
+      "notes": "",
+      "modrinth_version_id": "izKINKFg"
+    },
+    {
+      "id": "architectury",
+      "name": "Architectury API",
+      "project": "architectury-api",
+      "version": "13.0.12+neoforge",
+      "file": "architectury-13.0.12-neoforge.jar",
+      "sha256": "aa558d884c9d35399bf5471e042d6be30c32e4a1cf0a5d06a4480ad49dba3ac0",
+      "groups": [
+        "popular",
+        "library"
+      ],
+      "expect": {},
+      "notes": "",
+      "modrinth_version_id": "xGfBrBzj"
+    },
+    {
+      "id": "geckolib",
+      "name": "GeckoLib",
+      "project": "geckolib",
+      "version": "4.9.3",
+      "file": "geckolib-neoforge-1.21.1-4.9.3.jar",
+      "sha256": "20a1995e4074f387ff549e2c57ea79dd7d41ee83c6afb9dd6a6e840e592d1c47",
+      "groups": [
+        "popular",
+        "library"
+      ],
+      "expect": {},
+      "notes": "",
+      "modrinth_version_id": "Grwn5rUB"
+    },
+    {
+      "id": "curios",
+      "name": "Curios API",
+      "project": "curios",
+      "version": "9.5.1+1.21.1",
+      "file": "curios-neoforge-9.5.1+1.21.1.jar",
+      "sha256": "a45df2125c26219974aba7507ffc9afe7b83acc941a386af3faacb1cc0056fde",
+      "groups": [
+        "popular",
+        "library"
+      ],
+      "expect": {},
+      "notes": "",
+      "modrinth_version_id": "yohfFbgD"
+    },
+    {
+      "id": "patchouli",
+      "name": "Patchouli",
+      "project": "patchouli",
+      "version": "1.21.1-93-neoforge",
+      "file": "Patchouli-1.21.1-93-NEOFORGE.jar",
+      "sha256": "959af52ed6640c316c3a8469203420be4aeea11ad6603890ba83bf48f5d9f993",
+      "groups": [
+        "popular",
+        "library"
+      ],
+      "expect": {},
+      "notes": "",
+      "modrinth_version_id": "BIogJv2D"
+    },
+    {
+      "id": "embeddium",
+      "name": "Embeddium",
+      "project": "embeddium",
+      "version": "1.0.15+mc1.21.1",
+      "file": "embeddium-1.0.15+mc1.21.1.jar",
+      "sha256": "3aac4c4c6e82d78d8dda4c611d68c672d1061b42bb6954331e3c2e7f14c451e1",
+      "groups": [
+        "popular",
+        "perf"
+      ],
+      "expect": {},
+      "notes": "",
+      "modrinth_version_id": "J7b96IEd"
+    },
+    {
+      "id": "modernfix",
+      "name": "ModernFix",
+      "project": "modernfix",
+      "version": "5.27.27+mc1.21.1",
+      "file": "modernfix-neoforge-5.27.27+mc1.21.1.jar",
+      "sha256": "7010aae2e837122fe8dabd5932358e2ba334fcbc62ca6530cb1cb00402d2c63b",
+      "groups": [
+        "popular",
+        "perf"
+      ],
+      "expect": {},
+      "notes": "",
+      "modrinth_version_id": "ZDZENbHH"
+    },
+    {
+      "id": "ferritecore",
+      "name": "FerriteCore",
+      "project": "ferrite-core",
+      "version": "7.0.3-neoforge",
+      "file": "ferritecore-7.0.3-neoforge.jar",
+      "sha256": "d87ea28262715ebff45b8a82d493e6b468e7a4521bc021df5d88302196d030a8",
+      "groups": [
+        "popular",
+        "perf"
+      ],
+      "expect": {},
+      "notes": "",
+      "modrinth_version_id": "x7kQWVju"
+    },
+    {
+      "id": "voicechat",
+      "name": "Simple Voice Chat",
+      "project": "simple-voice-chat",
+      "version": "neoforge-1.21.1-2.6.27",
+      "file": "voicechat-neoforge-1.21.1-2.6.27.jar",
+      "sha256": "ca517aa9062b916a446a5424c643176ca845b95add682aca980efe298b2b44df",
+      "groups": [
+        "popular",
+        "network"
+      ],
+      "expect": {},
+      "notes": "",
+      "modrinth_version_id": "iR08ksVF"
+    },
+    {
+      "id": "farmersdelight",
+      "name": "Farmer's Delight",
+      "project": "farmers-delight",
+      "version": "1.21.1-1.3.4",
+      "file": "FarmersDelight-1.21.1-1.3.4.jar",
+      "sha256": "139ad7696462c89c03eea463f805abffa552526c5dadaadae221dd9624cb197c",
+      "groups": [
+        "popular",
+        "content"
+      ],
+      "expect": {},
+      "notes": "",
+      "modrinth_version_id": "XTVZDOol"
+    },
+    {
+      "id": "waystones",
+      "name": "Waystones",
+      "project": "waystones",
+      "version": "21.1.47+neoforge-1.21.1",
+      "file": "waystones-neoforge-1.21.1-21.1.47.jar",
+      "sha256": "1b6afa9fd9ec3e2153001353e6a16e84c8d6c94a17257acc61ff3286c5518353",
+      "groups": [
+        "popular",
+        "content"
+      ],
+      "expect": {},
+      "notes": "",
+      "modrinth_version_id": "sE6fMBGR"
+    },
+    {
+      "id": "comforts",
+      "name": "Comforts",
+      "project": "comforts",
+      "version": "9.0.5+1.21.1",
+      "file": "comforts-neoforge-9.0.5+1.21.1.jar",
+      "sha256": "6b0fd35a1349107e08a45539adbde9683bb203febc43a3305f6fc4ac73e59615",
+      "groups": [
+        "popular",
+        "content"
+      ],
+      "expect": {},
+      "notes": "",
+      "modrinth_version_id": "3kpPjcTc"
+    },
+    {
+      "id": "moonlight",
+      "name": "Moonlight Lib",
+      "project": "moonlight",
+      "version": "1.21.1-3.8.3",
+      "file": "moonlight-1.21.1-3.8.3-neoforge.jar",
+      "sha256": "d487a1101ab90998f5b4a2bceca42789e85a45c25700556de49fb9a2d2a11bd0",
+      "groups": [
+        "popular",
+        "library"
+      ],
+      "expect": {},
+      "notes": "",
+      "modrinth_version_id": "yBea1yLM"
+    },
+    {
+      "id": "supplementaries",
+      "name": "Supplementaries",
+      "project": "supplementaries",
+      "version": "1.21.1-4.1.1",
+      "file": "supplementaries-1.21.1-4.1.1-neoforge.jar",
+      "sha256": "84c06d5ab1a5dc205f62b489d0914f23808633b39b6ac94f9c3e3ba0c2e2f265",
+      "groups": [
+        "popular",
+        "content"
+      ],
+      "expect": {},
+      "notes": "",
+      "modrinth_version_id": "ry2Njtnv"
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "input",
+      "title": "键位搜索：Searchables → Controlling",
+      "jbr": true,
+      "jars": [
+        "searchables",
+        "controlling"
+      ],
+      "expect": {
+        "default": "pass",
+        "jars": {
+          "controlling": {
+            "hotadd": "refuse",
+            "kind": "ACCESS_TRANSFORMER"
+          }
+        }
+      },
+      "notes": "Searchables 先加成功；Controlling 的前置满足了，但自身带 AT，仍然是干净拒绝——正好区分“缺前置”和“AT”。"
+    },
+    {
+      "id": "input-nojbr",
+      "title": "无 JBR：Searchables 的布局变更必须被点名拒绝",
+      "jbr": false,
+      "jars": [
+        "searchables"
+      ],
+      "expect": {
+        "default": "pass",
+        "jars": {
+          "searchables": {
+            "hotadd": "refuse",
+            "kind": "JBR_REQUIRED"
+          }
+        }
+      },
+      "notes": "同一 jar 的对照组：证明拒绝不是“随便失败”，而是 JBR 边界。"
+    },
+    {
+      "id": "mouse-gestures",
+      "title": "鼠标手势：Mouse Tweaks（JBR）",
+      "jbr": true,
+      "jars": [
+        "mousetweaks"
+      ],
+      "expect": {
+        "default": "pass"
+      }
+    },
+    {
+      "id": "mouse-gestures-nojbr",
+      "title": "鼠标手势：Mouse Tweaks（无 JBR 必须 JBR_REQUIRED）",
+      "jbr": false,
+      "jars": [
+        "mousetweaks"
+      ],
+      "expect": {
+        "default": "pass",
+        "jars": {
+          "mousetweaks": {
+            "hotadd": "refuse",
+            "kind": "JBR_REQUIRED"
+          }
+        }
+      }
+    },
+    {
+      "id": "minimap",
+      "title": "小地图：Xaero's Minimap（含 JiJ XaeroLib）",
+      "jbr": true,
+      "jars": [
+        "xaerominimap"
+      ],
+      "expect": {
+        "default": "pass"
+      },
+      "notes": "Xaero's Minimap + JiJ 的 XaeroLib：容器、9 个 mixin config、23 个按键、HUD 层、mod/xaerolib 资源包（shader）都验证过。"
+    },
+    {
+      "id": "minimap-addon",
+      "title": "小地图 + 两个前置 + addon：World Map/Minimap → XaeroPlus",
+      "jbr": true,
+      "jars": [
+        "xaeroworldmap",
+        "xaerominimap",
+        "xaeroplus"
+      ],
+      "expect": {
+        "default": "unknown"
+      },
+      "notes": "XaeroPlus 自身 7 条 AT；World Map 在标题屏会走自己的 loadLater（L1 环境崩溃），所以这条留给 L2/AT 场景。"
+    },
+    {
+      "id": "minimap-journeymap",
+      "title": "小地图：JourneyMap（独立实现）",
+      "jbr": true,
+      "jars": [
+        "journeymap"
+      ],
+      "expect": {
+        "default": "refuse",
+        "jars": {
+          "journeymap": {
+            "hotadd": "refuse",
+            "kind": "ACCESS_TRANSFORMER"
+          }
+        }
+      },
+      "notes": "commonnetworking 是 JiJ 嵌套 mod（已支持 container）；接下来是 39 条 AT 的硬拒绝。"
+    },
+    {
+      "id": "missing-dependency",
+      "title": "缺前置：只加 Controlling 必须 MISSING_DEPENDENCY",
+      "jbr": true,
+      "jars": [
+        "controlling"
+      ],
+      "requires_absent": [
+        "searchables"
+      ],
+      "expect": {
+        "default": "pass",
+        "jars": {
+          "controlling": {
+            "hotadd": "refuse",
+            "kind": "MISSING_DEPENDENCY"
+          }
+        }
+      },
+      "notes": "负向场景：如果 Searchables 已在 run/mods，这个场景就失去意义，pipeline 会拒绝跑。"
+    },
+    {
+      "id": "tooltip-at",
+      "title": "工具提示：Jade 必须干净拒绝（AT）",
+      "jbr": true,
+      "jars": [
+        "jade"
+      ],
+      "expect": {
+        "default": "refuse",
+        "jars": {
+          "jade": {
+            "hotadd": "refuse",
+            "kind": "ACCESS_TRANSFORMER"
+          }
+        }
+      }
+    },
+    {
+      "id": "recipe-at",
+      "title": "配方查看：JEI（自带 MezzConfig）必须拒绝于 AT",
+      "jbr": true,
+      "jars": [
+        "jei"
+      ],
+      "expect": {
+        "default": "refuse",
+        "jars": {
+          "jei": {
+            "hotadd": "refuse",
+            "kind": "ACCESS_TRANSFORMER"
+          }
+        }
+      },
+      "notes": "JEI 的 required 依赖 mezz_config 由嵌套 jar 满足（有 mods.toml）；接下来是 34 条 AT。"
+    },
+    {
+      "id": "hud",
+      "title": "HUD：AppleSkin",
+      "jbr": true,
+      "jars": [
+        "appleskin"
+      ],
+      "expect": {
+        "default": "pass"
+      }
+    },
+    {
+      "id": "library",
+      "title": "前置库：Balm 单独热加",
+      "jbr": true,
+      "jars": [
+        "balm"
+      ],
+      "expect": {
+        "default": "pass"
+      }
+    },
+    {
+      "id": "input-lateat",
+      "title": "键位搜索 + late AT：Searchables → Controlling",
+      "jbr": true,
+      "late_at": true,
+      "jars": [
+        "searchables",
+        "controlling"
+      ],
+      "expect": {
+        "default": "pass"
+      },
+      "notes": "JBR enhanced redefinition 改已加载类的访问标志；Controlling 的 1 条 AT 在加载前生效。"
+    },
+    {
+      "id": "tooltip-lateat",
+      "title": "工具提示 + late AT：Jade",
+      "jbr": true,
+      "late_at": true,
+      "jars": [
+        "jade"
+      ],
+      "expect": {
+        "default": "pass"
+      },
+      "notes": "Jade 57 条规则 / 39 个目标全部应用；构造与插件加载通过（L1）；功能仍需 L2。"
+    },
+    {
+      "id": "recipe-lateat",
+      "title": "配方查看 + late AT：JEI",
+      "jbr": true,
+      "late_at": true,
+      "jars": [
+        "jei"
+      ],
+      "expect": {
+        "default": "pass"
+      },
+      "notes": "JEI 34 条规则 / 16 个目标全部应用；MezzConfig 嵌套 container 正常。"
+    },
+    {
+      "id": "popular-libs",
+      "title": "热门库：Cloth Config / Architectury / GeckoLib / Curios / Patchouli",
+      "jbr": true,
+      "jars": [
+        "cloth-config",
+        "architectury",
+        "geckolib",
+        "curios",
+        "patchouli"
+      ],
+      "expect": {},
+      "notes": "白名单扩样（2026-11-18）；expect 留空，以实测为准。"
+    },
+    {
+      "id": "popular-perf",
+      "title": "热门性能模组：Embeddium / ModernFix / FerriteCore",
+      "jbr": true,
+      "jars": [
+        "embeddium",
+        "modernfix",
+        "ferritecore"
+      ],
+      "expect": {},
+      "notes": "白名单扩样（2026-11-18）；expect 留空，以实测为准。"
+    },
+    {
+      "id": "popular-misc",
+      "title": "热门杂项：Simple Voice Chat / Farmer's Delight",
+      "jbr": true,
+      "jars": [
+        "voicechat",
+        "farmersdelight"
+      ],
+      "expect": {},
+      "notes": "白名单扩样（2026-11-18）；expect 留空，以实测为准。"
+    },
+    {
+      "id": "popular-moonlight",
+      "title": "内容前置：Moonlight → Supplementaries",
+      "jbr": true,
+      "jars": [
+        "moonlight",
+        "supplementaries"
+      ],
+      "expect": {},
+      "notes": "白名单扩样（2026-11-18）；expect 留空，以实测为准。"
+    },
+    {
+      "id": "popular-balm",
+      "title": "Balm 系内容：Balm → Waystones → Comforts",
+      "jbr": true,
+      "jars": [
+        "balm",
+        "waystones",
+        "comforts"
+      ],
+      "expect": {},
+      "notes": "白名单扩样（2026-11-18）；expect 留空，以实测为准。"
+    }
+  ]
+}

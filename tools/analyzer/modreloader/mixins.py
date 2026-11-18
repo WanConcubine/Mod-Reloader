@@ -27,10 +27,35 @@ class MixinConfig:
     compatibility: str = ""
 
 
+def _qualify(entry: str, package: str, class_names) -> str:
+    """Resolve a config entry against the config's `package`, by presence.
+
+    Mixin resolves every entry relative to `package`; entries may still carry
+    sub-package dots (`client.Foo`, `server.Bar`), which is the common shape in
+    real NeoForge mods. Treating any dotted entry as already-qualified (the old
+    heuristic) turned all of JourneyMap's 26 mixins into "0 mixin classes" and
+    classified a mixin mod as PIN — the dangerous direction.
+
+    Candidates are tried by whether the class really exists in this jar, so a
+    fully-qualified or unusual entry is not lost either; without evidence the
+    spec-conformant relative form wins.
+    """
+    candidates = []
+    if package and entry != package and not entry.startswith(package + "."):
+        candidates.append("%s.%s" % (package, entry))
+    candidates.append(entry)
+    if class_names:
+        for candidate in candidates:
+            if candidate.replace(".", "/") + ".class" in class_names:
+                return candidate
+    return candidates[0]
+
+
 def read_configs(jar_path, config_names: List[str]) -> List[MixinConfig]:
     configs: List[MixinConfig] = []
     try:
         with zipfile.ZipFile(jar_path) as zf:
+            class_names = {name for name in zf.namelist() if name.endswith(".class")}
             for name in config_names:
                 data = metadata._read_json(zf, name)
                 if not isinstance(data, dict):
@@ -44,13 +69,7 @@ def read_configs(jar_path, config_names: List[str]) -> List[MixinConfig]:
                     for entry in entries:
                         if not isinstance(entry, str):
                             continue
-                        if "." in entry:
-                            full = entry
-                        elif package:
-                            full = "%s.%s" % (package, entry)
-                        else:
-                            full = entry
-                        classes.append(full)
+                        classes.append(_qualify(entry, package, class_names))
                 configs.append(MixinConfig(
                     path=name,
                     package=package,

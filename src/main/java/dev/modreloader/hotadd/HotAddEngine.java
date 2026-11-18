@@ -46,7 +46,7 @@ public final class HotAddEngine {
     }
 
     public enum FailureKind {
-        NONE, MISSING_FILE, NOT_A_MOD, INVALID_METADATA, ALREADY_LOADED, MISSING_DEPENDENCY, JBR_REQUIRED,
+        NONE, MISSING_FILE, NOT_A_MOD, LIBRARY, INVALID_METADATA, ALREADY_LOADED, MISSING_DEPENDENCY, JBR_REQUIRED,
         MIXIN_RUNTIME, NETWORK_PAYLOAD, UNSUPPORTED_TIER, CAPABILITY, MIXIN_CONFIG, MIXIN_TARGET, REDEFINE, MODULE, MODLIST, REGISTRY,
         CONSTRUCT, EVENT, RESOURCE_PACK, DATAPACK, ACCESS_TRANSFORMER, CLIENT_REGISTRATION, JAR_IN_JAR,
         COREMOD, ROLLBACK_PARTIAL, UNKNOWN
@@ -87,6 +87,10 @@ public final class HotAddEngine {
             IModFile candidate = new JarModsDotTomlModFileReader()
                     .read(JarContents.of(jar), ModFileDiscoveryAttributes.DEFAULT);
             if (!(candidate instanceof ModFile modFile)) {
+                if (ModInspector.isGameLibrary(jar)) {
+                    return fail(rollback, Stage.VALIDATE, FailureKind.LIBRARY,
+                            "library jar (FMLModType: GAMELIBRARY), not a mod: " + jar.getFileName());
+                }
                 return fail(rollback, Stage.VALIDATE, FailureKind.NOT_A_MOD, "not a NeoForge mod jar (no mods.toml): " + jar.getFileName());
             }
 
@@ -99,6 +103,10 @@ public final class HotAddEngine {
 
             List<IModInfo> infos = modFile.getModInfos();
             if (infos.isEmpty()) {
+                if (ModInspector.isGameLibrary(jar)) {
+                    return fail(rollback, Stage.VALIDATE, FailureKind.LIBRARY,
+                            "library jar (FMLModType: GAMELIBRARY), not a mod: " + jar.getFileName());
+                }
                 return fail(rollback, Stage.VALIDATE, FailureKind.INVALID_METADATA, "jar declares no mods: " + jar.getFileName());
             }
 
@@ -132,9 +140,58 @@ public final class HotAddEngine {
                 return fail(rollback, Stage.VALIDATE, FailureKind.INVALID_METADATA, "no ModInfo produced for " + ids);
             }
 
-            List<ModFileParser.MixinConfig> mixinConfigs = modFile.getMixinConfigs();
-            if (mixinConfigs == null) {
-                mixinConfigs = List.of();
+            // Nested mods (jar-in-jar with a mods.toml) normally get a ModFile and
+            // a container from FML's JarJar locator at startup. A hot-add skips
+            // that locator, so build them here *before* the outer mod's dependency
+            // check: Xaero's Minimap requires XaeroLib, which it bundles itself.
+            stage = Stage.MODULE;
+            JarInJar.Result nested;
+            try {
+                nested = JarInJar.extract(jar);
+            } catch (Throwable t) {
+                ModReloader.LOGGER.error("[ModReloader] cannot read jar-in-jar metadata of {}", jar, t);
+                return fail(rollback, Stage.MODULE, FailureKind.JAR_IN_JAR,
+                        "cannot read the jars nested in " + jar.getFileName() + ": " + t);
+            }
+            for (String skip : nested.skipped()) {
+                ModReloader.LOGGER.warn("[ModReloader] jar-in-jar skipped {}: {}",
+                        jar.getFileName(), skip);
+            }
+            Set<String> loadedIds = new LinkedHashSet<>();
+            for (IModInfo modInfo : ModList.get().getMods()) {
+                loadedIds.add(modInfo.getModId());
+            }
+            List<NestedMods.Loaded> nestedMods;
+            try {
+                nestedMods = NestedMods.prepare(nested, loadedIds);
+            } catch (NestedMods.AccessTransformer e) {
+                return fail(rollback, Stage.VALIDATE, FailureKind.ACCESS_TRANSFORMER,
+                        ids + ": " + e.getMessage() + "; restart with the jar in mods/.");
+            } catch (Throwable t) {
+                ModReloader.LOGGER.error("[ModReloader] cannot prepare nested mods of {}", jar, t);
+                return fail(rollback, Stage.MODULE, FailureKind.JAR_IN_JAR,
+                        "cannot prepare the mods nested in " + jar.getFileName() + ": " + t);
+            }
+            Set<String> nestedIds = NestedMods.ids(nestedMods);
+            if (!nested.nested().isEmpty()) {
+                ModReloader.LOGGER.info("[ModReloader] jar-in-jar: {} nested jar(s) from {} -> modules {}; containers {}",
+                        nested.nested().size(), jar.getFileName(),
+                        nested.nested().stream().map(JarInJar.Nested::moduleName).toList(),
+                        nestedIds);
+            }
+
+            List<ModFileParser.MixinConfig> declaredMixins = modFile.getMixinConfigs();
+            List<ModFileParser.MixinConfig> mixinConfigs = new ArrayList<>(
+                    declaredMixins == null ? List.of() : declaredMixins);
+            mixinConfigs.addAll(NestedMods.mixins(nestedMods));
+            // GAMELIBRARY nested jars have no ModFile, so their manifest
+            // MixinConfigs are not part of getMixinConfigs().
+            Set<String> knownConfigs = new LinkedHashSet<>();
+            mixinConfigs.forEach(config -> knownConfigs.add(config.config()));
+            for (String config : nested.libraryMixinConfigs()) {
+                if (knownConfigs.add(config)) {
+                    mixinConfigs.add(new ModFileParser.MixinConfig(config, List.of()));
+                }
             }
 
             ModReloader.LOGGER.info("[ModReloader] hot-adding {} from {} (mixin configs: {})",
@@ -155,9 +212,19 @@ public final class HotAddEngine {
                     // build no container ("no ModContainer built"), which is a
                     // confusing failure after the module was already injected.
                     List<String> missingDeps = inspection.dependencies().stream()
-                            .filter(dep -> dep.required() && !dep.satisfied())
+                            .filter(dep -> dep.required() && !dep.satisfied()
+                                    && !nestedIds.contains(dep.modId()))
                             .map(dep -> dep.modId() + " " + dep.versionRange())
                             .toList();
+                    for (var dependency : inspection.dependencies()) {
+                        if (dependency.required() && !dependency.satisfied()
+                                && nestedIds.contains(dependency.modId())) {
+                            ModReloader.LOGGER.info(
+                                    "[ModReloader] dependency {} is bundled as a nested mod of {}; "
+                                            + "it will be registered before the outer mod",
+                                    dependency.modId(), jar.getFileName());
+                        }
+                    }
                     if (!missingDeps.isEmpty()) {
                         return fail(rollback, Stage.VALIDATE, FailureKind.MISSING_DEPENDENCY,
                                 ids + " needs " + missingDeps + " first; hot-add it in that order");
@@ -165,19 +232,34 @@ public final class HotAddEngine {
                 }
                 if (inspection.ok() && inspection.accessTransformers()) {
                     // Access transformers are applied when the game layer loads
-                    // classes; a hot-added mod's ATs are not. Mods that widen a
-                    // private vanilla member fail with IllegalAccessError during
-                    // construction - which happens after mixins were applied and
-                    // cannot be undone. Refuse before touching anything.
+                    // classes; a hot-added mod's ATs are not. The default gate is
+                    // still "refuse before touching anything": widening a private
+                    // vanilla member after construction causes IllegalAccessError.
                     //
-                    // The composition is part of the message on purpose: ATs are the
-                    // most common refusal (6 of 9 real mods), and some jars only widen
-                    // datagen classes a playing client never loads. The gate stays
-                    // conservative; the user gets the facts.
-                    return fail(rollback, Stage.VALIDATE, FailureKind.ACCESS_TRANSFORMER,
-                            ids + " ships " + dev.modreloader.inspect.AccessTransformerRules.ENTRY
-                                    + " (" + accessTransformerComposition(jar) + "); access "
-                                    + "transformers only apply at startup. Restart with the jar in mods/.");
+                    // `-Dmodreloader.lateAt=true` is the experimental alternative:
+                    // JBR's enhanced redefinition can change access flags of an
+                    // already-loaded class, so apply the ATs to the captured current
+                    // bytes and redefine the targets BEFORE this mod's classes load.
+                    // Stock JVMs reject the modifier change; this is JBR-only.
+                    if (LateAccessTransformers.enabled()) {
+                        LateAccessTransformers.Result late = LateAccessTransformers.apply(jar, rollback);
+                        if (!late.ok()) {
+                            return fail(rollback, Stage.VALIDATE, FailureKind.ACCESS_TRANSFORMER,
+                                    ids + " ships " + dev.modreloader.inspect.AccessTransformerRules.ENTRY
+                                            + " (" + accessTransformerComposition(jar) + "); late AT failed: "
+                                            + late.messages() + ". Hot-add failed (runtime gap).");
+                        }
+                        ModReloader.LOGGER.info("[ModReloader] late AT applied for {}: {}",
+                                ids, late.summary());
+                        late.messages().forEach(message ->
+                                ModReloader.LOGGER.info("[ModReloader] late AT {}", message));
+                    } else {
+                        return fail(rollback, Stage.VALIDATE, FailureKind.ACCESS_TRANSFORMER,
+                                ids + " ships " + dev.modreloader.inspect.AccessTransformerRules.ENTRY
+                                        + " (" + accessTransformerComposition(jar) + "); access "
+                                        + "transformers only apply at startup. Use the failure screen's "
+                                        + "JBR restart once; the runtime enables what is needed.");
+                    }
                 }
             } catch (Throwable t) {
                 ModReloader.LOGGER.warn("[ModReloader] cannot predict registry content for {}", jar, t);
@@ -242,33 +324,7 @@ public final class HotAddEngine {
             //    locator, so its bundled classes do not exist in the game layer
             //    (jecharacters -> NoClassDefFoundError: me/towdium/pinin/Keyboard).
             //    Extract them and put them on the module path in the same step.
-            stage = Stage.MODULE;
-            JarInJar.Result nested;
-            try {
-                nested = JarInJar.extract(jar);
-            } catch (Throwable t) {
-                ModReloader.LOGGER.error("[ModReloader] cannot read jar-in-jar metadata of {}", jar, t);
-                return fail(rollback, Stage.MODULE, FailureKind.JAR_IN_JAR,
-                        "cannot read the jars nested in " + jar.getFileName() + ": " + t);
-            }
-            for (String skip : nested.skipped()) {
-                ModReloader.LOGGER.warn("[ModReloader] jar-in-jar skipped {}: {}",
-                        jar.getFileName(), skip);
-            }
-            if (!nested.nested().isEmpty()) {
-                ModReloader.LOGGER.info("[ModReloader] jar-in-jar: {} nested jar(s) from {} -> modules {}",
-                        nested.nested().size(), jar.getFileName(),
-                        nested.nested().stream().map(JarInJar.Nested::moduleName).toList());
-                for (JarInJar.Nested inner : nested.nested()) {
-                    if (inner.declaresMod()) {
-                        ModReloader.LOGGER.warn(
-                                "[ModReloader] nested mod {} is exposed as a module only; its @Mod "
-                                        + "constructor is not run (nested mods are not hot-added yet)",
-                                inner.declaredPath());
-                    }
-                }
-            }
-
+            //
             // Coremod jars get their own module layer, and it has to exist before the
             // same jar is injected into the game layer: two modules with the same
             // packages cannot be resolved against each other. Preparing it here also
@@ -284,14 +340,18 @@ public final class HotAddEngine {
 
             ModuleInjector.Snapshot moduleSnapshot = ModuleInjector.snapshot();
             rollback.add("module layer", () -> ModuleInjector.restore(moduleSnapshot));
+            List<ModFileInfo> newFileInfos = new ArrayList<>(NestedMods.fileInfos(nestedMods));
+            newFileInfos.add(newFileInfo);
             Set<String> moduleNames = ModuleInjector.addToGameLayer(
-                    List.of(newFileInfo), nested.secureJars());
+                    newFileInfos, nested.libraryJars());
 
             // 2. mixin: register configs, then redefine already-loaded targets.
             //    MixinStage keeps every MixinRuntime/MixinSupport reference behind
             //    one call, so a Type2 mod still works when mr is not installed.
             stage = Stage.MIXIN;
             List<String> mixinSummary = new ArrayList<>();
+            Set<String> hotIds = new LinkedHashSet<>(ids);
+            hotIds.addAll(nestedIds);
             if (!mixinConfigs.isEmpty()) {
                 // JBR is not required for every mixin mod: a mixin that keeps the
                 // class layout still applies on a stock JVM (method bodies only), and
@@ -313,7 +373,7 @@ public final class HotAddEngine {
                 }
                 mixinsApplied = true;
                 List<String> mixinLog = new ArrayList<>();
-                String mixinError = MixinStage.register(mixinConfigs, ids, primaryId, rollback,
+                String mixinError = MixinStage.register(mixinConfigs, hotIds, primaryId, rollback,
                         mixinLog, mixinSummary);
                 mixinLog.forEach(ModReloader.LOGGER::info);
                 if (mixinError != null) {
@@ -357,10 +417,23 @@ public final class HotAddEngine {
             stage = Stage.MODLIST;
             ModListInjector.Snapshot modListSnapshot = ModListInjector.snapshot();
             rollback.add("mod list", () -> ModListInjector.restore(modListSnapshot));
-            List<ModContainer> containers = ModListInjector.rebuild(List.of(newFileInfo), newInfos);
-            if (containers.isEmpty()) {
+            List<ModContainer> containers = new ArrayList<>();
+            if (!nestedMods.isEmpty()) {
+                List<ModContainer> nestedContainers = ModListInjector.rebuild(
+                        NestedMods.fileInfos(nestedMods), NestedMods.modInfos(nestedMods));
+                if (nestedContainers.isEmpty()) {
+                    return fail(rollback, Stage.MODLIST, FailureKind.MODLIST,
+                            "no ModContainer built for nested mods " + nestedIds);
+                }
+                ModReloader.LOGGER.info("[ModReloader] nested mods registered: {}",
+                        nestedContainers.stream().map(ModContainer::getModId).toList());
+                containers.addAll(nestedContainers);
+            }
+            List<ModContainer> outerContainers = ModListInjector.rebuild(List.of(newFileInfo), newInfos);
+            if (outerContainers.isEmpty()) {
                 return fail(rollback, Stage.MODLIST, FailureKind.MODLIST, "no ModContainer built for " + ids);
             }
+            containers.addAll(outerContainers);
 
             if (Boolean.getBoolean("modreloader.failAfterModList")) {
                 return fail(rollback, Stage.MODLIST, FailureKind.UNKNOWN, "injected failure after ModList rebuild");
@@ -418,7 +491,7 @@ public final class HotAddEngine {
             // arrive at a dead connection, so it goes first, while the players can
             // still act on it.
             try {
-                ModNotice.notifyPlayers(jar, containers, registryContent, inspectionForNotice);
+                ModNotice.notifyPlayers(jar, outerContainers, registryContent, inspectionForNotice);
             } catch (Throwable t) {
                 ModReloader.LOGGER.warn("[ModReloader] cannot tell connected clients about {}", ids, t);
             }
@@ -477,9 +550,7 @@ public final class HotAddEngine {
                         capabilityReplay.describe());
             }
             stage = Stage.EVENT;
-            for (ModContainer container : containers) {
-                FmlEvents.finish(container);
-            }
+            FmlEvents.finishAll(containers);
             int keysAfter = hooks.keyMappingCount();
 
             // 4a. payloads: NeoForge closes its network registry after start-up, so
@@ -512,7 +583,11 @@ public final class HotAddEngine {
             Capabilities.Result packCapability =
                     Capabilities.get(Capabilities.Capability.RESOURCE_PACKS);
             if (packCapability.available()) {
-                hooks.injectResourcePack(modFile, newFileInfo, ids, rollback);
+                List<ModFileInfo> packInfos = new ArrayList<>(NestedMods.fileInfos(nestedMods));
+                packInfos.add(newFileInfo);
+                Set<String> packIds = new LinkedHashSet<>(ids);
+                packIds.addAll(nestedIds);
+                hooks.injectResourcePacks(packInfos, packIds, rollback);
             } else {
                 // Resources are cosmetic; never fail an otherwise good add for this.
                 ModReloader.LOGGER.warn("[ModReloader] resource pack injection skipped: {}",

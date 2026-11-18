@@ -1,6 +1,7 @@
 # 分析器校准（Tier 预测 vs 运行期人工标注，2026-11-16）
 
 > 状态：**已做首轮校准**（11 个有真机结论的 jar，10 个 tier 一致，1 个已知过估）。
+> 2026-11-17 补第二把尺：**方向性门禁**（漏估必须为 0）与**运行期差分测试**（`ModInspector` vs 本分析器），差分当场抓到一个漏估 bug（JourneyMap 被预测成 PIN），见 §7。
 > 工具：[tools/analyzer/calibrate.py](../../tools/analyzer/calibrate.py) + [calibration/ground-truth.tsv](../../tools/analyzer/calibration/ground-truth.tsv)。
 > 为什么不提交 jar：语料是本机下载的第三方模组（AGENTS 硬规则 6），ground truth 只用**文件名**做键。
 
@@ -90,8 +91,13 @@ tier 描述**内容形状**；AT / 缺依赖 / JiJ 嵌套 mod / 启动期事件�
 ## 5. 怎么复现
 
 - ground truth 只存文件名，本机把 jar 放到任意目录，把路径传给 `calibrate.py`；输出是逐 jar 的
-  `tier / AT / JiJ / verified / state` 表 + `labelled/matches/mismatches` 计数（有 mismatch 时退出码 1，方便进 CI）。
+  `tier / AT / JiJ / verified / state` 表 + `labelled/matches/under/over` 计数。
+- 退出码按**方向**分流：漏估（预测得比真机低）和“分析失败（T?）”**永远**退出 1；
+  过估默认也退出 1，CI / 批量跑用 `--allow-overestimate` 只放过过估。
+  理由：过估只是多一条警告，漏估是对用户说“可加载”然后构造期崩。
 - 新增真机结论后，往 `calibration/ground-truth.tsv` 加一行即可（`untested` 的行不参与判定）。
+- 全绿基线（2026-11-17，含 fixture 与 `/tmp` 语料）：
+  `labelled jars: 11, matches: 10, mismatches: 1 (under: 0, over: 1, failed: 0)`，唯一 mismatch 是 ZeroCore2 过估（§4.3）。
 
 ## 6. 仍缺
 
@@ -99,3 +105,46 @@ tier 描述**内容形状**；AT / 缺依赖 / JiJ 嵌套 mod / 启动期事件�
   当前有真机结论的语料全是 NeoForge。
 - 只有 3 个 jar 还是「未标注」（Searchables / Controlling / mcwifipnp）——要做完整热加才有标注。
 - tier 的**置信度**没有校准（只知道 tier 对不对，不知道 0.55 vs 0.85 意味着什么）。
+
+## 7. 第二把尺：方向性门禁 + 运行期差分（2026-11-17）
+
+§3 的那张表只回答“tier 字符串对不对”，它有两个盲区：
+
+1. **没有方向**：`PIN` 被预测成 `GUIFEI`（过估）和 `GUIFEI` 被预测成 `PIN`（漏估）在表里都只是一行 MISMATCH，
+   但后者会让弹窗说“可加载”然后构造期崩。`calibrate.py` 现在按 `TIER_RANK` 分流成 `under/over/unknown`，
+   漏估与 `T?` 永远退出 1（§5）。
+2. **只覆盖“跑到了 tier”的 jar**：被 AT / 依赖 / 注册审计提前拒掉的 jar 在 TSV 里是 `-`，永远不进校准。
+   而这类 jar 恰恰是新规则最容易错的地方。
+
+所以加了**差分测试**：同一个 jar 分别过运行期 `inspect/ModInspector`（字节码 + `mods.toml`，管着 UI 的
+tier 显示）和 `tools/analyzer`（Python，管着 `scan` / 流水线），逐 jar 比较 tier 与各轴信号。
+真值不是人工写的，而是两边互相作证：一致 → 至少没实现漂移；不一致 → 必须有一个人改，或者明确写“这是策略差异”。
+
+**2026-11-17 实测（`/tmp/modreloader-corpus` 9 个 jar，运行期 tier 取自 `tools/pipeline/reports/*/report.json` 的
+`RESULT ... tier=`）**：修复前 6 一致 / 3 不一致，其中 **JourneyMap 是危险方向**——运行期 `FEI`，分析器 `PIN`。
+根因：`mixin` 配置里的条目是**相对 `package`** 的，而 JourneyMap 写的是 `client.GuiMixin` / `server.ChunkMapAccessor`
+（子包带点）。旧代码 `if "." in entry: 当作全限定名` 于是 26 个 mixin 类一个都没算上，`mixin_class_count=0` → `PIN`。
+修法（`tools/analyzer/modreloader/mixins.py` 的 `_qualify`）：**按 jar 里类是否真的存在**来解析候选名
+（`package.entry` 优先，其次裸 `entry`），并把 `test_mixins_package.py` 4 个用例钉住。
+修复后：JourneyMap → `HUANGHOU`（26 个 mixin、25 个 target），差分变 **7 一致 / 2 不一致，且 2 个都是过估**
+（Controlling、JourneyMap：分析器有“render-core mixin + 侵入注入 ⇒ 皇后级”策略，运行期 inspector 没有这条轴，判 `FEI`）。
+策略差异保留，方向安全；写在这里而不是悄悄改规则。
+
+**决策层比 tier 字符串更重要**：`HotAddEngine.VALIDATE` 里**没有 tier 门禁**（只拦 AT / 缺依赖 / 注册审计 / 客户端类等），
+tier 只在 UI 的 `canHotLoad` 里当门禁。于是出现“UI 会拒、引擎能加”的分叉，已有实例：
+Xaero's Minimap 两边都判 `HUANGHOU`（`META-INF/coremods.json` → native 轴 + 分析器 render-core 轴），
+但流水线 `minimap` 场景 `ok=true`、`isLoaded=true`（coremod 晚注入 + 9 个 mixin config 都过了）。
+这不是 tier 算错，而是**tier 被当成了可热加性本身**（AGENTS §14 早就写着不是）。要把“分级正确”落到决策上，
+需要一张决策矩阵：`预测可加载 / 预测需重启` × `真机 pass / refused`，漏报（预测可加载、真机失败）为 0 才算过；
+现在的 TSV 只能算其中两格。
+
+### 仍缺（按优先级）
+
+1. **把运行期 tier 自动进校准集**：`report.json` 里已有 `RESULT ... tier=`，`calibrate.py` 应能吃 pipeline 报告，
+   而不是只吃手写 TSV——差分这次抓到 bug 就是因为它覆盖了 TSV 没有的 jar。
+2. **决策层矩阵 + CI 门槛**：漏报必须为 0；过报要可见。当前 `calibrate.py` 只做 tier，不做 `canHotLoad`。
+3. **逐轴标注**：`mixins / registry / native / at / jij / deps` 各一列，tier 由轴**推导**出来（单一函数），
+   这样错在轴上而不是错在最终标签上；否则“tier 对了、轴错了”会被掩盖。
+4. **置信度校准与 abstain**：`T?` 只在读不了 jar 时出现；规则全没命中时也应输出“未知/需人工”，
+   而不是给一个确信的 `PIN`（JourneyMap 就是这么错的）。
+5. **版本锁**：以上全部只对 NeoForge 1.21.1 语料成立；换版本 / 换加载器必须重跑，不能沿用数字。

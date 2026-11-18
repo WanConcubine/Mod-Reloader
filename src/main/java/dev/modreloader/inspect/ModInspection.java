@@ -52,7 +52,7 @@ public record ModInspection(Path jar, String fileName, List<Mod> mods, Tier tier
     }
 
     public boolean canHotLoad() {
-        return canHotLoad(false);
+        return canHotLoad(false, false);
     }
 
     /**
@@ -60,7 +60,24 @@ public record ModInspection(Path jar, String fileName, List<Mod> mods, Tier tier
      *                             guifei content is still experimental and add-only.
      */
     public boolean canHotLoad(boolean allowRegistryContent) {
-        if (!ok() || alreadyLoaded || accessTransformers || tier == Tier.HUANGHOU) {
+        return canHotLoad(allowRegistryContent, false);
+    }
+
+    /**
+     * @param allowRegistryContent        true when the registry-adaptation path is available;
+     *                                    guifei content is still experimental and add-only.
+     * @param allowLateAccessTransformers true when {@code -Dmodreloader.lateAt=true} is set, i.e.
+     *                                    the experimental JBR path that applies a mod's access
+     *                                    transformers to already-loaded classes before its own
+     *                                    classes load. Off by default: FML applies ATs only while
+     *                                    it loads classes, so on a stock JVM an AT is a hard gate.
+     *                                    Keep this in sync with the engine's VALIDATE check.
+     */
+    public boolean canHotLoad(boolean allowRegistryContent, boolean allowLateAccessTransformers) {
+        if (!ok() || alreadyLoaded || tier == Tier.HUANGHOU) {
+            return false;
+        }
+        if (accessTransformers && !allowLateAccessTransformers) {
             return false;
         }
         if (tier == Tier.GUIFEI && !allowRegistryContent) {

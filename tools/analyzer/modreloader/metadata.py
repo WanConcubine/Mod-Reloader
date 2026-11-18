@@ -20,6 +20,38 @@ MAX_TEXT = 4 * 1024 * 1024
 # FailureKind.ACCESS_TRANSFORMER gate.
 AT_ENTRY = "META-INF/accesstransformer.cfg"
 
+# Dependencies that are always present in a running game (loader/platform), never
+# something a user has to install next to the jar.
+PLATFORM_DEP_IDS = frozenset(
+    {"minecraft", "neoforge", "forge", "fml", "java", "fabricloader", "quilt_loader"}
+)
+
+
+def depends_platform_ids():
+    return PLATFORM_DEP_IDS
+
+
+@dataclass
+class Dependency:
+    """One declared mod dependency (a "前置" in player terms).
+
+    Only ``required`` entries block a hot-add; NeoForge's validator also looks at
+    the side. The runtime refuses a required dependency that is not loaded
+    (``FailureKind.MISSING_DEPENDENCY``), so a test pipeline has to see the same
+    distinction instead of treating every id in the metadata as mandatory.
+    """
+
+    mod_id: str
+    type: str = "required"
+    side: str = "BOTH"
+    version_range: str = ""
+    ordering: str = "NONE"
+    reason: str = ""
+
+    @property
+    def required(self) -> bool:
+        return self.type.lower() == "required"
+
 
 @dataclass
 class ModInfo:
@@ -35,6 +67,7 @@ class ModInfo:
     at_rules: int = 0
     at_targets: List[str] = field(default_factory=list)
     depends: Dict[str, str] = field(default_factory=dict)
+    dependencies: List[Dependency] = field(default_factory=list)
     client_only: bool = False
     namespace: str = ""
     errors: List[str] = field(default_factory=list)
@@ -182,12 +215,16 @@ def _read_access_transformer(zf: zipfile.ZipFile):
 
 
 def _detect_loader(names: set) -> str:
+    # NeoForge first on purpose: multi-loader jars (JourneyMap 1.21.1, XaeroPlus)
+    # ship a fabric.mod.json "wrongloader" sentinel next to the real
+    # neoforge.mods.toml. Picking Fabric there reads the sentinel and loses the
+    # real mod id, dependencies and mixin list.
+    if "META-INF/neoforge.mods.toml" in names:
+        return "neoforge"
     if "fabric.mod.json" in names:
         return "fabric"
     if "quilt.mod.json" in names:
         return "quilt"
-    if "META-INF/neoforge.mods.toml" in names:
-        return "neoforge"
     if "META-INF/mods.toml" in names:
         return "forge"
     if "mcmod.info" in names:
@@ -214,6 +251,10 @@ def _from_fabric(zf: zipfile.ZipFile) -> Optional[ModInfo]:
         declared_mixins=mixins,
         access_widener=str(data["accessWidener"]) if data.get("accessWidener") else None,
         depends={str(k): str(v) for k, v in depends.items()},
+        dependencies=[
+            Dependency(mod_id=str(k), type="required", version_range=str(v))
+            for k, v in depends.items()
+        ],
         client_only=str(data.get("environment") or "").lower() == "client",
     )
 
@@ -254,12 +295,29 @@ def _from_toml(zf: zipfile.ZipFile, name: str, loader: str) -> Optional[ModInfo]
         first = mods[0] if isinstance(mods[0], dict) else {}
     mod_id = str(first.get("modId") or first.get("modid") or "unknown")
     mixins = _mixin_paths(doc.get("mixins"))
-    depends: Dict[str, str] = {}
+    dependencies: List[Dependency] = []
     deps = doc.get("dependencies")
     if isinstance(deps, dict):
         for dep_id, entries in deps.items():
-            if isinstance(entries, list) and entries and isinstance(entries[0], dict):
-                depends[str(dep_id)] = str(entries[0].get("versionRange") or "")
+            if not isinstance(entries, list):
+                continue
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                dependencies.append(Dependency(
+                    mod_id=str(entry.get("modId") or dep_id),
+                    type=str(entry.get("type") or "required").lower(),
+                    side=str(entry.get("side") or "BOTH").upper(),
+                    version_range=str(entry.get("versionRange") or ""),
+                    ordering=str(entry.get("ordering") or "NONE").upper(),
+                    reason=str(entry.get("reason") or ""),
+                ))
+    # Kept for callers that only need "required id -> version range".
+    depends: Dict[str, str] = {
+        dep.mod_id: dep.version_range
+        for dep in dependencies
+        if dep.required and dep.mod_id not in depends_platform_ids()
+    }
     return ModInfo(
         path=Path(),
         jar_size=0,
@@ -270,6 +328,7 @@ def _from_toml(zf: zipfile.ZipFile, name: str, loader: str) -> Optional[ModInfo]
         entrypoints=[],
         declared_mixins=mixins,
         depends=depends,
+        dependencies=dependencies,
     )
 
 
