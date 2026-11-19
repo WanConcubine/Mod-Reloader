@@ -8,7 +8,7 @@
 | 指标 | 现状 |
 |---|---|
 | Java 代码 | **25 720 行 / 136 文件**（`main` 15 802 / 85 + `dev` 8 314 / 35 + `test` 1 604 / 16） |
-| `hotadd` 包 | **7 559 行**；`HotAddEngine.add` 单方法 **70–773 行（约 700 行）** |
+| `hotadd` 包 | **7 559 行**；`HotAddEngine.add` 已拆成 10 个阶段方法（2026-11-19），单方法最长约 150 行 |
 | 反射 / Unsafe 站点 | **228 处 / 32 个文件**（约占 main 文件 25%）：mixin、注入器、ModList、module、注册表、网络、资源包、启动器锁 |
 | 一次性事件重放 | **17 处**，覆盖 12+ 种事件，全部手写（命令、payload、菜单/渲染器/颜色/层/粒子…） |
 | Java 单测 | **98**（新增 `AddStagePlan` 5 个）；引擎主流程仍以真机 L1 harness 为主要证据 |
@@ -28,8 +28,10 @@
 
 顺序只存在于 `HotAddEngine.add` 的代码里；阶段可跳过、失败种类、线程归属、副作用都是隐式的。
 任何一次“换个位置试试”都要通读 700 行并跑真机。
-**本次增量**：抽出 `hotadd/AddStagePlan`（顺序 + 默认 FailureKind）与 5 个单测，行为不变，先把契约钉住；
-后续按阶段逐段抽方法，再处理 53 的重排（pack/reload → payload）。
+**2026-11-19 增量**：`AddStagePlan`（顺序 + 默认 FailureKind）钉住契约；`add()` 拆成
+validate/module/mixin/coremod/modlist/construct/registry/event/pack/client/datapack 十个阶段方法，
+共享状态收进 `Run`，每段失败返回 `Result`。随后用阶段表完成 53 的重排（PACK 前移到 client setup 任务与
+payload 之前）。剩下的顺序风险从“700 行隐式流程”收敛为“阶段表 + 每段一个方法”。
 
 ### P0-6 客户端启动期重放是手写清单
 

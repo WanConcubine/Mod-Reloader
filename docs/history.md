@@ -1921,3 +1921,38 @@ P1-13 反射面 228 处/32 文件、P1-14 并发模型局部补丁、P2-15 测�
 - `AddStagePlanTest` 5 个：顺序固定、可跳过可选阶段、可重复当前阶段、禁止回退、失败种类映射。
 
 验证：`./gradlew build` 绿，单测 **98**。
+
+## 2026-11-19（阶段重排修问题 53；XaeroLib 多注册表窗口）
+
+调研更正：`ReloadableResourceManager.createReload` 在**调用时**就同步关闭旧资源、换入含全部已选包的
+新 `MultiPackResourceManager`；`Minecraft.reloadResourcePacks()` 同步走到这一步。启动期
+`ClientHooks.initClientHooks`（reload listener 等注册）早于初始重载，`FMLClientSetupEvent` 的 deferred
+tasks 在重载内执行——此时 live manager 已含 mod 包。所以 53 只需把顺序排对，不必异步化（推翻了“必须改
+异步管线”的结论）。
+
+实现：
+- 阶段表改为 `… REGISTRY → EVENT → PACK → CLIENT → DATAPACK`：
+  - `EVENT`：capability 重放 + `FMLCommonSetupEvent`；
+  - `PACK`：`ClientRegistrationReplay`（含 reload listener 注册）→ 注入包并启动重载 → 可选
+    `rebuildShaderInstances`；
+  - `CLIENT`：`FMLClientSetupEvent` + deferred tasks → `FMLLoadCompleteEvent` → 层/渲染器重放 →
+    payload 适配 → 命令重放。
+- `PlatformHooks.registerClientRegistrations` 把注册从 `acceptClientLifecycle` 拆出，保证在
+  `createReload` 快照 listener 列表之前完成；`FmlEvents` 拆出 `commonSetupAll` / `sidedSetupAll`。
+- `XaeroLibChannels` 从“ConfigChannelRegistry 一个”推广到四个同型 frozen 单例：`PermissionRegistry`、
+  `PermissionSystemRegistry`、`PacketHandlerRegistry`。第二个 Xaero 模组构造时
+  `BuiltInConfigChannelPermissions → PermissionSystemRegistry.handleModPresence` 抛
+  `IllegalStateException`，是同一类一次性注册表。
+- `ClientResourcePacks` 若发现原版已有 `pendingReload`，在该次重载后补一次，避免新包被选中却从未加载
+  （此时后续任务只保证看到“当前这次”重载的包，日志会 warn）。
+
+证据（JBR 21，`tools/pipeline`，语料 `/tmp/modreloader-corpus`）：
+- `minimap-addon`：`xaeroworldmap ok=true`、`xaerominimap ok=true`、`xaeroplus` 干净拒绝
+  (`ACCESS_TRANSFORMER`，未开 lateAt)；`verdict: RECORDED`（focus 正常）。
+- `minimap`：`MATCH`（FOCUS_STOLEN 为环境问题）；`hud` AppleSkin：`PASS`；`input`
+  Searchables `ok` / Controlling 干净拒绝：`MATCH`。
+- `moonlight-lateat`：Moonlight、Supplementaries 均 `ok=true`（FOCUS_STOLEN）。
+- 客户端夹具（`-PverifyAddCommand=/tmp/clientfixture/... -PverifyGuiLayers -PverifyItemDecorators`）：
+  GUI 层与物品装饰 `RESULT: PASS`。
+- **payload 回归为既有失败**：`-PverifyPayload`（标题屏加 payloadfix 后建世界）在 HEAD `8e1523d`
+  同样 `FAIL`（40s 无 ping；适配日志正常），非本次改动引入；记入 status 验证缺口。

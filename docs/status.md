@@ -68,6 +68,12 @@
 
 ### 已验证
 
+- **资源顺序（问题 53，2026-11-19）**：阶段改为 `… EVENT → PACK → CLIENT → DATAPACK`；先注册 client reload listener，
+  再注入包并启动重载（`createReload` 同步换入新 manager），然后跑 `FMLClientSetupEvent` 任务、层/渲染器重放、
+  payload、命令。`minimap-addon`：World Map + Minimap 同会话 `ok=true`（此前 World Map 必失败），XaeroPlus 干净拒绝 AT；
+  `minimap`/`hud`/`input` MATCH；`moonlight-lateat` 两个 `ok=true`；客户端夹具 GUI 层/物品装饰 PASS。
+  同会话第二个 Xaero 模组的 `PermissionRegistry`/`PermissionSystemRegistry`/`PacketHandlerRegistry` frozen 由
+  `XaeroLibChannels` 一并开窗（问题 62）。
 - **late AT + 类级 `-f` 边界**：Jade/JEI/Controlling L1 PASS、Jade 回滚 39/39；独立 JBR 21.0.11 探针证明去**类** final 后
   `NativeImage.read` 与合成 `final class` 的构造全部返回 null，第二次 redefine SIGSEGV；`LateAccessTransformers` 改字节前拒绝，
   JourneyMap 实跑 `ok=false stage=VALIDATE kind=ACCESS_TRANSFORMER`（无崩溃、无残留）。细节 [late-at.md](features/late-at.md) §5.1。
@@ -130,9 +136,9 @@
 
 ## 已知问题 / 坑
 
-> 追加式账本，**编号稳定**（引用不变）。共 61 条：待解决 6 / 验证缺口 5 / 结构性边界 16 / 历史与注记 15 / 已修 19。
-> **当前 actionable（6）**：61 Sodium 单例 mixin 字段（结构边界，需产品决策）· 53 资源顺序 · 50 回滚 VerifyError ·
-> 35 post-construct 注册残留 · 2 AE2 的 L2 与皇后判定 · 29 reload/chunk 并发。
+> 追加式账本，**编号稳定**（引用不变）。共 63 条：待解决 5 / 验证缺口 6 / 结构性边界 16 / 历史与注记 15 / 已修 21。
+> **当前 actionable（6）**：61 Sodium 单例 mixin 字段（结构边界，需产品决策）· 50 回滚 VerifyError ·
+> 35 post-construct 注册残留 · 2 AE2 的 L2 与皇后判定 · 29 reload/chunk 并发 · 63 payload harness 回归。
 
 ### 待解决（需改代码）
 
@@ -143,14 +149,6 @@
 35. **post-construct 失败仍留注册表内容**：Waystones 在 Balm 之后失败，`BuiltInRegistries` 已 +44/+55，只能重启；与 18 同源，需要更早的校验点。
 
 50. **失败回滚对 late-AT 重定义过的类可能 VerifyError（2026-11-18）**：Supplementaries 失败后回滚 `MineshaftPieces$MineShaftPiece` 报 `VerifyError: null`，`kind=ROLLBACK_PARTIAL`。回滚写回的是 late AT 之前的字节，但该类的后续加载/重定义可能已经改变了校验状态；需要专门复现，失败时至少保证“可重启的干净状态”并明确提示。
-
-53. **client setup 的 deferred task 早于热加资源包注入（2026-11-18；2026-11-19 调研）**：World Map 的 `loadLater`
-    在 `FMLClientSetupEvent` 的 deferred queue 里读自己的 `vanillaStatesResource`，此时热加包还没注入 →
-    `Optional.get()` 抛 `NoSuchElementException`。**启动期实锤**：client setup 在初始资源重载内部执行（包已可用），
-    payload 注册在其后；运行期我们的顺序是 client setup（payload 前）→ 包注入/重载，两边不可兼得。
-    试过「任务整体延后到重载后」（minimap 因 XaeroLib 未冻结而 `NETWORK_PAYLOAD` 失败）与
-    「按 `TaskInfo` 逐任务重试」（取到的不是用户 runnable），均回滚。
-    **下一步需重排阶段**（pack/reload 先于 payload，任务在 reload 内执行）或做可恢复的分段管线。
 
 61. **Sodium 热加后旧渲染对象崩溃（2026-11-19）**：`sodium-lateat` 中 Sodium ok=true（含 4 个 fabric 库、约 64 类 redefine）。
     已修：`ShaderInstance` 的 `uniformCache` NPE —— add 流程在资源重载前调用 `PlatformHooks.rebuildShaderInstances`
@@ -174,6 +172,12 @@
     启动期顺序是“注册表冻结 → common setup → client setup → renderers”；现已把 staged 的层/渲染器重放移到
     `FmlEvents.finishAll` + `RegistryStage.commit` 之后（仍在资源包注入之前），层先于渲染器、全容器先层不变。
     **修复后的 jar 尚未在真机重跑 Mekanism**（用户时间到）；下次直接热加 Mekanism 复验。
+
+63. **`-PverifyPayload` 标题屏路径回归（2026-11-19 发现，既有问题）**：payloadfix 在标题屏热加后建世界，
+    适配日志正常（`adapted payloads ... [payloadfix:ping]`），但 40s 内客户端收不到 ping；
+    `PayloadFix` 的 `PlayerLoggedInEvent`/tick 均未走 `send` 分支（`hasChannel=false`）。
+    **HEAD `8e1523d`（未含本次重排）同样 FAIL**，因此不是 53 重排引入；需要单独查连接 setup 的
+    `PayloadSetup` 是新世界登录时从哪里取的。恢复前不要把 payload 标成“当前已验证”。
 
 ### 结构性边界（长期限制，不是待修 bug）
 
@@ -248,6 +252,20 @@
 
 ### 已修
 
+53. ✅ **client setup 的 deferred task 早于热加资源包注入（2026-11-19 已修）**：World Map 的 `loadLater` 在
+    `FMLClientSetupEvent` 的 deferred queue 里用 live `ResourceManager` 读自己的 `vanilla_states.dat`，
+    而热加包当时还没进 manager → `NoSuchElementException`。关键事实：`ReloadableResourceManager.createReload`
+    在**调用时**就同步换入含全部已选包的新 `MultiPackResourceManager`；只要先注册 reload listener、注入包并启动
+    重载，再跑 deferred tasks，就与启动期语义一致（任务在初始重载内执行）。现在阶段为
+    `REGISTRY → EVENT（common setup）→ PACK（注册+注入+启动重载）→ CLIENT（client setup 任务、层/渲染器、
+    payload、命令）→ DATAPACK`。证据：`minimap-addon` 中 `xaeroworldmap ok=true`（此前必失败）。
+
+62. ✅ **同会话第二个 Xaero 模组的 frozen 单例（2026-11-19 已修）**：World Map 热加后，再热加 Minimap 时
+    `BuiltInConfigChannelPermissions → PermissionSystemRegistry.handleModPresence` 抛 `IllegalStateException`。
+    XaeroLib 有四个同型 `INSTANCE + private boolean frozen` 单例：`ConfigChannelRegistry`、`PermissionRegistry`、
+    `PermissionSystemRegistry`、`PacketHandlerRegistry`；`XaeroLibChannels` 现在统一开窗、成功后按 LIFO 恢复。
+    证据：`minimap-addon` 中 `xaerominimap ok=true`。
+
 20. ✅ **创造页签排序非幂等（已修）**：`sortTabs()` 追加不清空 → 4→8 → 越界崩；`afterRegistryContent()` 先清 `DEFAULT_TABS`。
 
 22. ✅ **专用服妃级（已修）**：`runServer` 也用 JBR + enhanced；ZeroCore2 `redefined Slot` 成功。
@@ -316,12 +334,10 @@
 
 ## 下一步
 
-> **当前交接（2026-11-19，已推送 `47a06cd`）**：Windows/PCL2/JBR 真机联调收尾：构建链 93/93、late AT 保 AT（architectury 311 规则）、
-> Jade 热加成功；新增问题 56（新增字段不初始化旧实例，字体变暗）、57（轮询把替换 jar 当候选，已修）、
-> 58（层/渲染器重放早于注册表提交，已修待 Mekanism 复验）。
-> JBR 计数 **J1×25 / J2×2 / BLACK×4**。下一项：① Mekanism 复验（问题 58）；② 问题 54（xaerolib mixin 挂起，先 jstack）
-> 与 53（client setup 早于热加包注入）；③ 问题 52/50（服务端事件重放未验证、回滚 VerifyError）；④ CraftTweaker 复跑；
-> ⑤ 类级 `-f` 启动期替代与流水线 L2。
+> **当前交接（2026-11-19，已推送 `4425e4c`）**：`HotAddEngine.add` 已按阶段拆成方法（行为不变）；问题 53 与
+> 同会话第二个 Xaero 模组的 frozen 单例已修（World Map + Minimap 同会话 `ok=true`）。
+> JBR 计数 **J1×25 / J2×2 / BLACK×4**。下一项：① payload 标题屏路径（问题 63，既有失败）；② Mekanism 复验（问题 58）；
+> ③ 问题 52/50（服务端事件重放未验证、回滚 VerifyError）；④ CraftTweaker 复跑；⑤ 类级 `-f` 启动期替代与流水线 L2。
 > 证据在 [history.md](history.md)；JBR 在 `run/jbr-21.0.11`（gitignored），语料 `/tmp/modreloader-corpus`。
 > 风险：`MixinAgentGuard` 依赖内部字段（找不到 no-op）；`ClassBytesCache` 不覆盖 eager loaded 目标。
 > ⚠️ 本机 dev client 显示层不稳：优先不需要 GL 的活，一次只起一个客户端场景；harness 命令见 [AGENTS §2](../AGENTS.md)，
@@ -336,7 +352,7 @@
 | **P0-新** | ✅ Xaero's World Map config channel | `XaeroLibChannels` 窗口（`ConfigChannelRegistry.frozen`），仅对引用该类的 jar 生效；World Map `ok=true isLoaded=true` | 已转 J2 |
 | **P0-新** | 服务端一次性事件（问题 52） | `ServerLifecycleReplay` 已实现（定向调用新增监听器 + integrated server 兜底），**未验证**：进入世界复跑卡在 54 | World Map J1 |
 | **P0-新** | xaerolib mixin 阶段挂起（问题 54） | 先 `jstack` 留线程栈再杀；怀疑 Mixin/transform 锁或常驻 guard | 复跑不挂 |
-| **P1-新** | 资源顺序（问题 53） | 让热加包在 client setup deferred task 之前可见，或重跑这些 task | World Map 不再 `NoSuchElement` |
+| **P1-新** | ✅ 资源顺序（问题 53） | 阶段重排：注册 → 注入包/启动重载 → client setup 任务 → payload；`createReload` 同步换 manager | `minimap-addon` World Map/Minimap `ok=true` |
 | **P0-新** | 类级 AT 的启动期替代 | 启动扫描队列里的 AT，在**加载期**去 final（覆盖 `NativeImage` 这类启动即加载的类） | 夹具/真实 jar 复跑 |
 | **P0-新** | ✅ 自定义注册表（`NewRegistryEvent`） | `CustomRegistries` + `RegistryStage` 窗口；夹具 `custom registry RESULT: PASS`，Moonlight `ok=true`（3 个注册表）。剩余：`fill()` 后失败 dirty、datapack 注册表/`ModifyRegistriesEvent` 不重放、CraftTweaker 未复跑 | Moonlight J1（candidate） |
 | **P0-新** | ✅ late AT 对已混类二次 transform（问题 47） | 常驻 wrapper 包裹全部 transformer + 每次 redefine 的 `blanket()` 全局抑制；Moonlight 复跑 `ok=true`，Entity 不再报错 | 批次复跑 |
@@ -359,11 +375,12 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近三条。
 
+- **2026-11-19（问题 53 阶段重排）**：`PACK` 提到 `client setup` 之前，先注册 reload listener 再注入包/启动
+  重载，任务与 payload 随后；World Map + Minimap 同会话 `ok=true`。`XaeroLibChannels` 覆盖四个 frozen 单例。
+  发现 payload 标题屏 harness 既有失败（问题 63）。
 - **2026-11-19（Windows 联调收尾）**：Windows/PCL2/JBR 真机跑通构建（93/93）与 late AT（architectury 311 规则，
   不再 `TextureStateShard.blur` 崩溃）；Jade 暴露问题 56（新增字段不初始化旧实例，字体变暗）；Mekanism 暴露问题 58
   （渲染器重放早于注册表提交，已修待复验）；问题 57（轮询把已加载 mod 的替换 jar 当候选，已修）。
 - **2026-11-18（late AT 保 AT，真机 PASS）**：late AT 改为优先抓活类字节（抑制 transformer 后 retransform），
   architectury 真机热加 311 规则/150 类不再触发 `TextureStateShard.blur` 的 `IllegalAccessError`；
   同批 Jade 暴露“新增字段不初始化旧实例”的变暗问题（问题 56，已加警告）。
-- **2026-11-18（统一「准备热加载环境」动作）**：JBR 入口收口为一个按钮：复用已装/运行中的 JBR，缺失才下载解压到
-  `gameDir/jbr-21.0.11`，重启带齐 enhanced + lateAt；菜单未就绪时常驻入口，失败屏同文案。菜单截图验证。
