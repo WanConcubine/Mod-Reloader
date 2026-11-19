@@ -54,6 +54,8 @@ public final class RegistryStage {
 
     private static boolean active;
     private static boolean committed;
+    /** Construct registered directly into a registry before the commit. */
+    private static boolean residue;
     private static Map<ResourceLocation, Integer> sizesBefore = Map.of();
     private static int stoneIdBefore = -1;
     private static int stateMapBefore = -1;
@@ -63,6 +65,11 @@ public final class RegistryStage {
 
     public static boolean active() {
         return active;
+    }
+
+    /** True when a failed window found entries that were added before the commit. */
+    public static boolean residue() {
+        return residue;
     }
 
     /** Opens the unfreeze window and registers the abort step. */
@@ -76,6 +83,7 @@ public final class RegistryStage {
         GameData.unfreezeData();
         active = true;
         committed = false;
+        residue = false;
         rollback.add("registry", RegistryStage::abort);
         ModReloader.LOGGER.info(
                 "[ModReloader] registry window open: blocks={} items={} states={} stoneId={}",
@@ -186,6 +194,7 @@ public final class RegistryStage {
                         "[ModReloader] registry window closed after failure; no entries were added "
                                 + "(state map cleared {} entries, ids restored)", cleared);
             } else {
+                residue = true;
                 ModReloader.LOGGER.error(
                         "[ModReloader] registry window closed after failure, but entries were already "
                                 + "added: {}; the runtime is dirty and needs a restart", grown);

@@ -200,6 +200,9 @@ JAVA_HOME=~/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x/jdk-21.0.12.1+1/Conten
 ./gradlew runClient -PverifyRunState=/tmp/t4fixture/t4fixture-1.0.0.jar -PfailAfterRegistry=true
 ./gradlew runServer -PserverRunState=/tmp/t4fixture/t4fixture-1.0.0.jar -PfailAfterRegistry=true -PdirtyLogSeconds=2
 
+# 构造期直接注册的残留路径（问题 35）：fixture 在构造器里直接 Registry.register
+./gradlew runClient -PverifyCompat=/tmp/t4fixture/t4fixture-1.0.0.jar -PfailAfterConstruct=true -PdirectRegister=true
+
 # 多 jar 场景只让一个模组失败（配合 failAfterModList / failAfterConstruct）
 #   -PfailAfterModListModId=<modId> / -PfailAfterConstructModId=<modId>
 

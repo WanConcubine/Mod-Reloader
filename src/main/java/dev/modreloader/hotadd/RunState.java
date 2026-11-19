@@ -21,7 +21,8 @@ public final class RunState {
     public enum Reason {
         ROLLBACK_PARTIAL("rollback_partial",
                 "the rollback of a previous add was incomplete"),
-        REGISTRY("registry", "registry content from a failed add is committed"),
+        REGISTRY("registry",
+                "registry content from a failed add is live in the registries"),
         CUSTOM_REGISTRY("custom_registry",
                 "custom registries from a failed add were created or filled"),
         MIXINS("mixins", "mixin code is already woven into loaded classes"),

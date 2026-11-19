@@ -976,7 +976,8 @@ public final class HotAddEngine {
      */
     private static Result recordFailure(Run run, Result failure) {
         RunState.Flags flags = new RunState.Flags(failure.rollbackPartial(),
-                run.registryCommitted, run.customRegistryOpened, run.constructed,
+                run.registryCommitted || RegistryStage.residue(),
+                run.customRegistryOpened, run.constructed,
                 run.mixinsSettled, run.payloadsAdapted, run.capabilitiesReplayed,
                 run.commandsReplayed);
         RunState.Reason reason = RunState.reasonFor(flags);

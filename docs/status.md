@@ -68,6 +68,10 @@
 
 ### 已验证
 
+- **注册表残留检测（问题 35，2026-11-19）**：构造后失败（提交前）不留内容；构造器直接注册会被
+  `RegistryStage.abort` 计数并置 `residue`，RunState 记为 REGISTRY、后续 add 被拒。
+  证据：`-PverifyCompat=<t4fixture> -PfailAfterConstruct -PdirectRegister=true` 报告
+  `block 1060->1061, item 1333->1334`；正常 t4fixture、Balm→Waystones 均 `ok=true`。
 - **late AT 回滚（问题 50，2026-11-19）**：构造后失败时 JBR 可能拒绝把 AT 类写回（内嵌类裸 `VerifyError`）；
   回滚改为尽力而为：被拒则保留加宽并 warn，`rollbackErrors` 为空。构造前失败仍正常还原。
   证据：Moonlight→Supplementaries 双 jar，`-PfailAfterModList -PfailAfterModListModId=supplementaries`
@@ -155,17 +159,15 @@
 
 ## 已知问题 / 坑
 
-> 追加式账本，**编号稳定**（引用不变）。共 63 条：待解决 4 / 验证缺口 5 / 结构性边界 16 / 历史与注记 15 / 已修 23。
-> **当前 actionable（4）**：61 Sodium 单例 mixin 字段（结构边界，需产品决策）·
-> 35 post-construct 注册残留 · 2 AE2 的 L2 与皇后判定 · 29 reload/chunk 并发。
+> 追加式账本，**编号稳定**（引用不变）。共 63 条：待解决 3 / 验证缺口 5 / 结构性边界 16 / 历史与注记 15 / 已修 24。
+> **当前 actionable（3）**：61 Sodium 单例 mixin 字段（结构边界，需产品决策）·
+> 2 AE2 的 L2 与皇后判定 · 29 reload/chunk 并发。
 
 ### 待解决（需改代码）
 
 2. **皇后级判定偏保守（2026-11-19 部分解决）**：AE2 在 JBR+lateAt 下 L1 热加成功（blocks 1060→1162、items 1334→1698），GUI 未验；不再按“必须重启”处理。
 
 29. **资源重载与 chunk 重镶并发（一次性）**：无 assets 时跳过整次重载；reload 已串行化 + 链期间隐藏 Screen（Jade 修复），但 chunk 重镶未串行化。
-
-35. **post-construct 失败仍留注册表内容**：Waystones 在 Balm 之后失败，`BuiltInRegistries` 已 +44/+55，只能重启；与 18 同源，需要更早的校验点。
 
 61. **Sodium 热加后旧渲染对象崩溃（2026-11-19）**：`sodium-lateat` 中 Sodium ok=true（含 4 个 fabric 库、约 64 类 redefine）。
     已修：`ShaderInstance` 的 `uniformCache` NPE —— add 流程在资源重载前调用 `PlatformHooks.rebuildShaderInstances`
@@ -262,6 +264,15 @@
 55. **「已选 JBR 仍要重启」是产品失败（2026-11-18 所有者）**：玩家已在启动器选了 JBR，却因缺 `-XX:+AllowEnhancedClassRedefinition` 被要求再重启——把实现细节转嫁给玩家，不可接受。**2026-11-18 收口为单一动作「为热加载增强环境做准备」**：菜单（未就绪时常驻）与失败屏都指向同一入口；已安装/正在运行的 JBR 直接复用；缺失时官方下载 → SHA-512 → 解压到 `gameDir/jbr-21.0.11`；随后自动重启并带齐 `-XX:+AllowEnhancedClassRedefinition` + `-Dmodreloader.lateAt=true`。**仍余缺口**：参数只能启动时给，启动器每次不带参数则每会话最多一次自动重启；跨会话永久生效需要启动器/整合包预设或 classloader 隔离/软重启。
 
 ### 已修
+
+35. ✅ **post-construct 失败仍留注册表内容（2026-11-19 查明）**：Waystones 走 `DeferredRegister`，条目只在
+    `RegistryStage.commit` 的 `RegisterEvent` 里注册；用 `-PfailAfterConstruct` 让它在提交前失败，
+    `blocks/items` 计数不变、`abort` 打印“no entries were added … ids restored”。所以“构造后失败留内容”只可能来自
+    两种情形：① **提交之后**失败（按设计不可逆，RunState=REGISTRY，重启）；② 模组在**构造器里直接**
+    `Registry.register`。后者用 fixture 开关 `-PdirectRegister=true` 复现：`abort` 报告
+    `block 1060->1061, item 1333->1334`、置 `RegistryStage.residue`，RunState 精确记为 REGISTRY，后续 add 被拒。
+    注册表没有删除路径（删了会移动 id），因此“检测 + 精确定位 + 拒绝后续 add + 重启”是这一边界的正解；
+    正常路径（t4fixture / Balm→Waystones）复跑 `ok=true`、无脏日志。
 
 50. ✅ **失败回滚对 late-AT 重定义过的类 VerifyError（2026-11-19 已修）**：复现路径为 Moonlight 成功后热加
     Supplementaries（`-PlateAt=true`），分别注入 ModList 后/构造后失败。构造前失败时内嵌类回滚正常；构造后

@@ -21,6 +21,7 @@ import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.minecraft.core.Registry;
 import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -61,6 +62,18 @@ public final class T4FixtureMod {
     public T4FixtureMod(IEventBus modBus) {
         BLOCKS.register(modBus);
         ITEMS.register(modBus);
+        // Dev-only: a direct registration in the constructor (not through
+        // DeferredRegister). Exercises the "entries were added before commit"
+        // rollback path of RegistryStage.abort.
+        if (Boolean.getBoolean("t4fixture.directRegister")) {
+            Registry.register(BuiltInRegistries.BLOCK,
+                    ResourceLocation.fromNamespaceAndPath(MOD_ID, "direct_block"),
+                    new Block(BlockBehaviour.Properties.of().strength(1.0F)));
+            Registry.register(BuiltInRegistries.ITEM,
+                    ResourceLocation.fromNamespaceAndPath(MOD_ID, "direct_item"),
+                    new Item(new Item.Properties()));
+            LOGGER.info("[T4Fixture] direct registration during construct");
+        }
         modBus.addListener(T4FixtureMod::onCommonSetup);
         modBus.addListener(T4FixtureMod::onBuildCreativeTab);
         NeoForge.EVENT_BUS.addListener(T4FixtureMod::onServerTick);

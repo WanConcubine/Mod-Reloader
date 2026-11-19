@@ -127,7 +127,7 @@
   "modreloader.failure.rollback_partial.suggestion": "建议重启游戏；残留项见下方回滚错误。",
   "modreloader.gui.dirty": "运行时不干净：%s",
   "modreloader.dirty.reason.rollback_partial": "上一次加载的回滚未完全成功",
-  "modreloader.dirty.reason.registry": "失败加载的注册表内容已经提交",
+  "modreloader.dirty.reason.registry": "失败加载的注册表内容仍在运行中的注册表里",
   "modreloader.dirty.reason.custom_registry": "失败加载的自定义注册表已创建或填充",
   "modreloader.dirty.reason.mixins": "mixin 代码已经织入已加载的类",
   "modreloader.dirty.reason.construct": "模组构造器已执行，副作用无法撤回",

@@ -2044,3 +2044,14 @@ clientfixture（GUI 层/物品装饰）PASS、`minimap` PASS、`moonlight-lateat
 证据：构造后失败不再有 `rollback errors`（`kind=UNKNOWN`，RunState 因构造/ mixin 置脏）；成功路径
 `moonlight-lateat` 仍为两个 `ok=true`。构造后失败仍会因 Supplementaries 构造器注册的 Moonlight 动态资源回调
 崩在后续 reload —— 属问题 35/7 的构造器副作用边界，不在本条范围。
+
+## 2026-11-19（问题 35 查明：提交前失败不留内容；直接注册会被检测）
+
+- Waystones 用 `DeferredRegister`，条目只在 `RegistryStage.commit` 的 `RegisterEvent` 里注册。
+  `-PfailAfterConstruct` + `-PfailAfterConstructModId=waystones`：`blocks 1060->1060 / items 1333->1333`，
+  `abort` 打印 “no entries were added … ids restored”。
+- 构造器里**直接** `Registry.register` 才会在提交前留下条目。给 t4-fixture 加 `-PdirectRegister=true`
+  （构造器里注册一个 block + item）复现：`abort` 报 `block 1060->1061, item 1333->1334`，置
+  `RegistryStage.residue`；`RunState` 的原因从 CONSTRUCT/CUSTOM_REGISTRY 收紧为 REGISTRY，后续 add 被拒。
+- 正常路径回归：t4fixture `ok=true`；Balm→Waystones `ok=true`（+44/+55 只发生在成功提交后）。
+- 边界仍存在：注册表没有删除路径（删条目会移动 id），恢复手段是重启；但现在不会被静默忽略。
