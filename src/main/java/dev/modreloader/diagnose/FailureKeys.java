@@ -49,6 +49,7 @@ public final class FailureKeys {
             case CUSTOM_REGISTRY -> "custom_registry";
             case COREMOD -> "coremod";
             case ROLLBACK_PARTIAL -> "rollback_partial";
+            case RUNTIME_DIRTY -> "runtime_dirty";
             case NONE, UNKNOWN -> "unknown";
         };
     }

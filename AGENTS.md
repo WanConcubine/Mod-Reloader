@@ -196,6 +196,10 @@ JAVA_HOME=~/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x/jdk-21.0.12.1+1/Conten
   -PverifyAddCommand=/tmp/lanmods/EasyLAN-neoforge-1.21.1-v1.6a.jar \
   -PverifyAddCommandWatchJar=/tmp/lanmods/mcwifipnp-1.9.0-1.21-neoforge.jar
 
+# 脏状态：提交后失败必须置脏，第二次 add 以 RUNTIME_DIRTY 拒绝（客户端 / 专用服）
+./gradlew runClient -PverifyRunState=/tmp/t4fixture/t4fixture-1.0.0.jar -PfailAfterRegistry=true
+./gradlew runServer -PserverRunState=/tmp/t4fixture/t4fixture-1.0.0.jar -PfailAfterRegistry=true -PdirtyLogSeconds=2
+
 # GUI / 文件夹监听初版验证（把 jar 放进 inbox，等待弹窗并加载）
 ./gradlew runClient \
   -PverifyWatch=true \

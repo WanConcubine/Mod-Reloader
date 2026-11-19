@@ -97,6 +97,10 @@ def verifyLan = providers.gradleProperty('verifyLan').orNull
 def verifyRollback = providers.gradleProperty('verifyRollback').orNull
 def failAfterModList = providers.gradleProperty('failAfterModList').orNull
 def failAfterPack = providers.gradleProperty('failAfterPack').orNull
+def failAfterRegistry = providers.gradleProperty('failAfterRegistry').orNull
+def verifyRunState = providers.gradleProperty('verifyRunState').orNull
+def serverRunState = providers.gradleProperty('serverRunState').orNull
+def dirtyLogSeconds = providers.gradleProperty('dirtyLogSeconds').orNull
 def verifyWatch = providers.gradleProperty('verifyWatch').orNull
 def watchJar = providers.gradleProperty('watchJar').orNull
 def watchExpectFailure = providers.gradleProperty('watchExpectFailure').orNull
@@ -140,6 +144,15 @@ neoForge {
             }
             if (failAfterPack) {
                 systemProperty 'modreloader.failAfterPack', 'true'
+            }
+            if (failAfterRegistry) {
+                systemProperty 'modreloader.failAfterRegistry', 'true'
+            }
+            if (verifyRunState) {
+                systemProperty 'modreloader.verifyRunState', verifyRunState
+            }
+            if (dirtyLogSeconds) {
+                systemProperty 'modreloader.dirtyLogSeconds', dirtyLogSeconds
             }
             if (providers.gradleProperty('failAfterConstruct').orNull) {
                 // Force a failure right after construct: the mod's game-bus listeners
@@ -439,6 +452,15 @@ neoForge {
                 // the console command once.
                 systemProperty 'modreloader.serverWhy',
                         providers.gradleProperty('serverWhy').get()
+            }
+            if (serverRunState) {
+                systemProperty 'modreloader.serverRunState', serverRunState
+            }
+            if (failAfterRegistry) {
+                systemProperty 'modreloader.failAfterRegistry', 'true'
+            }
+            if (dirtyLogSeconds) {
+                systemProperty 'modreloader.dirtyLogSeconds', dirtyLogSeconds
             }
             if (providers.gradleProperty('serverAddCommand').orNull) {
                 // Console-path check: short-name /modreloader add + TAB completion

@@ -49,6 +49,14 @@ payload 之前）。剩下的顺序风险从“700 行隐式流程”收敛为�
 注册表 commit、datapack、资源包、类 redefine 不可逆；失败只剩 `ROLLBACK_PARTIAL`/dirty 文案（问题 50 的回滚
 `VerifyError` 就是回滚自身失败）。缺一个正式的 RunState（clean/dirty）来拒绝后续 add、提示重启。
 
+**2026-11-19 增量**：`hotadd/RunState` 落地——一次 add 记录 registry commit / 自定义注册表窗口 / 构造 /
+mixin 落定 / payload / capability / 命令重放；任一之后再失败即置脏（`reasonFor` 纯函数，单测 6 个），
+后续 `add` 在 VALIDATE 以 `RUNTIME_DIRTY` 拒绝。客户端失败屏走重启建议；专用服由 `RunStateWarner`
+按间隔（默认 60s，可调）重复在控制台告警。`-PverifyRunState` / `-PserverRunState` + `-PfailAfterRegistry`
+是可重复证据。
+**剩余**：① dirty 期间客户端菜单还没有常驻标识（只有下一次 add 被拒时可见）；② 脏原因仍是一句英文说明，
+未进 i18n；③ “构造后失败=永久脏”偏保守，若以后能量化“构造器未执行副作用”可以放宽。
+
 ### P1-13 反射面大且深
 
 228 处、32 文件；能力守卫只验名字不验语义。问题 54 的修复一次性依赖三个事实：

@@ -1975,3 +1975,25 @@ tasks 在重载内执行——此时 live manager 已含 mod 包。所以 53 只
 clientfixture（GUI 层/物品装饰）PASS、`minimap` PASS、`moonlight-lateat` 两个 `ok=true`，三个日志均无
 `replay event mismatch`。
 剩余：重放仍是逐个事件手写 + 审计兜底，不是让 mod loading 回到真实 reload 上下文；事件类替换靠运行期 warn。
+
+## 2026-11-19（技术债 P1-12：RunState 脏状态；专用服周期告警）
+
+病灶：失败按“能否重试”混在一起——注册表已提交、mixin 已织入、构造器副作用、payload/capability/命令重放之后
+失败，回滚只恢复 runtime 的账本，下一条 `add` 仍会继续跑；专用服只有一次失败日志，运维很容易在残留状态下
+继续加模组。
+
+实现：
+- `hotadd/RunState`：一次 add 记录 registry commit、自定义注册表窗口、构造、mixin 落定、payload、capability、
+  命令重放；`reasonFor(Flags)` 是纯函数，按不可逆程度给出原因；置脏是进程级、只有重启清零。
+- `HotAddEngine`：`add` 之前 `RunState.isDirty()` → `FailureKind.RUNTIME_DIRTY`（VALIDATE）；所有阶段失败经
+  `recordFailure` 汇入状态，并在 `Result.message` 末尾附加脏原因（已有 “runtime is dirty” 时不重复）。
+- `hotadd/RunStateWarner`：专用服上按间隔（默认 60s，`-Dmodreloader.dirtyLogSeconds`）在控制台重复告警。
+- `FailureKind.RUNTIME_DIRTY` + `FailureKeys` + 中英文案 + `FailureAnalyzer` 重启建议。
+- dev：`RunStateCheck`（`-PverifyRunState` / `-PserverRunState`）与 `-PfailAfterRegistry` 注入点。
+
+证据（JBR 21）：
+- 客户端 `-PverifyRunState=/tmp/t4fixture/t4fixture-1.0.0.jar -PfailAfterRegistry=true`：
+  `first add ok=false ... runtime is dirty: registry content ...`；`second add kind=RUNTIME_DIRTY stage=VALIDATE`；`RESULT: PASS`。
+- 专用服 `-PserverRunState=... -PfailAfterRegistry=true -PdirtyLogSeconds=2`：两次 `runtime is still DIRTY`
+  （2s 间隔），`RESULT: PASS`，服务器自行 halt。
+- 回归：`hud`、`input` 场景无脏日志（成功与变更前拒绝不置脏）。单测 **109**（`RunStateTest` 6）。

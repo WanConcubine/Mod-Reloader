@@ -125,6 +125,8 @@
   "modreloader.sync.failed": "Applying the server registry mapping failed; the previous mapping was restored.",
   "modreloader.failure.rollback_partial.summary": "Load failed and rollback was not fully successful.",
   "modreloader.failure.rollback_partial.suggestion": "Restart; see rollback errors below.",
+  "modreloader.failure.runtime_dirty.summary": "The runtime is dirty: an earlier load failed after changes that cannot be undone.",
+  "modreloader.failure.runtime_dirty.suggestion": "Restart with the working jars in mods/. Further loads are refused until then.",
   "modreloader.failure.unknown.summary": "Load failed; the cause could not be classified.",
   "modreloader.failure.unknown.suggestion": "Copy details and check latest.log; report it if needed.",
   "modreloader.command.add.not_found": "No jar found for '%s'. Looked in: %s",

@@ -68,6 +68,12 @@
 
 ### 已验证
 
+- **脏状态与拒绝（RunState，技术债 P1-12，2026-11-19）**：注册表提交、自定义注册表窗口、构造、mixin 落定、
+  payload/capability/命令重放等任一不可逆操作之后再失败，`RunState` 置脏；后续 `add` 在 `VALIDATE`
+  以 `FailureKind.RUNTIME_DIRTY` 拒绝，文案区分客户端/专用服。失败 `Result` 末尾附加脏原因。
+  专用服由 `RunStateWarner` 按间隔持续在控制台告警（默认 60s，`-Dmodreloader.dirtyLogSeconds` 可调）。
+  证据：`-PverifyRunState=<t4fixture> -PfailAfterRegistry=true` 客户端 PASS（第二次 add `RUNTIME_DIRTY`）；
+  `-PserverRunState=... -PdirtyLogSeconds=2` 专用服 PASS（窗口内 2 条重复告警）；`hud`/`input` 回归无脏日志；单测 **109**。
 - **一次性重放单一出口（技术债 P0-6，2026-11-19）**：`inspect/ReplayCatalog` 列 21 个会被重放的启动期事件；
   所有调用点走 `OneShotReplay.fire(container, catalog 常量, event)`，helper 运行期校验“声明名 == 实际事件类”；
   `RegistrationAudit.covered` 直接读该列表。顺带纠正层定义被审计误标为 behavior（2026-11-18 起其实已重放）。
@@ -373,18 +379,17 @@
 | **P3-1** | GUI/watcher Phase 3/4 | 主菜单弹窗、失败面板、多候选/依赖排序、同 mod id 冲突 | [gui-mod-watcher.md](features/gui-mod-watcher.md) |
 | **P3-2** | 产品化下一步 | 托管重启端到端、嵌套 mod 容器、可分发形态、coremod target 报告 | [managed-relaunch.md](features/managed-relaunch.md) 未验证项 |
 | **P3-3** | 分析器 Fabric 校准 | intermediary 名 → 核心类识别；置信度校准 | 校准表扩充 |
-| **tech-debt** | ✅ `OneShotReplay` 统一出口（21 个调用点 + `ReplayCatalog` 单一覆盖清单）；剩余 harness 样板抽取 | [tech-debt.md](tech-debt.md) | 构建绿 + 回归 |
+| **tech-debt** | ✅ `OneShotReplay` 统一出口；✅ `RunState` 脏状态（拒绝 + 专用服周期告警）；剩余 harness 样板抽取 | [tech-debt.md](tech-debt.md) | 构建绿 + 回归 |
 
 ## 最近变更
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近三条。
 
+- **2026-11-19（脏状态 RunState）**：不可逆操作之后的失败把运行期置脏，后续 add 以 `RUNTIME_DIRTY` 拒绝；
+  专用服每 60s 在控制台重复告警（间隔可调）。客户端与专用服 harness 均 PASS；成功与干净拒绝不置脏。
 - **2026-11-19（问题 53 阶段重排）**：`PACK` 提到 `client setup` 之前，先注册 reload listener 再注入包/启动
   重载，任务与 payload 随后；World Map + Minimap 同会话 `ok=true`。`XaeroLibChannels` 覆盖四个 frozen 单例。
   发现 payload 标题屏 harness 既有失败（问题 63）。
 - **2026-11-19（Windows 联调收尾）**：Windows/PCL2/JBR 真机跑通构建（93/93）与 late AT（architectury 311 规则，
   不再 `TextureStateShard.blur` 崩溃）；Jade 暴露问题 56（新增字段不初始化旧实例，字体变暗）；Mekanism 暴露问题 58
   （渲染器重放早于注册表提交，已修待复验）；问题 57（轮询把已加载 mod 的替换 jar 当候选，已修）。
-- **2026-11-18（late AT 保 AT，真机 PASS）**：late AT 改为优先抓活类字节（抑制 transformer 后 retransform），
-  architectury 真机热加 311 规则/150 类不再触发 `TextureStateShard.blur` 的 `IllegalAccessError`；
-  同批 Jade 暴露“新增字段不初始化旧实例”的变暗问题（问题 56，已加警告）。

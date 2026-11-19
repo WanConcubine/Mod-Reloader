@@ -103,6 +103,10 @@ public final class DevEntry {
         if (!verifyAddCommand.isEmpty()) {
             AddCommandCheck.start(Path.of(verifyAddCommand));
         }
+        String verifyRunState = System.getProperty("modreloader.verifyRunState", "").trim();
+        if (!verifyRunState.isEmpty()) {
+            RunStateCheck.startClient(Path.of(verifyRunState));
+        }
         String verifyCompat = System.getProperty("modreloader.verifyCompat", "").trim();
         if (!verifyCompat.isEmpty()) {
             CompatCheck.start(verifyCompat);

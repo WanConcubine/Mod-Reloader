@@ -34,6 +34,11 @@ public final class ServerDev {
             ServerWhyCheck.start(serverWhy);
             ModReloader.LOGGER.info("[ServerDev] serverWhy harness installed");
         }
+        String serverRunState = System.getProperty("modreloader.serverRunState", "").trim();
+        if (!serverRunState.isEmpty()) {
+            RunStateCheck.startServer(serverRunState);
+            ModReloader.LOGGER.info("[ServerDev] serverRunState harness installed");
+        }
         String serverAddCommand = System.getProperty("modreloader.serverAddCommand", "").trim();
         if (!serverAddCommand.isEmpty()) {
             ServerAddCmdCheck.start(serverAddCommand);

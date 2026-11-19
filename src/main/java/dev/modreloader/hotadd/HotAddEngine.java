@@ -55,7 +55,7 @@ public final class HotAddEngine {
         NONE, MISSING_FILE, NOT_A_MOD, LIBRARY, INVALID_METADATA, ALREADY_LOADED, MISSING_DEPENDENCY, JBR_REQUIRED,
         MIXIN_RUNTIME, NETWORK_PAYLOAD, UNSUPPORTED_TIER, CAPABILITY, MIXIN_CONFIG, MIXIN_TARGET, REDEFINE, MODULE, MODLIST, REGISTRY,
         CONSTRUCT, EVENT, RESOURCE_PACK, DATAPACK, ACCESS_TRANSFORMER, CLIENT_REGISTRATION, JAR_IN_JAR, CUSTOM_REGISTRY,
-        COREMOD, ROLLBACK_PARTIAL, UNKNOWN
+        COREMOD, ROLLBACK_PARTIAL, RUNTIME_DIRTY, UNKNOWN
     }
 
     public record Result(boolean ok, String message, Stage stage, FailureKind kind,
@@ -96,6 +96,7 @@ public final class HotAddEngine {
 
         // MIXIN / COREMOD
         boolean mixinsApplied;
+        boolean mixinsSettled;
         final List<String> mixinSummary = new ArrayList<>();
         final List<String> coremodSummary = new ArrayList<>();
 
@@ -108,6 +109,12 @@ public final class HotAddEngine {
         int keysBefore;
         int keysAfter;
         boolean constructed;
+        // Irreversible operations reached; see RunState.
+        boolean registryCommitted;
+        boolean customRegistryOpened;
+        boolean payloadsAdapted;
+        boolean capabilitiesReplayed;
+        boolean commandsReplayed;
 
         Run(Path jar) {
             this.jar = jar;
@@ -126,24 +133,31 @@ public final class HotAddEngine {
         if (!jar.getFileName().toString().endsWith(".jar")) {
             return new Result(false, "not a jar: " + jar);
         }
+        if (RunState.isDirty()) {
+            return new Result(false,
+                    "the runtime is dirty (" + RunState.reason() + "); restart "
+                            + (Platform.isClient() ? "the game" : "the server")
+                            + " with the working jars in mods/ before adding more",
+                    Stage.VALIDATE, FailureKind.RUNTIME_DIRTY, List.of());
+        }
 
         Run run = new Run(jar);
         try {
             Result failure;
-            if ((failure = readModFile(run)) != null) return failure;
-            if ((failure = prepareModules(run)) != null) return failure;
-            if ((failure = applyMixins(run)) != null) return failure;
-            if ((failure = applyCoremods(run)) != null) return failure;
-            if ((failure = registerModList(run)) != null) return failure;
-            if ((failure = construct(run)) != null) return failure;
-            if ((failure = commitRegistry(run)) != null) return failure;
-            if ((failure = replayCommonStartup(run)) != null) return failure;
-            if ((failure = injectPacks(run)) != null) return failure;
-            if ((failure = runSidedStartup(run)) != null) return failure;
-            if ((failure = reloadData(run)) != null) return failure;
+            if ((failure = readModFile(run)) != null) return recordFailure(run, failure);
+            if ((failure = prepareModules(run)) != null) return recordFailure(run, failure);
+            if ((failure = applyMixins(run)) != null) return recordFailure(run, failure);
+            if ((failure = applyCoremods(run)) != null) return recordFailure(run, failure);
+            if ((failure = registerModList(run)) != null) return recordFailure(run, failure);
+            if ((failure = construct(run)) != null) return recordFailure(run, failure);
+            if ((failure = commitRegistry(run)) != null) return recordFailure(run, failure);
+            if ((failure = replayCommonStartup(run)) != null) return recordFailure(run, failure);
+            if ((failure = injectPacks(run)) != null) return recordFailure(run, failure);
+            if ((failure = runSidedStartup(run)) != null) return recordFailure(run, failure);
+            if ((failure = reloadData(run)) != null) return recordFailure(run, failure);
             return succeed(run);
         } catch (Throwable t) {
-            return unexpected(run, t);
+            return recordFailure(run, unexpected(run, t));
         }
     }
 
@@ -566,6 +580,7 @@ public final class HotAddEngine {
                         needsJbr ? FailureKind.JBR_REQUIRED : FailureKind.MIXIN_CONFIG,
                         "mixin setup failed for " + ids + ": " + mixinError);
             }
+            run.mixinsSettled = true;
         } else {
             ModReloader.LOGGER.info("[ModReloader] no mixin configs declared by {}", ids);
         }
@@ -695,6 +710,7 @@ public final class HotAddEngine {
             run.loaded.add(container.getModId());
         }
         if (run.registryContent) {
+            run.customRegistryOpened = true;
             try {
                 CustomRegistries.replay(run.containers);
             } catch (Throwable t) {
@@ -740,7 +756,14 @@ public final class HotAddEngine {
         }
         PlatformHooks hooks = run.hooks;
         run.stagePlan.enter(Stage.REGISTRY);
+        // Set before the call: a commit that throws halfway has already added
+        // entries that cannot be removed.
+        run.registryCommitted = true;
         RegistryStage.commit(run.containers);
+        if (Boolean.getBoolean("modreloader.failAfterRegistry")) {
+            return fail(run.rollback, Stage.REGISTRY, FailureKind.UNKNOWN,
+                    "injected failure after registry commit");
+        }
         try {
             // Cosmetic refresh (creative tabs); never fail a committed add for it.
             hooks.afterRegistryContent();
@@ -778,6 +801,7 @@ public final class HotAddEngine {
         Capabilities.Result capabilityReplay =
                 Capabilities.get(Capabilities.Capability.CAPABILITY_REPLAY);
         if (capabilityReplay.available()) {
+            run.capabilitiesReplayed = true;
             for (ModContainer container : run.containers) {
                 CapabilityReplay.replay(container);
             }
@@ -873,6 +897,7 @@ public final class HotAddEngine {
                                 + "be adapted: " + payloads.error());
             }
             if (!payloads.added().isEmpty()) {
+                run.payloadsAdapted = true;
                 ModReloader.LOGGER.info(
                         "[ModReloader] adapted payloads for {}: {}; existing connections were "
                                 + "patched too (requires the runtime on the other side)",
@@ -884,6 +909,7 @@ public final class HotAddEngine {
         //     hot-added mod's listener never ran. Re-fire it now. On a client
         //     this targets the integrated server (and is a no-op at the title
         //     screen); the side decides, the engine does not.
+        run.commandsReplayed = true;
         hooks.replayCommands();
         return null;
     }
@@ -935,6 +961,34 @@ public final class HotAddEngine {
         XaeroLibChannels.close();
         ModReloader.LOGGER.info("[ModReloader] {}", message);
         return new Result(true, message);
+    }
+
+    /**
+     * Marks the process dirty when this failure left something that cannot be
+     * undone. The Result stays the same apart from a note, so existing failure
+     * screens keep their kind; {@link RunState} is the machine-readable half.
+     */
+    private static Result recordFailure(Run run, Result failure) {
+        RunState.Flags flags = new RunState.Flags(failure.rollbackPartial(),
+                run.registryCommitted, run.customRegistryOpened, run.constructed,
+                run.mixinsSettled, run.payloadsAdapted, run.capabilitiesReplayed,
+                run.commandsReplayed);
+        String reason = RunState.reasonFor(flags);
+        if (reason == null) {
+            return failure;
+        }
+        RunState.markDirty(reason);
+        RunStateWarner.ensureStarted(Platform.isClient());
+        ModReloader.LOGGER.error(
+                "[ModReloader] runtime is now dirty: {}. Further hot-adds are refused until "
+                        + "a restart", reason);
+        if (failure.message().contains("runtime is dirty")) {
+            return failure;
+        }
+        String note = " (runtime is dirty: " + reason + "; restart "
+                + (Platform.isClient() ? "the game" : "the server") + " before adding more)";
+        return new Result(false, failure.message() + note, failure.stage(), failure.kind(),
+                failure.rollbackErrors());
     }
 
     /** Failure path for anything a stage threw instead of reporting. */

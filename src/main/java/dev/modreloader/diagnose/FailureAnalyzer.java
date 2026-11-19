@@ -161,7 +161,8 @@ public final class FailureAnalyzer {
     private static boolean restartIsTheFix(HotAddEngine.Result result) {
         return switch (result.kind()) {
             case JBR_REQUIRED, ACCESS_TRANSFORMER, CLIENT_REGISTRATION, COREMOD, LIBRARY,
-                    UNSUPPORTED_TIER, MIXIN_CONFIG, REDEFINE, ROLLBACK_PARTIAL -> true;
+                    UNSUPPORTED_TIER, MIXIN_CONFIG, REDEFINE, ROLLBACK_PARTIAL,
+                    RUNTIME_DIRTY -> true;
             default -> false;
         };
     }
