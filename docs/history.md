@@ -1863,3 +1863,27 @@ Supplementaries 的 config 单独应用到这份已混字节上就 `Scanned 0 ta
 - 构建：`./gradlew build` 绿。
 
 白名单：Supplementaries 证据补 2026-11-19 复跑（桶不变，J1 candidate）。
+
+## 2026-11-19（问题 54：Mixin 直接 transform 与 ModLauncher 的 ABBA 死锁）
+
+复现：`-PverifyAddCommand=<xaeroworldmap>` 反复跑，第 1 次即挂；日志停在
+`Mixin compatibility level set ... xaerolib.neoforge.mixins.json` 之后，60 秒无增长。
+
+jstack：
+- Render thread（我们的 add）在 `MixinSupport.transformBytes` 里持有 `MixinTransformer` 与
+  `MixinProcessor` 锁；注入点解析（`InjectionPoint.parse`）要加载类，该加载走 ModLauncher
+  转换 → `MixinLaunchPluginLegacy.handlesClass` 要 Mixin 插件列表锁（A）。
+- worldgen 线程正持 A（transform `RailBlock`），等 `MixinTransformer` 锁（B）。经典 A/B 反转。
+
+修复：新增 `hotadd/LaunchPluginMonitor`，经 `transforming_class_loader` 属性 →
+`TransformingClassLoader.classTransformer` → `LaunchPluginHandler.plugins` → 找到
+`MixinLaunchPlugin`（继承 `MixinLaunchPluginLegacy`）的 `processors` 监视器；
+`MixinSupport.transformBytes` 在调用 `transformClassBytes` 前先 `synchronized` 该监视器，
+统一成 ModLauncher 的 A→B 顺序（类加载在 transform 内部同线程重入）。
+`Launcher.INSTANCE` 路径在本环境为 null（类加载器分裂），实际走属性路径。
+
+验证：修复前 1/1 挂起；修复后 8/8 次全部走完 mixin（每次 13 个类 redefine，日志有
+`Mixin launch-plugin monitor resolved`），不再挂起；随后的失败是已知问题 52
+（`WorldMap.serverPlayerTickHandler` null）与 53（`loadLater` NoSuchElement）。
+
+构建：`./gradlew build` 绿。

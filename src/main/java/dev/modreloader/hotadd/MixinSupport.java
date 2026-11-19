@@ -488,7 +488,16 @@ public final class MixinSupport {
      */
     private static byte[] transformBytes(byte[] original, String dotted) {
         IMixinTransformer transformer = MixinRuntimeApi.getTransformer();
-        return transformer.transformClassBytes(dotted, dotted, original);
+        Object monitor = LaunchPluginMonitor.get();
+        if (monitor == null) {
+            return transformer.transformClassBytes(dotted, dotted, original);
+        }
+        // Normal class loading takes this monitor before Mixin's transformer lock;
+        // a direct transform must do the same or a class load inside Mixin can
+        // deadlock against a worldgen/server thread (issue 54).
+        synchronized (monitor) {
+            return transformer.transformClassBytes(dotted, dotted, original);
+        }
     }
 
     /**

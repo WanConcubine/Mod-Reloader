@@ -130,9 +130,9 @@
 
 ## 已知问题 / 坑
 
-> 追加式账本，**编号稳定**（引用不变）。共 61 条：待解决 7 / 验证缺口 5 / 结构性边界 16 / 历史与注记 15 / 已修 18。
-> **当前 actionable（7）**：61 Sodium 单例 mixin 字段（结构边界，需产品决策）· 54 xaerolib 挂起（先 jstack）·
-> 53 资源顺序 · 50 回滚 VerifyError · 35 post-construct 注册残留 · 2 AE2 的 L2 与皇后判定 · 29 reload/chunk 并发。
+> 追加式账本，**编号稳定**（引用不变）。共 61 条：待解决 6 / 验证缺口 5 / 结构性边界 16 / 历史与注记 15 / 已修 19。
+> **当前 actionable（6）**：61 Sodium 单例 mixin 字段（结构边界，需产品决策）· 53 资源顺序 · 50 回滚 VerifyError ·
+> 35 post-construct 注册残留 · 2 AE2 的 L2 与皇后判定 · 29 reload/chunk 并发。
 
 ### 待解决（需改代码）
 
@@ -145,8 +145,6 @@
 50. **失败回滚对 late-AT 重定义过的类可能 VerifyError（2026-11-18）**：Supplementaries 失败后回滚 `MineshaftPieces$MineShaftPiece` 报 `VerifyError: null`，`kind=ROLLBACK_PARTIAL`。回滚写回的是 late AT 之前的字节，但该类的后续加载/重定义可能已经改变了校验状态；需要专门复现，失败时至少保证“可重启的干净状态”并明确提示。
 
 53. **client setup 的 deferred task 早于热加资源包注入（2026-11-18）**：World Map 的 `loadLater` 在 `FMLClientSetupEvent` 的 deferred queue 里读自己的 `vanillaStatesResource`（`Minecraft.getResourceManager()`），此时热加包还没注入 → `Optional.get()` 抛 `NoSuchElementException`。启动期该顺序成立是因为包在 setup 前已注册；运行期需要“包先可用”或把这类 deferred task 放到 资源重载之后重跑。
-
-54. **xaerolib mixin 阶段挂起（2026-11-18，待查）**：两次 `-PverifyAddCommand=<xaeroworldmap>` 都停在 `Mixin compatibility level set to JAVA_21 after xaerolib.neoforge.mixins.json` 之后，10 分钟无日志；两个客户端 JVM 都需 `kill -9`。之前同一场景能跑到 add 返回 1，所以是间歇/时序问题；下次先 `jstack` 留线程栈（重点看 Mixin/transform 锁与我们的 guard），再决定修法。
 
 61. **Sodium 热加后旧渲染对象崩溃（2026-11-19）**：`sodium-lateat` 中 Sodium ok=true（含 4 个 fabric 库、约 64 类 redefine）。
     已修：`ShaderInstance` 的 `uniformCache` NPE —— add 流程在资源重载前调用 `PlatformHooks.rebuildShaderInstances`
@@ -281,6 +279,14 @@
     add/late AT 改写过时，用**类资源原始字节 + 全部活动 configs** 重组，再把 live 的访问标志移植回来；
     `moonlight-lateat` 复跑 Supplementaries **ok=true**（blocks 1061→1306、items 1335→1584）。
     证据：`reports/20261119-162209-moonlight-lateat`（`recomposed ... with all active configs`）。
+
+54. ✅ **xaerolib mixin 阶段挂起（2026-11-19 已修）**：jstack 显示 ABBA 死锁——Render 线程在
+    `MixinSupport.transformBytes` 里持 `MixinTransformer`/`MixinProcessor` 锁后，注入点解析需要加载类，
+    该加载走 ModLauncher 转换要 Mixin 插件列表锁；而 worldgen 线程正持插件列表锁等 transformer 锁。
+    修法：`LaunchPluginMonitor` 通过 `transforming_class_loader` → `classTransformer.pluginHandler`
+    找到 `MixinLaunchPlugin`（继承 `MixinLaunchPluginLegacy`）的 `processors` 监视器，直接 transform 前
+    先拿它，统一 A→B 顺序。修复后同一场景 8 次复现全部走完 mixin（每次 13 个 redefine），不再挂起；
+    后续失败是已知问题 52/53（`serverPlayerTickHandler` null、`loadLater` NoSuchElement）。
 
 57. ✅ **轮询把已加载 mod 的替换 jar 当新候选（2026-11-18 真机，已修）**：轮询 `scan()` 只过滤 ignored/failed，
     没有“modId 已加载”检查（手动 `scanNow()` 有）。在游戏运行时覆盖 `modreloader` 自身 jar 后，它被当成新候选并
