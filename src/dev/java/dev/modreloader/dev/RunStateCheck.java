@@ -4,9 +4,7 @@ import dev.modreloader.ModReloader;
 import dev.modreloader.hotadd.HotAddEngine;
 import dev.modreloader.hotadd.RunState;
 import dev.modreloader.hotadd.RunStateWarner;
-import net.minecraft.client.Minecraft;
 import net.minecraft.server.MinecraftServer;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
@@ -20,15 +18,16 @@ import java.nio.file.Path;
  *
  * <p>Needs a jar with registry content and {@code -PfailAfterRegistry=true}
  * (client: {@code -PverifyRunState=<jar>}, server: {@code -PserverRunState=<jar>}).
- * On the server the harness also waits for the periodic console warning
- * ({@code -PdirtyLogSeconds=2}) and asserts it repeats.
+ * The server side waits for the periodic console warning
+ * ({@code -PdirtyLogSeconds=2}) and asserts it repeats. The client half lives in
+ * {@code RunStateClientCheck}: this class must stay loadable on a dedicated
+ * server, which has no client classes.
  */
 public final class RunStateCheck {
     private static final int START_TICKS = 60;
     private static final int WARN_WINDOW_TICKS = 120;
 
     private static Path jar;
-    private static boolean client;
     private static boolean started;
     private static boolean checksDone;
     private static boolean ok = true;
@@ -40,49 +39,27 @@ public final class RunStateCheck {
     private RunStateCheck() {
     }
 
-    public static void startClient(Path jarPath) {
-        if (started) {
-            return;
-        }
-        started = true;
-        client = true;
-        jar = jarPath.toAbsolutePath().normalize();
-        ModReloader.LOGGER.info("[RunStateCheck] armed with {} (client)", jar);
-        NeoForge.EVENT_BUS.addListener(ClientTickEvent.Post.class, event -> tick());
-    }
-
     public static void startServer(String jarPath) {
         if (started) {
             return;
         }
         started = true;
-        client = false;
         jar = Path.of(jarPath).toAbsolutePath().normalize();
         ModReloader.LOGGER.info("[RunStateCheck] armed with {} (dedicated server)", jar);
         NeoForge.EVENT_BUS.addListener(ServerStartedEvent.class, event -> server = event.getServer());
         NeoForge.EVENT_BUS.addListener(ServerTickEvent.Post.class, event -> tick());
     }
 
-    private static void tick() {
-        if (!started) {
-            return;
-        }
-        if (checksDone) {
-            if (client || server == null || ++waitTicks < WARN_WINDOW_TICKS) {
-                return;
-            }
-            finish();
-            return;
-        }
-        if (client) {
-            if (++ticks < START_TICKS) {
-                return;
-            }
-        } else if (server == null || ++ticks < START_TICKS) {
-            return;
-        }
-
-        HotAddEngine.Result first = HotAddEngine.add(jar);
+    /**
+     * One failing add (post-commit) followed by a refused add.
+     *
+     * @return true when the runtime became dirty and the second add was refused
+     *         before touching anything
+     */
+    public static boolean runChecks(Path jarPath) {
+        Path target = jarPath.toAbsolutePath().normalize();
+        boolean ok = true;
+        HotAddEngine.Result first = HotAddEngine.add(target);
         ok &= expect(!first.ok(), "injected failure must fail the add");
         ok &= expect(RunState.isDirty(), "a post-commit failure must mark the runtime dirty");
         ok &= expect(first.message().contains("runtime is dirty"),
@@ -91,7 +68,7 @@ public final class RunStateCheck {
                 first.ok(), first.kind(), first.message());
 
         warnLogsBefore = RunStateWarner.logCount();
-        HotAddEngine.Result second = HotAddEngine.add(jar);
+        HotAddEngine.Result second = HotAddEngine.add(target);
         ok &= expect(!second.ok(), "the second add must be refused");
         ok &= expect(second.kind() == HotAddEngine.FailureKind.RUNTIME_DIRTY,
                 "second add must fail as RUNTIME_DIRTY, was " + second.kind());
@@ -99,30 +76,39 @@ public final class RunStateCheck {
                 "second add must stop at VALIDATE, was " + second.stage());
         ModReloader.LOGGER.info("[RunStateCheck] second add: ok={} kind={} stage={} message={}",
                 second.ok(), second.kind(), second.stage(), second.message());
-
-        checksDone = true;
-        if (client) {
-            finish();
-        } else {
-            ModReloader.LOGGER.info(
-                    "[RunStateCheck] waiting {} ticks for the periodic console warning", WARN_WINDOW_TICKS);
-        }
+        return ok;
     }
 
-    private static void finish() {
-        if (!client) {
-            long logged = RunStateWarner.logCount() - warnLogsBefore;
+    public static long warningsSince() {
+        return RunStateWarner.logCount() - warnLogsBefore;
+    }
+
+    private static void tick() {
+        if (!started) {
+            return;
+        }
+        if (checksDone) {
+            if (server == null || ++waitTicks < WARN_WINDOW_TICKS) {
+                return;
+            }
+            long logged = warningsSince();
             ok &= expect(logged >= 2,
                     "dirty warning must repeat on the console, saw " + logged + " line(s)");
             ModReloader.LOGGER.info("[RunStateCheck] periodic warnings during the window: {}", logged);
+            ModReloader.LOGGER.info("[RunStateCheck] RESULT: {}", ok ? "PASS" : "FAIL");
+            started = false;
+            if (server != null) {
+                server.halt(false);
+            }
+            return;
         }
-        ModReloader.LOGGER.info("[RunStateCheck] RESULT: {}", ok ? "PASS" : "FAIL");
-        started = false;
-        if (client) {
-            Minecraft.getInstance().stop();
-        } else if (server != null) {
-            server.halt(false);
+        if (server == null || ++ticks < START_TICKS) {
+            return;
         }
+        ok = runChecks(jar);
+        checksDone = true;
+        ModReloader.LOGGER.info(
+                "[RunStateCheck] waiting {} ticks for the periodic console warning", WARN_WINDOW_TICKS);
     }
 
     private static boolean expect(boolean condition, String failure) {

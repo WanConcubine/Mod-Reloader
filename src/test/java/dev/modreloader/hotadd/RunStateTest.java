@@ -46,15 +46,15 @@ class RunStateTest {
 
     @Test
     void rollbackFailureOutranksEverything() {
-        String reason = RunState.reasonFor(flags(true, true, true, true, true, true, true, true));
-        assertEquals("the rollback of a previous add was incomplete", reason);
+        RunState.Reason reason = RunState.reasonFor(flags(true, true, true, true, true, true, true, true));
+        assertEquals(RunState.Reason.ROLLBACK_PARTIAL, reason);
     }
 
     @Test
     void firstIrreversibleOperationIsReported() {
-        assertEquals("registry content from a failed add is committed",
+        assertEquals(RunState.Reason.REGISTRY,
                 RunState.reasonFor(flags(false, true, true, false, false, false, false, false)));
-        assertEquals("custom registries from a failed add were created or filled",
+        assertEquals(RunState.Reason.CUSTOM_REGISTRY,
                 RunState.reasonFor(flags(false, false, true, true, false, false, false, false)));
     }
 }

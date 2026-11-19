@@ -1997,3 +1997,16 @@ clientfixture（GUI 层/物品装饰）PASS、`minimap` PASS、`moonlight-lateat
 - 专用服 `-PserverRunState=... -PfailAfterRegistry=true -PdirtyLogSeconds=2`：两次 `runtime is still DIRTY`
   （2s 间隔），`RESULT: PASS`，服务器自行 halt。
 - 回归：`hud`、`input` 场景无脏日志（成功与变更前拒绝不置脏）。单测 **109**（`RunStateTest` 6）。
+
+## 2026-11-19（P1-12 收尾：脏原因 i18n + 菜单常驻标识）
+
+- `RunState.Reason` 枚举：8 个原因各有稳定 key（`modreloader.dirty.reason.*`）与英文句子；UI 只负责翻译，
+  日志/`Result.message` 继续用英文（控制台不本地化）。
+- 客户端热加载菜单左上角、JBR 标识下一行常驻红字“运行时不干净：…”，截图
+  `run/screenshots/runstate-dirty.png` 实测显示中文原因；失败详情增加“脏状态原因”一行。
+- dev harness 拆成服务端安全的 `RunStateCheck`（只引用 server-safe 类型）与 `RunStateClientCheck`
+  （客户端 tick/菜单/截图）；此前二合一类在专用服上因引用客户端类 `NoClassDefFoundError`，`ServerDev.install` 失败，
+  服务器不会自行 halt。
+- 验证：客户端 `-PverifyRunState` PASS 并截图；专用服 `-PserverRunState -PdirtyLogSeconds=2` PASS（2 条重复告警）；
+  `hud`/`input` 无脏日志；单测 **110**。`-PverifyMenu` 仍因本机缺 `/tmp/lanmods/EasyLAN...` 样本 jar 报 FAIL
+  （环境依赖，非本次改动；菜单本身正常渲染）。

@@ -2,6 +2,7 @@ package dev.modreloader;
 
 import dev.modreloader.diagnose.FailureKeys;
 import dev.modreloader.hotadd.HotAddEngine;
+import dev.modreloader.hotadd.RunState;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -77,6 +78,23 @@ class LangKeysTest {
         // NONE and UNKNOWN intentionally share the "unknown" stem.
         assertTrue(checked.contains("unknown"));
         assertTrue(checked.contains("rollback_partial"));
+    }
+
+    @Test
+    void dirtyReasonsAndBadgesAreTranslated() throws IOException {
+        Map<String, String> en = load("en_us");
+        Map<String, String> zh = load("zh_cn");
+        for (RunState.Reason reason : RunState.Reason.values()) {
+            assertTrue(en.containsKey(reason.key()), "missing en_us key " + reason.key());
+            assertTrue(zh.containsKey(reason.key()), "missing zh_cn key " + reason.key());
+        }
+        for (String key : new String[]{
+                "modreloader.gui.dirty", "modreloader.detail.dirty_reason",
+                "modreloader.failure.runtime_dirty.summary",
+                "modreloader.failure.runtime_dirty.suggestion"}) {
+            assertTrue(en.containsKey(key), "missing en_us key " + key);
+            assertTrue(zh.containsKey(key), "missing zh_cn key " + key);
+        }
     }
 
     @Test

@@ -62,7 +62,7 @@
 | **capability 重放** | 五项全 present；`-PskipCapabilityReplay=true` 时五项 MISSING（反证） | `-PverifyCapabilities=<jar>`；[dogfood-gameplay.md](features/dogfood-gameplay.md) §1.1 |
 | **late AT（实验性）** | Jade 57/39、JEI 34/16、Controlling 1/1；Jade 回滚 39/39 ok；**类级 `public-f` 拒绝**（`stage=VALIDATE kind=ACCESS_TRANSFORMER`）；**嵌套 mod AT 已接入**（2026-11-19：Create/Iris 越过嵌套 AT） | `-PlateAt=true`；[late-at.md](features/late-at.md) |
 | **失败回滚** | post-ModList / post-pack 恢复 ModList/module/config/类/资源包；post-construct 监听器按实例摘除 | `-PverifyRollback` / `-PfailAfterModList` / `-PfailAfterPack` / `-PfailAfterConstruct` |
-| **工程底座** | `capabilities` 10 组全 ok；无 `libs/` 可 `clean build`；**109 个无游戏 Java 单测**；i18n 两语言**各 197 key** | `./gradlew build`/`test`；[tech-debt.md](tech-debt.md) |
+| **工程底座** | `capabilities` 10 组全 ok；无 `libs/` 可 `clean build`；**110 个无游戏 Java 单测**；i18n 两语言**各 197 key** | `./gradlew build`/`test`；[tech-debt.md](tech-debt.md) |
 
 ## 验证状态
 
@@ -72,8 +72,11 @@
   payload/capability/命令重放等任一不可逆操作之后再失败，`RunState` 置脏；后续 `add` 在 `VALIDATE`
   以 `FailureKind.RUNTIME_DIRTY` 拒绝，文案区分客户端/专用服。失败 `Result` 末尾附加脏原因。
   专用服由 `RunStateWarner` 按间隔持续在控制台告警（默认 60s，`-Dmodreloader.dirtyLogSeconds` 可调）。
-  证据：`-PverifyRunState=<t4fixture> -PfailAfterRegistry=true` 客户端 PASS（第二次 add `RUNTIME_DIRTY`）；
-  `-PserverRunState=... -PdirtyLogSeconds=2` 专用服 PASS（窗口内 2 条重复告警）；`hud`/`input` 回归无脏日志；单测 **109**。
+  脏原因有稳定 i18n key（`modreloader.dirty.reason.*`），热加载菜单左上角常驻红字（JBR 标识下一行），
+  失败详情里也有“脏状态原因”一行。
+  证据：`-PverifyRunState=<t4fixture> -PfailAfterRegistry=true` 客户端 PASS（第二次 add `RUNTIME_DIRTY`，
+  截图 `run/screenshots/runstate-dirty.png` 显示中文红字）；`-PserverRunState=... -PdirtyLogSeconds=2` 专用服 PASS
+  （窗口内 2 条重复告警）；`hud`/`input` 回归无脏日志；单测 **110**。
 - **一次性重放单一出口（技术债 P0-6，2026-11-19）**：`inspect/ReplayCatalog` 列 21 个会被重放的启动期事件；
   所有调用点走 `OneShotReplay.fire(container, catalog 常量, event)`，helper 运行期校验“声明名 == 实际事件类”；
   `RegistrationAudit.covered` 直接读该列表。顺带纠正层定义被审计误标为 behavior（2026-11-18 起其实已重放）。

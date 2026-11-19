@@ -135,7 +135,7 @@ public final class HotAddEngine {
         }
         if (RunState.isDirty()) {
             return new Result(false,
-                    "the runtime is dirty (" + RunState.reason() + "); restart "
+                    "the runtime is dirty (" + RunState.describe() + "); restart "
                             + (Platform.isClient() ? "the game" : "the server")
                             + " with the working jars in mods/ before adding more",
                     Stage.VALIDATE, FailureKind.RUNTIME_DIRTY, List.of());
@@ -973,7 +973,7 @@ public final class HotAddEngine {
                 run.registryCommitted, run.customRegistryOpened, run.constructed,
                 run.mixinsSettled, run.payloadsAdapted, run.capabilitiesReplayed,
                 run.commandsReplayed);
-        String reason = RunState.reasonFor(flags);
+        RunState.Reason reason = RunState.reasonFor(flags);
         if (reason == null) {
             return failure;
         }
@@ -981,11 +981,11 @@ public final class HotAddEngine {
         RunStateWarner.ensureStarted(Platform.isClient());
         ModReloader.LOGGER.error(
                 "[ModReloader] runtime is now dirty: {}. Further hot-adds are refused until "
-                        + "a restart", reason);
+                        + "a restart", reason.english());
         if (failure.message().contains("runtime is dirty")) {
             return failure;
         }
-        String note = " (runtime is dirty: " + reason + "; restart "
+        String note = " (runtime is dirty: " + reason.english() + "; restart "
                 + (Platform.isClient() ? "the game" : "the server") + " before adding more)";
         return new Result(false, failure.message() + note, failure.stage(), failure.kind(),
                 failure.rollbackErrors());

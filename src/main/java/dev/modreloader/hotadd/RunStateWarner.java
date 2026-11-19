@@ -48,7 +48,7 @@ public final class RunStateWarner {
 
     private static void log() {
         try {
-            String reason = RunState.reason();
+            String reason = RunState.describe();
             if (reason == null) {
                 return;
             }

@@ -1,6 +1,7 @@
 package dev.modreloader.diagnose;
 
 import dev.modreloader.hotadd.HotAddEngine;
+import dev.modreloader.hotadd.RunState;
 import dev.modreloader.inspect.JbrSupport;
 import dev.modreloader.inspect.MixinRuntimeSupport;
 import dev.modreloader.inspect.ModInspection;
@@ -79,6 +80,10 @@ public final class FailureAnalyzer {
                     dependencySummary(inspection)));
             lines.add(I18n.get("modreloader.detail.jbr", JbrSupport.describe()));
             lines.add(I18n.get("modreloader.detail.mixinruntime", MixinRuntimeSupport.describe()));
+        }
+        if (result.kind() == HotAddEngine.FailureKind.RUNTIME_DIRTY && RunState.isDirty()) {
+            lines.add(I18n.get("modreloader.detail.dirty_reason",
+                    I18n.get(RunState.reason().key())));
         }
         lines.add(I18n.get("modreloader.detail.stage", result.stage()));
         lines.add(I18n.get("modreloader.detail.kind", result.kind()));

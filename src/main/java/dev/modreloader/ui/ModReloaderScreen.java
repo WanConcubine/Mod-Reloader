@@ -1,6 +1,7 @@
 package dev.modreloader.ui;
 
 import dev.modreloader.ModReloader;
+import dev.modreloader.hotadd.RunState;
 import dev.modreloader.inspect.JbrSupport;
 import dev.modreloader.inspect.ModInspection;
 import dev.modreloader.watch.ModWatcherConfig;
@@ -293,12 +294,24 @@ public final class ModReloaderScreen extends Screen {
         guiGraphics.drawString(font, Component.translatable(key), 6, 6, color, true);
     }
 
+    /** A dirty runtime looks healthy until the next add; say so while the menu is open. */
+    private void renderDirtyBadge(GuiGraphics guiGraphics) {
+        if (!RunState.isDirty()) {
+            return;
+        }
+        guiGraphics.drawString(font,
+                Component.translatable("modreloader.gui.dirty",
+                        Component.translatable(RunState.reason().key())),
+                6, 32, 0xFF5555, true);
+    }
+
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         renderBackground(guiGraphics, mouseX, mouseY, partialTick);
         super.render(guiGraphics, mouseX, mouseY, partialTick);
         guiGraphics.drawCenteredString(font, title, width / 2, 20, 0xFFFFFF);
         renderJbrBadge(guiGraphics);
+        renderDirtyBadge(guiGraphics);
         String vendor = System.getProperty("java.vendor", "?");
         guiGraphics.drawCenteredString(font, Component.translatable("modreloader.gui.env",
                         vendor,
