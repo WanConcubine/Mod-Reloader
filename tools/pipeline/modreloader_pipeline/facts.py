@@ -140,12 +140,15 @@ def inspect_entry(entry: Entry, mods_dir: Path) -> Facts:
         facts.mixin_targets = sorted(analysis.mixin_targets)
         facts.bundled_jars = analysis.bundled_jars
         if analysis.errors:
-            # A nested plain library (e.g. JourneyMap's pngj) has no mods.toml;
-            # that is not an error for the outer mod or for this pipeline.
+            # A nested plain library (e.g. JourneyMap's pngj, e4mc's kaleido)
+            # has no mods.toml; that is not an error for the outer mod or for
+            # this pipeline. Both NeoForge (jarjar/) and Fabric-style (jars/)
+            # nesting show up in real NeoForge jars.
             facts.errors.extend(
                 error for error in analysis.errors[:3]
-                if not ("META-INF/jarjar/" in error
-                        and "no supported mod metadata found" in error))
+                if not ("no supported mod metadata found" in error
+                        and ("META-INF/jarjar/" in error
+                             or "META-INF/jars/" in error)))
     except Exception as exc:
         facts.errors.append("class analysis failed: %s" % exc)
     if entry.sha256 and entry.sha256 != facts.sha256:

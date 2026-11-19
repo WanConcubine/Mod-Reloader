@@ -405,6 +405,129 @@
       "expect": {},
       "notes": "",
       "modrinth_version_id": "ry2Njtnv"
+    },
+    {
+      "id": "sodium",
+      "name": "Sodium",
+      "project": "sodium",
+      "version": "mc1.21.1-0.8.13-neoforge",
+      "file": "sodium-neoforge-0.8.13+mc1.21.1.jar",
+      "sha256": "575d187b15328d7bddd8a9b1bee64333c22c14735f5780ec49eac0cd5503c08d",
+      "modrinth_version_id": "uMOpc5uV",
+      "groups": [
+        "render",
+        "performance",
+        "common"
+      ],
+      "expect": {
+        "hotadd": "unknown"
+      },
+      "notes": "渲染替换（NeoForge 版）；与 Embeddium 冲突，实例里只能二选一。"
+    },
+    {
+      "id": "iris",
+      "name": "Iris Shaders",
+      "project": "iris",
+      "version": "1.8.14-beta.1+1.21.1-neoforge",
+      "file": "iris-neoforge-1.8.14-beta.1+mc1.21.1.jar",
+      "sha256": "60d5f8bf52f25e9986440f4a4270a6bd986d9cff994510e1108ac1547063b314",
+      "modrinth_version_id": "KduFYu4t",
+      "groups": [
+        "render",
+        "shader",
+        "common"
+      ],
+      "expect": {
+        "hotadd": "unknown"
+      },
+      "notes": "着色器加载器；required 依赖 sodium。三种测法：同批 / 单独 sodium / sodium 预装后热加 iris。"
+    },
+    {
+      "id": "create",
+      "name": "Create",
+      "project": "create",
+      "version": "6.0.10+mc1.21.1",
+      "file": "create-1.21.1-6.0.10.jar",
+      "sha256": "ef87fe5709f1ba1f5b8bb20a2925b5afb4669e178fd6d8bf10c167759eefe37a",
+      "modrinth_version_id": "UjX6dr61",
+      "groups": [
+        "content",
+        "tech",
+        "common"
+      ],
+      "expect": {
+        "hotadd": "unknown"
+      },
+      "notes": "大型内容模组标杆；mixin 直指 GlStateManager/RenderSystem/BufferBuilder/PoseStack。"
+    },
+    {
+      "id": "ae2",
+      "name": "Applied Energistics 2",
+      "project": "ae2",
+      "version": "19.2.20",
+      "file": "appliedenergistics2-19.2.20.jar",
+      "sha256": "219cbf2b3e677567d843ddeea568eda75db35dea545b04b7b904c8587c264077",
+      "modrinth_version_id": "7Ac6mXbf",
+      "groups": [
+        "content",
+        "storage",
+        "common"
+      ],
+      "expect": {
+        "hotadd": "unknown"
+      },
+      "notes": "应用能源；required 依赖 guideme；mixin 直指模型/图集渲染类。"
+    },
+    {
+      "id": "guideme",
+      "name": "GuideME",
+      "project": "guideme",
+      "version": "21.1.22",
+      "file": "guideme-21.1.22.jar",
+      "sha256": "108337ff98c706b18ed2fbec077b3337ba72c08f8b46a273534886280e89ef0d",
+      "modrinth_version_id": "QeYKsstN",
+      "groups": [
+        "library",
+        "common"
+      ],
+      "expect": {
+        "hotadd": "unknown"
+      },
+      "notes": "AE2 的指南前置；47 条 AT / 17 个目标类（JBR late AT 才可尝试成员级）。"
+    },
+    {
+      "id": "e4mc",
+      "name": "e4mc",
+      "project": "e4mc",
+      "version": "6.2.3-neoforge",
+      "file": "e4mc-neoforge-6.2.3.jar",
+      "sha256": "6000692f216faa67f8a6be26fad6dffd54f1c229ee290f355cd42792c4cdbd57",
+      "modrinth_version_id": "HXD8kS5O",
+      "groups": [
+        "network",
+        "common"
+      ],
+      "expect": {
+        "hotadd": "unknown"
+      },
+      "notes": "类 EasyLAN 的联机方案：本机起局域网 + 隧道分享；含 JiJ 与 native 声明（分析器判 HUANGHOU，可能误判）。"
+    },
+    {
+      "id": "mcwifipnp",
+      "name": "LAN World Plug-n-Play",
+      "project": "mcwifipnp",
+      "version": "1.9.0",
+      "file": "mcwifipnp-1.9.0-1.21-neoforge.jar",
+      "sha256": "e726f0ca3c76db428fcbfa46c6830451886a9cff6539318a38d723ec9460bcc3",
+      "modrinth_version_id": "TQtrilwF",
+      "groups": [
+        "network",
+        "common"
+      ],
+      "expect": {
+        "hotadd": "unknown"
+      },
+      "notes": "类 EasyLAN 的联机方案（mcwifipnp）；分析器判 FEI。"
     }
   ],
   "scenarios": [
@@ -694,6 +817,112 @@
       ],
       "expect": {},
       "notes": "白名单扩样（2026-11-18）；expect 留空，以实测为准。"
+    },
+    {
+      "id": "sodium-only",
+      "title": "渲染：Sodium 单独热加",
+      "jbr": true,
+      "jars": [
+        "sodium"
+      ],
+      "expect": {},
+      "notes": "考察渲染核心替换能否在运行期加载（分析器判 HUANGHOU）。"
+    },
+    {
+      "id": "sodium-iris",
+      "title": "渲染：Sodium + Iris 同批热加",
+      "jbr": true,
+      "jars": [
+        "sodium",
+        "iris"
+      ],
+      "expect": {},
+      "notes": "先 sodium 后 iris（依赖顺序）；窗口用 no-focus，若撞重载 NPE 改为可见窗口重跑。"
+    },
+    {
+      "id": "iris-after-sodium",
+      "title": "渲染：Sodium 预装后热加 Iris",
+      "jbr": true,
+      "jars": [
+        "iris"
+      ],
+      "expect": {},
+      "notes": "运行前把 sodium jar 放进 run/mods（pipeline 识别为 preloaded）；只热加 iris。"
+    },
+    {
+      "id": "create-only",
+      "title": "内容：Create 单独热加",
+      "jbr": true,
+      "jars": [
+        "create"
+      ],
+      "expect": {},
+      "notes": "分析器判 HUANGHOU；实测 tier/AT/构造期行为。"
+    },
+    {
+      "id": "ae2",
+      "title": "存储：GuideME → AE2",
+      "jbr": true,
+      "jars": [
+        "guideme",
+        "ae2"
+      ],
+      "expect": {},
+      "notes": "前置顺序 guideme → ae2；GUI 功能需 L2，L1 只看引擎 ok/isLoaded。"
+    },
+    {
+      "id": "lan-e4mc",
+      "title": "联机：e4mc（类 EasyLAN）",
+      "jbr": true,
+      "jars": [
+        "e4mc"
+      ],
+      "expect": {},
+      "notes": "对照 EasyLAN 的 LAN 场景；L1 只看热加与容器。"
+    },
+    {
+      "id": "lan-mcwifipnp",
+      "title": "联机：mcwifipnp（类 EasyLAN）",
+      "jbr": true,
+      "jars": [
+        "mcwifipnp"
+      ],
+      "expect": {},
+      "notes": "仓库里已有作为 watch jar 的历史用法；L1 只看热加与容器。"
+    },
+    {
+      "id": "ae2-lateat",
+      "title": "存储 + late AT：GuideME → AE2（JBR late AT）",
+      "jbr": true,
+      "late_at": true,
+      "jars": [
+        "guideme",
+        "ae2"
+      ],
+      "expect": {},
+      "notes": "GuideME 的 47 条 AT 先应用，再热加 AE2；L1 只看引擎结果，GUI 功能需 L2。"
+    },
+    {
+      "id": "iris-after-sodium-lateat",
+      "title": "渲染：Sodium 预装后热加 Iris（late AT）",
+      "jbr": true,
+      "late_at": true,
+      "jars": [
+        "iris"
+      ],
+      "expect": {},
+      "notes": "运行前把 sodium jar 放进 run/mods；Iris 自身 33 条 AT 含 2 条类级 public-f。"
+    },
+    {
+      "id": "create-lateat",
+      "title": "内容：Create（late AT 对照）",
+      "jbr": true,
+      "late_at": true,
+      "jars": [
+        "create"
+      ],
+      "expect": {},
+      "notes": "嵌套 AT 检查与 lateAt 无关，用来确认拒绝点不在 late AT。"
     }
   ]
 }
