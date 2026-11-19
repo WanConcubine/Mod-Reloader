@@ -35,7 +35,8 @@ import java.util.Set;
 public final class NestedMods {
     /** One nested jar that declares at least one mod. */
     public record Loaded(Path path, ModFile file, ModFileInfo info, List<ModInfo> infos,
-                         List<ModFileParser.MixinConfig> mixins, List<Path> accessTransformers) {
+                         List<ModFileParser.MixinConfig> mixins, List<Path> accessTransformers,
+                         boolean sharesOuterId) {
     }
 
     /** A nested jar that declares an access transformer: still startup-only. */
@@ -51,12 +52,15 @@ public final class NestedMods {
     /**
      * @param alreadyLoaded mod ids that are already in the ModList (a dependency
      *                      was installed normally); that nested jar is not rebuilt
+     * @param outerModIds   mod ids declared by the outer jar; a nested jar that
+     *                      declares the same id is the real implementation of that
+     *                      mod (Sodium-style shell) and must not get a second container
      * @param allowLateAt   true when {@code -Dmodreloader.lateAt=true}: nested ATs
      *                      are collected for the same JBR late-AT path as the outer
      *                      jar instead of refusing the add
      */
     public static List<Loaded> prepare(JarInJar.Result extracted, Set<String> alreadyLoaded,
-                                       boolean allowLateAt) throws Exception {
+                                       Set<String> outerModIds, boolean allowLateAt) throws Exception {
         List<Loaded> prepared = new ArrayList<>();
         for (JarInJar.Nested nested : extracted.nested()) {
             if (!nested.declaresMod()) {
@@ -108,8 +112,11 @@ public final class NestedMods {
                 // mod id twice would create a duplicate container.
                 continue;
             }
+            boolean sharesOuterId = infos.stream()
+                    .anyMatch(modInfo -> outerModIds.contains(modInfo.getModId()));
             prepared.add(new Loaded(nested.file(), file, info, List.copyOf(infos),
-                    file.getMixinConfigs() == null ? List.of() : file.getMixinConfigs(), usedAts));
+                    file.getMixinConfigs() == null ? List.of() : file.getMixinConfigs(),
+                    usedAts, sharesOuterId));
         }
         return prepared;
     }

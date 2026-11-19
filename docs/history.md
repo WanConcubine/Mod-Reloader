@@ -1805,3 +1805,23 @@ mcwifipnp 1.9.0，并登记 10 个场景（含 lateAt 对照）。全部在 macO
 - 构建：`./gradlew build` 绿。
 
 白名单：Create（JBR）→ J1 candidate；计数变为 JBR J1×25 / J2×1 / BLACK×5。
+
+## 2026-11-19（同 modId 嵌套：内嵌实现作主文件；Sodium 热加 ok 但旧渲染对象崩）
+
+背景：Sodium 的发行 jar 是「外壳 + 内嵌实现」且两边都声明 `modId = sodium`；外壳只有 mods.toml 与服务类，
+入口、mixin、`assets/` 都在内嵌 jar。启动期 FML 用内嵌文件作为该 mod 的文件；我们的引擎却把外壳当主文件，
+两个 ModFile 都叫模块 `sodium`（问题 24 记录）。
+
+改动：
+- `NestedMods` 标记 `sharesOuterId`；引擎改用内嵌实现作主文件（容器、mixin、资源包、数据包、注册审计、通知），
+  外壳降级为 extra 库模块（模块名来自 manifest 的 `sodium_service`），不再建第二个容器。
+- 嵌套 AT 与主文件 AT 去重：主文件是内嵌实现时不再走外层 late AT 分支。
+
+验证：
+- `sodium-lateat`：**ok=true isLoaded=true**，同批 4 个 fabric 库进模块，约 64 个类 redefine；
+  随后渲染 overlay 抛 NPE：`ShaderInstance.uniformCache` 为 null（旧实例拿不到 mixin 新增字段，问题 45/56 同族），
+  退出码 1 → 记 J2（问题 61）。
+- `minimap` 回归：PASS（Xaero 的嵌套 mod 逻辑未受影响）。
+- 构建：`./gradlew build` 绿。
+
+白名单：Sodium（JBR）BLACK → J2 candidate；计数 JBR J1×25 / J2×2 / BLACK×4。

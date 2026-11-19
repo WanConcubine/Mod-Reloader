@@ -153,7 +153,7 @@
 21. **客户端启动期注册仍是手写清单**：已重放 FMLClientSetup/key/menu/renderers/颜色/扩展/reload listener/tooltip/配方书/**shader**/HUD/物品装饰/粒子+item→model；未做 `ColorResolvers`；`RegisterLayerDefinitions` 2026-11-18 起重放（含 `EntityModelSet` roots 重建与 staged 顺序）。漏一个就是一类 bug，所以有注册审计。
 22. ✅ **专用服妃级（已修）**：`runServer` 也用 JBR + enhanced；ZeroCore2 `redefined Slot` 成功。
 23. **AT：stock 硬边界；JBR late AT 实验性可行**：成员级 access/final 可改；**类级 `-f` 见 44**。默认拒绝（`ACCESS_TRANSFORMER`），`-PlateAt=true` 才走实验路径；托管重启会自动带开关。ADR-0014 否决“改写调用方”。
-24. **JiJ/coremod 剩余边界**：嵌套 GAMELIBRARY 无 container（独立分发的 MezzConfig 类）；**嵌套 mod 的 AT 自 2026-11-19 起在 `-PlateAt=true` 下走 late AT**（无 lateAt 仍拒绝），嵌套 **GAMELIBRARY** 的 AT 与 `data/` 仍不单独注入；审计只扫外层；coremod 只覆盖 class 级 `ITransformer`，redefine 路径未实测。另有 Sodium 式“外壳 jar 与内嵌实现同 modId”会撞模块名（stage=MODULE），尚未适配。
+24. **JiJ/coremod 剩余边界**：嵌套 GAMELIBRARY 无 container（独立分发的 MezzConfig 类）；**嵌套 mod 的 AT 自 2026-11-19 起在 `-PlateAt=true` 下走 late AT**（无 lateAt 仍拒绝），嵌套 **GAMELIBRARY** 的 AT 与 `data/` 仍不单独注入；审计只扫外层；coremod 只覆盖 class 级 `ITransformer`，redefine 路径未实测。Sodium 式「外壳 jar 与内嵌实现同 modId」已适配（2026-11-19：内嵌实现作主文件，外壳降级为库模块）。
 25. **JBR 只对「已加载类的布局变更」必需**：数据/方法级 mixin 在 JBR 下可 redefine；未加载目标免 JBR；缺 JBR 时干净 `JBR_REQUIRED` 并点名目标。
 26. ✅ **`RegisterCapabilitiesEvent` 重放（已修）**：commit 后、common setup 前只投新容器；审计移入 covered；模型层未重放。
 27. **「主菜单热加后创造栏没出现」无法复现**：本机四条路径 PASS；需要那台机器的 `latest.log`（[dogfood-gameplay.md](features/dogfood-gameplay.md) §2.1.1）。
@@ -211,6 +211,10 @@
     Supplementaries 在 `MIXIN` 阶段失败：`transform net.minecraft.client.gui.MapRenderer$MapInstance:
     MixinTransformerError: An unexpected critical error was encountered`（回滚 late AT 成功）。该目标先被 Moonlight
     的 late AT 重定义（1 条规则），再被自己的 mixin 处理，属问题 47 同族；与本次注册表改动无关，待复现。
+61. **Sodium 热加后旧渲染对象崩溃（2026-11-19）**：`sodium-lateat` 中 Sodium ok=true（含 4 个 fabric 库、约 64 类 redefine），
+    随后渲染 overlay 抛 NPE：`ShaderInstance.uniformCache` 为 null。同 modId 适配后暴露出问题 45/56 的致命版：
+    mixin 给已存在的 `ShaderInstance` 加字段，旧实例保持 JVM 默认值（null）。当前结论 J2（能加、崩溃）；
+    需在 add 后强制重建受影响的渲染对象（或明确“需重启才正确渲染”）。
 
 ## 玩家侧原则（ADR-0015，2026-11-18 最终）
 
@@ -225,7 +229,7 @@
 > **当前交接（2026-11-19，已推送 `47a06cd`）**：Windows/PCL2/JBR 真机联调收尾：构建链 93/93、late AT 保 AT（architectury 311 规则）、
 > Jade 热加成功；新增问题 56（新增字段不初始化旧实例，字体变暗）、57（轮询把替换 jar 当候选，已修）、
 > 58（层/渲染器重放早于注册表提交，已修待 Mekanism 复验）。
-> JBR 计数 **J1×25 / J2×1 / BLACK×5**。下一项：① Mekanism 复验（问题 58）；② 问题 54（xaerolib mixin 挂起，先 jstack）
+> JBR 计数 **J1×25 / J2×2 / BLACK×4**。下一项：① Mekanism 复验（问题 58）；② 问题 54（xaerolib mixin 挂起，先 jstack）
 > 与 53（client setup 早于热加包注入）；③ 问题 52/50（服务端事件重放未验证、回滚 VerifyError）；④ CraftTweaker 复跑；
 > ⑤ 类级 `-f` 启动期替代与流水线 L2。
 > 证据在 [history.md](history.md)；JBR 在 `run/jbr-21.0.11`（gitignored），语料 `/tmp/modreloader-corpus`。
@@ -238,7 +242,7 @@
 | **P1-3** | Git 收尾 | 本轮及 JBR/Windows 联调已推送（`47a06cd`）；观察 Actions、需要时打 tag | Actions 绿 |
 | **P0-新** | 流水线 L2 | 标题屏热加 → 建世界 → N tick → HUD/按键/截图；先 minimap/mouse-gestures | 断言 + 截图证据 |
 | **P0-新** | 语料扩到 20–30 个常用模组 | 小地图/JEI/HUD/输入/前置库；`check` 进 PR | 报告 + 矩阵 |
-| **P0-新** | 模组白名单实测（所有者驱动） | 61 行：stock T1×7 / BLACK×23；JBR J1×25 / J2×1 / BLACK×5；candidate 由所有者复测转 verified | TSV + 视图同步 |
+| **P0-新** | 模组白名单实测（所有者驱动） | 61 行：stock T1×7 / BLACK×23；JBR J1×25 / J2×2 / BLACK×4；candidate 由所有者复测转 verified | TSV + 视图同步 |
 | **P0-新** | ✅ Xaero's World Map config channel | `XaeroLibChannels` 窗口（`ConfigChannelRegistry.frozen`），仅对引用该类的 jar 生效；World Map `ok=true isLoaded=true` | 已转 J2 |
 | **P0-新** | 服务端一次性事件（问题 52） | `ServerLifecycleReplay` 已实现（定向调用新增监听器 + integrated server 兜底），**未验证**：进入世界复跑卡在 54 | World Map J1 |
 | **P0-新** | xaerolib mixin 阶段挂起（问题 54） | 先 `jstack` 留线程栈再杀；怀疑 Mixin/transform 锁或常驻 guard | 复跑不挂 |
@@ -249,7 +253,8 @@
 | **P0-新** | ✅ 嵌套 MixinSquared bootstrap（问题 48） | `JarInJar` 递归 3 层拆包；3 个嵌套库进 module path，MixinSquared config 可加载。Supplementaries 越过 MIXIN/CONSTRUCT | 批次复跑 |
 | **P0-新** | ✅ 模型层/Skull 模型（问题 49） | `RegisterLayerDefinitions` 重放 + `EntityModelSet` roots 重建；全容器先层后渲染器；FMLClientSetup 窗口内放开 client-loading 门禁。Supplementaries 层 213→234、`ok=true` | 批次复跑 |
 | **P1-新** | 回滚 VerifyError（问题 50） | 失败回滚 late-AT 类时 `VerifyError`；保证失败后是可重启的干净状态并明确提示 | 复跑 |
-| **P1-新** | 同 modId 嵌套（Sodium 式外壳） | 外壳 jar 与内嵌实现同 modId → 模块名 `sodium` 冲突（stage=MODULE）；需把内嵌实现作为模块/容器、外壳降级为库 | Sodium 越过 MODULE |
+| **P1-新** | ✅ 同 modId 嵌套（Sodium 式外壳） | `NestedMods` 标记同 id 内嵌；引擎用内嵌实现作主文件（容器/mixin/资源/审计），外壳降级为库模块 | Sodium 热加 ok（J2，问题 61） |
+| **P1-新** | Sodium 旧渲染对象（问题 61） | `ShaderInstance.uniformCache` 旧实例为 null → overlay NPE；add 后重建受影响对象或明确需重启 | Sodium J1 |
 | **P1-新** | ✅ Create 的自定义注册表冻结（问题 59） | `CustomRegistries.open` 在构造期解冻根注册表、`fill/close/回滚` 再冻结；复跑 `create-lateat` ok=true（blocks→1703、items→2032） | Create J1 |
 | **P1-新** | Moonlight 之后 Supplementaries 的 Mixin 失败（问题 60） | `MapRenderer$MapInstance` 先被 late AT 重定义，再被 mixin 处理；问题 47 同族，待复现 | 复跑 |
 | **P0-新** | late AT 硬化 | L2 功能（Jade tooltip/JEI 界面）、Mekanism/AE2、多 mod 冲突、嵌套 AT、Windows/Linux、默认 UX | [late-at.md](features/late-at.md) |

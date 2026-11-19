@@ -1,6 +1,7 @@
 package dev.modreloader.hotadd;
 
 import cpw.mods.jarhandling.JarContents;
+import cpw.mods.jarhandling.SecureJar;
 import dev.modreloader.ModReloader;
 import dev.modreloader.Platform;
 import dev.modreloader.capability.Capabilities;
@@ -163,8 +164,10 @@ public final class HotAddEngine {
             }
             List<NestedMods.Loaded> nestedMods;
             boolean lateAt = LateAccessTransformers.enabled();
+            Set<String> outerIds = new LinkedHashSet<>();
+            newInfos.forEach(info -> outerIds.add(info.getModId()));
             try {
-                nestedMods = NestedMods.prepare(nested, loadedIds, lateAt);
+                nestedMods = NestedMods.prepare(nested, loadedIds, outerIds, lateAt);
             } catch (NestedMods.AccessTransformer e) {
                 return fail(rollback, Stage.VALIDATE, FailureKind.ACCESS_TRANSFORMER,
                         ids + ": " + e.getMessage() + "; restart with the jar in mods/.");
@@ -198,15 +201,46 @@ public final class HotAddEngine {
                         nested.nested().stream().map(JarInJar.Nested::moduleName).toList(),
                         nestedIds);
             }
+            // Sodium-style packaging: the outer jar is only a shell (mods.toml +
+            // services); the real mod (entrypoint, mixins, assets) is the nested jar
+            // with the same modId, and FML picks that nested file at startup. Use it
+            // as the mod file and demote the shell to a classes-only module; otherwise
+            // both files claim module "sodium" and the shell has no @Mod to construct.
+            NestedMods.Loaded primaryNested = nestedMods.stream()
+                    .filter(NestedMods.Loaded::sharesOuterId)
+                    .findFirst().orElse(null);
+            Path primaryJar = jar;
+            ModFileInfo primaryInfo = newFileInfo;
+            List<ModInfo> primaryInfos = newInfos;
+            if (primaryNested != null) {
+                primaryJar = primaryNested.path();
+                primaryInfo = primaryNested.info();
+                primaryInfos = new ArrayList<>(primaryNested.infos());
+                ModReloader.LOGGER.info(
+                        "[ModReloader] nested implementation shares modId {}; using {} as the mod "
+                                + "file and demoting the shell {} to a library",
+                        primaryInfos.stream().map(ModInfo::getModId).toList(),
+                        primaryJar.getFileName(), jar.getFileName());
+            }
 
-            List<ModFileParser.MixinConfig> declaredMixins = modFile.getMixinConfigs();
-            List<ModFileParser.MixinConfig> mixinConfigs = new ArrayList<>(
-                    declaredMixins == null ? List.of() : declaredMixins);
-            mixinConfigs.addAll(NestedMods.mixins(nestedMods));
+            ModFile primaryModFile = (ModFile) primaryInfo.getFile();
+            List<ModFileParser.MixinConfig> declaredMixins = primaryModFile.getMixinConfigs();
+            Set<String> knownConfigs = new LinkedHashSet<>();
+            List<ModFileParser.MixinConfig> mixinConfigs = new ArrayList<>();
+            if (declaredMixins != null) {
+                for (ModFileParser.MixinConfig config : declaredMixins) {
+                    if (knownConfigs.add(config.config())) {
+                        mixinConfigs.add(config);
+                    }
+                }
+            }
+            for (ModFileParser.MixinConfig config : NestedMods.mixins(nestedMods)) {
+                if (knownConfigs.add(config.config())) {
+                    mixinConfigs.add(config);
+                }
+            }
             // GAMELIBRARY nested jars have no ModFile, so their manifest
             // MixinConfigs are not part of getMixinConfigs().
-            Set<String> knownConfigs = new LinkedHashSet<>();
-            mixinConfigs.forEach(config -> knownConfigs.add(config.config()));
             for (String config : nested.libraryMixinConfigs()) {
                 if (knownConfigs.add(config)) {
                     mixinConfigs.add(new ModFileParser.MixinConfig(config, List.of()));
@@ -223,7 +257,7 @@ public final class HotAddEngine {
             boolean registryContent = false;
             ModInspection inspectionForNotice = null;
             try {
-                ModInspection inspection = ModInspector.inspect(jar);
+                ModInspection inspection = ModInspector.inspect(primaryJar);
                 inspectionForNotice = inspection.ok() ? inspection : null;
                 registryContent = inspection.ok() && inspection.registry();
                 if (inspection.ok()) {
@@ -249,7 +283,9 @@ public final class HotAddEngine {
                                 ids + " needs " + missingDeps + " first; hot-add it in that order");
                     }
                 }
-                if (inspection.ok() && inspection.accessTransformers()) {
+                // With a shared-id nested implementation (Sodium), primaryJar is the
+                // nested jar and its ATs were already applied in the nested loop.
+                if (primaryNested == null && inspection.ok() && inspection.accessTransformers()) {
                     // Access transformers are applied when the game layer loads
                     // classes; a hot-added mod's ATs are not. The default gate is
                     // still "refuse before touching anything": widening a private
@@ -294,7 +330,7 @@ public final class HotAddEngine {
             // mod registries) are reported loudly but do not block the add.
             // See docs/features/client-registration-audit.md.
             try {
-                RegistrationAudit.Report audit = RegistrationAuditScanner.audit(jar, Platform.isClient());
+                RegistrationAudit.Report audit = RegistrationAuditScanner.audit(primaryJar, Platform.isClient());
                 ModReloader.LOGGER.info("[ModReloader] registration audit {}: {}",
                         ids, audit.line());
                 if (audit.fatal()) {
@@ -326,7 +362,7 @@ public final class HotAddEngine {
             // A data pack has its own framework anchors. Check them before any
             // mutation: failing at Stage.DATAPACK happens after the registry
             // commit, which cannot be rolled back.
-            if (DatapackStage.hasData(newFileInfo)) {
+            if (DatapackStage.hasData(primaryInfo)) {
                 Capabilities.Result datapackCapability =
                         Capabilities.get(Capabilities.Capability.DATAPACK_RELOAD);
                 if (!datapackCapability.available()) {
@@ -360,9 +396,16 @@ public final class HotAddEngine {
             ModuleInjector.Snapshot moduleSnapshot = ModuleInjector.snapshot();
             rollback.add("module layer", () -> ModuleInjector.restore(moduleSnapshot));
             List<ModFileInfo> newFileInfos = new ArrayList<>(NestedMods.fileInfos(nestedMods));
-            newFileInfos.add(newFileInfo);
-            Set<String> moduleNames = ModuleInjector.addToGameLayer(
-                    newFileInfos, nested.libraryJars());
+            List<SecureJar> extraJars = new ArrayList<>(nested.libraryJars());
+            if (primaryNested == null) {
+                newFileInfos.add(newFileInfo);
+            } else {
+                // The shell keeps its own classes (pre-launch services) but must not
+                // shape a mod container; it becomes a library module named from its
+                // manifest, so it no longer collides with the nested "sodium" module.
+                extraJars.add(SecureJar.from(JarContents.of(jar)));
+            }
+            Set<String> moduleNames = ModuleInjector.addToGameLayer(newFileInfos, extraJars);
 
             // 2. mixin: register configs, then redefine already-loaded targets.
             //    MixinStage keeps every MixinRuntime/MixinSupport reference behind
@@ -437,8 +480,9 @@ public final class HotAddEngine {
             ModListInjector.Snapshot modListSnapshot = ModListInjector.snapshot();
             rollback.add("mod list", () -> ModListInjector.restore(modListSnapshot));
             List<ModContainer> containers = new ArrayList<>();
+            List<ModContainer> nestedContainers = List.of();
             if (!nestedMods.isEmpty()) {
-                List<ModContainer> nestedContainers = ModListInjector.rebuild(
+                nestedContainers = ModListInjector.rebuild(
                         NestedMods.fileInfos(nestedMods), NestedMods.modInfos(nestedMods));
                 if (nestedContainers.isEmpty()) {
                     return fail(rollback, Stage.MODLIST, FailureKind.MODLIST,
@@ -448,11 +492,17 @@ public final class HotAddEngine {
                         nestedContainers.stream().map(ModContainer::getModId).toList());
                 containers.addAll(nestedContainers);
             }
-            List<ModContainer> outerContainers = ModListInjector.rebuild(List.of(newFileInfo), newInfos);
-            if (outerContainers.isEmpty()) {
-                return fail(rollback, Stage.MODLIST, FailureKind.MODLIST, "no ModContainer built for " + ids);
+            List<ModContainer> outerContainers;
+            if (primaryNested != null) {
+                // The nested implementation already carries the container for this id.
+                outerContainers = new ArrayList<>(nestedContainers);
+            } else {
+                outerContainers = ModListInjector.rebuild(List.of(newFileInfo), newInfos);
+                if (outerContainers.isEmpty()) {
+                    return fail(rollback, Stage.MODLIST, FailureKind.MODLIST, "no ModContainer built for " + ids);
+                }
+                containers.addAll(outerContainers);
             }
-            containers.addAll(outerContainers);
 
             if (Boolean.getBoolean("modreloader.failAfterModList")) {
                 return fail(rollback, Stage.MODLIST, FailureKind.UNKNOWN, "injected failure after ModList rebuild");
@@ -493,7 +543,7 @@ public final class HotAddEngine {
             }
             // XaeroLib freezes its config-channel registry at startup; the Xaero
             // mods register their channels during construct/common setup.
-            if (XaeroLibChannels.appliesTo(jar)) {
+            if (XaeroLibChannels.appliesTo(primaryJar)) {
                 XaeroLibChannels.open(rollback);
             }
             PlatformHooks hooks = PlatformHooks.get();
@@ -525,7 +575,7 @@ public final class HotAddEngine {
             // arrive at a dead connection, so it goes first, while the players can
             // still act on it.
             try {
-                ModNotice.notifyPlayers(jar, outerContainers, registryContent, inspectionForNotice);
+                ModNotice.notifyPlayers(primaryJar, outerContainers, registryContent, inspectionForNotice);
             } catch (Throwable t) {
                 ModReloader.LOGGER.warn("[ModReloader] cannot tell connected clients about {}", ids, t);
             }
@@ -631,7 +681,9 @@ public final class HotAddEngine {
                     Capabilities.get(Capabilities.Capability.RESOURCE_PACKS);
             if (packCapability.available()) {
                 List<ModFileInfo> packInfos = new ArrayList<>(NestedMods.fileInfos(nestedMods));
-                packInfos.add(newFileInfo);
+                if (primaryNested == null) {
+                    packInfos.add(newFileInfo);
+                }
                 Set<String> packIds = new LinkedHashSet<>(ids);
                 packIds.addAll(nestedIds);
                 hooks.injectResourcePacks(packInfos, packIds, rollback);
@@ -650,7 +702,7 @@ public final class HotAddEngine {
             //    /reload path. Ordering matters: the registry commit above must be
             //    done, otherwise recipe ingredients and loot item ids resolve to air.
             stage = Stage.DATAPACK;
-            DatapackStage.Result datapack = hooks.reloadDataPacks(newFileInfo, ids);
+            DatapackStage.Result datapack = hooks.reloadDataPacks(primaryInfo, ids);
             ModReloader.LOGGER.info("[ModReloader] datapack {}: {}",
                     datapack.applied() ? "applied" : "skipped", datapack.detail());
 
