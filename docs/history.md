@@ -1908,3 +1908,16 @@ jstack：
 
 结论：需要**重排阶段**（pack/reload 先于 payload，client setup 任务在 reload 内执行）或把热加做成
 可恢复的分段管线；单纯“延后”或“任务级重试”都不可行。
+
+## 2026-11-19（技术债复审 + 渐进式重构第一步）
+
+复审（详见 [tech-debt.md](tech-debt.md)）：严重债集中在「运行时重实现 FML 加载顺序」——
+P0-5 生命周期顺序没有单一事实源、P0-6 客户端重放是手写清单；P1-12 不可逆/可回滚混流、
+P1-13 反射面 228 处/32 文件、P1-14 并发模型局部补丁、P2-15 测试与文档漂移。
+
+增量：
+- 新增 `hotadd/AddStagePlan`：把 10 个阶段的顺序与默认 `FailureKind` 收到一处；
+  `HotAddEngine.add` 的 10 处 `stage = ...` 统一走 `stagePlan.enter(...)`（反向跳转直接抛）。
+- `AddStagePlanTest` 5 个：顺序固定、可跳过可选阶段、可重复当前阶段、禁止回退、失败种类映射。
+
+验证：`./gradlew build` 绿，单测 **98**。

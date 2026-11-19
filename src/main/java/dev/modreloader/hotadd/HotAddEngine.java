@@ -79,7 +79,8 @@ public final class HotAddEngine {
 
         Rollback rollback = new Rollback();
         boolean[] constructed = {false};
-        Stage stage = Stage.VALIDATE;
+        AddStagePlan stagePlan = new AddStagePlan();
+        Stage stage = stagePlan.enter(Stage.VALIDATE);
         // Visible to the catch block: a failure after mixins were applied leaves
         // injected handlers in already-loaded classes and needs a restart.
         Set<String> ids = new LinkedHashSet<>();
@@ -145,7 +146,7 @@ public final class HotAddEngine {
             // a container from FML's JarJar locator at startup. A hot-add skips
             // that locator, so build them here *before* the outer mod's dependency
             // check: Xaero's Minimap requires XaeroLib, which it bundles itself.
-            stage = Stage.MODULE;
+            stage = stagePlan.enter(Stage.MODULE);
             JarInJar.Result nested;
             try {
                 nested = JarInJar.extract(jar);
@@ -410,7 +411,7 @@ public final class HotAddEngine {
             // 2. mixin: register configs, then redefine already-loaded targets.
             //    MixinStage keeps every MixinRuntime/MixinSupport reference behind
             //    one call, so a Type2 mod still works when mr is not installed.
-            stage = Stage.MIXIN;
+            stage = stagePlan.enter(Stage.MIXIN);
             List<String> mixinSummary = new ArrayList<>();
             Set<String> hotIds = new LinkedHashSet<>(ids);
             hotIds.addAll(nestedIds);
@@ -455,7 +456,7 @@ public final class HotAddEngine {
             //     loading classes, which a hot-added jar missed entirely - the mod
             //     loads and its coremod feature is silently dead (jecharacters ->
             //     pinyin search). Apply the same transformers late.
-            stage = Stage.COREMOD;
+            stage = stagePlan.enter(Stage.COREMOD);
             List<String> coremodSummary = new ArrayList<>();
             LateCoremod.Report coremods = LateCoremod.apply(coremodJars, rollback);
             if (!coremods.ok()) {
@@ -476,7 +477,7 @@ public final class HotAddEngine {
             }
 
             // 3. ModList: FML now knows about the mod.
-            stage = Stage.MODLIST;
+            stage = stagePlan.enter(Stage.MODLIST);
             ModListInjector.Snapshot modListSnapshot = ModListInjector.snapshot();
             rollback.add("mod list", () -> ModListInjector.restore(modListSnapshot));
             List<ModContainer> containers = new ArrayList<>();
@@ -512,7 +513,7 @@ public final class HotAddEngine {
             //    A registry window must open before construction: some mods call
             //    Registry.register directly in the constructor. For registry content the normal
             //    startup order is construct → RegisterEvent → freeze → common setup.
-            stage = Stage.CONSTRUCT;
+            stage = stagePlan.enter(Stage.CONSTRUCT);
             // Snapshot the game-bus owners before the mod is constructed: FML registers
             // its @EventBusSubscriber methods during construct, and a later failure must
             // take them off again (otherwise a retry registers them twice).
@@ -591,7 +592,7 @@ public final class HotAddEngine {
             }
 
             if (registryContent) {
-                stage = Stage.REGISTRY;
+                stage = stagePlan.enter(Stage.REGISTRY);
                 RegistryStage.commit(containers);
                 try {
                     // Cosmetic refresh (creative tabs); never fail a committed add for it.
@@ -633,7 +634,7 @@ public final class HotAddEngine {
                 ModReloader.LOGGER.warn("[ModReloader] capability replay skipped: {}",
                         capabilityReplay.describe());
             }
-            stage = Stage.EVENT;
+            stage = stagePlan.enter(Stage.EVENT);
             FmlEvents.finishAll(containers);
             try {
                 // Startup order: registries frozen -> common setup -> client setup ->
@@ -683,7 +684,7 @@ public final class HotAddEngine {
             if (mixinsApplied) {
                 hooks.rebuildShaderInstances();
             }
-            stage = Stage.PACK;
+            stage = stagePlan.enter(Stage.PACK);
             Capabilities.Result packCapability =
                     Capabilities.get(Capabilities.Capability.RESOURCE_PACKS);
             if (packCapability.available()) {
@@ -708,7 +709,7 @@ public final class HotAddEngine {
             //    was never in it. Inject the jar as a data pack and run the vanilla
             //    /reload path. Ordering matters: the registry commit above must be
             //    done, otherwise recipe ingredients and loot item ids resolve to air.
-            stage = Stage.DATAPACK;
+            stage = stagePlan.enter(Stage.DATAPACK);
             DatapackStage.Result datapack = hooks.reloadDataPacks(primaryInfo, ids);
             ModReloader.LOGGER.info("[ModReloader] datapack {}: {}",
                     datapack.applied() ? "applied" : "skipped", datapack.detail());
@@ -793,19 +794,7 @@ public final class HotAddEngine {
     }
 
     private static FailureKind kindFor(Stage stage) {
-        return switch (stage) {
-            case MIXIN -> FailureKind.MIXIN_CONFIG;
-            case COREMOD -> FailureKind.COREMOD;
-            case MODULE -> FailureKind.MODULE;
-            case MODLIST -> FailureKind.MODLIST;
-            case CONSTRUCT -> FailureKind.CONSTRUCT;
-            case REGISTRY -> FailureKind.REGISTRY;
-            case EVENT -> FailureKind.EVENT;
-            case PACK -> FailureKind.RESOURCE_PACK;
-            case DATAPACK -> FailureKind.DATAPACK;
-            case VALIDATE -> FailureKind.INVALID_METADATA;
-            case NONE -> FailureKind.UNKNOWN;
-        };
+        return AddStagePlan.defaultFailure(stage);
     }
 
     private static Result fail(Rollback rollback, String message) {

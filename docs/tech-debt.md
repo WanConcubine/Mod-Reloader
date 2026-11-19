@@ -3,16 +3,58 @@
 > 只记录**结构性**问题与可升级点；实现进度见 [status.md](status.md)。
 > 原则：先修"会让我们说错话/悄悄坏掉"的，再修"好改但收益小"的；不为未来可能的需求预先抽象。
 
-## 事实盘点（2026-11-16，P1/P2 收口之后）
+## 事实盘点（2026-11-19 复审）
 
 | 指标 | 现状 |
 |---|---|
-| Java 代码 | **17624 行 / 13 个包**（`main` 9966 / 65 文件 + `dev` 7118 / 30 文件 + `test` 540 / 5 文件） |
-| `dev/` 夹具 | **30 文件 / 7118 行 ≈ 40%**，独立 `src/dev/java` source set；**不在发布 jar 里**（jar 内 0 条 `dev/modreloader/dev/`） |
-| 反射 / Unsafe 站点 | **19 个文件**（mixin、ModList、module、网络、资源包、注册表同步、事件总线快照、JVM 等） |
-| Java 单测 | **29**（`./gradlew test`，不需要游戏；i18n 3 / 命令短名 6 / JiJ 3 / AT 规则 6 / 注册审计 11） |
-| 语言文件 | `en_us` / `zh_cn` 各 **197 key**，键集与 `%s` 占位符由单测核对 |
-| 包依赖 | `hotadd` **不再**依赖 `client` / `server`；`command ↔ client` 循环**已消除**（2026-11-16：client → command 单向）；剩 `client → server`（集成服务器的命令重放）、`diagnose → ui`（文案） |
+| Java 代码 | **25 720 行 / 136 文件**（`main` 15 802 / 85 + `dev` 8 314 / 35 + `test` 1 604 / 16） |
+| `hotadd` 包 | **7 559 行**；`HotAddEngine.add` 单方法 **70–773 行（约 700 行）** |
+| 反射 / Unsafe 站点 | **228 处 / 32 个文件**（约占 main 文件 25%）：mixin、注入器、ModList、module、注册表、网络、资源包、启动器锁 |
+| 一次性事件重放 | **17 处**，覆盖 12+ 种事件，全部手写（命令、payload、菜单/渲染器/颜色/层/粒子…） |
+| Java 单测 | **98**（新增 `AddStagePlan` 5 个）；引擎主流程仍以真机 L1 harness 为主要证据 |
+| 语言文件 | `en_us` / `zh_cn` 各 197 key（未变） |
+| 包依赖 | `hotadd` 不依赖两侧；`client → command` 单向；剩 `client → server`（集成服命令重放）与 `diagnose → ui` |
+
+## 2026-11-19 复审（链路视角）
+
+**结论**：严重技术债是**集中**的，不是全面腐烂。核心矛盾是我们用一条 700 行的顺序流程**重实现 FML 的加载顺序**，
+而真实契约散落在 FML 内部。2026-11-19 的三个问题同源：
+
+- **54**：直接 transform 的锁序（B→A）与世界生成线程（A→B）反转；
+- **52**：`ServerStarted` 重放太晚，构造后到重放之间服务端会 tick 一个空 handler；
+- **53**：client setup 任务必须在 payload 前，但“包可见”必须在任务前——运行期两个约束互斥。
+
+### P0-5 生命周期顺序没有单一事实源
+
+顺序只存在于 `HotAddEngine.add` 的代码里；阶段可跳过、失败种类、线程归属、副作用都是隐式的。
+任何一次“换个位置试试”都要通读 700 行并跑真机。
+**本次增量**：抽出 `hotadd/AddStagePlan`（顺序 + 默认 FailureKind）与 5 个单测，行为不变，先把契约钉住；
+后续按阶段逐段抽方法，再处理 53 的重排（pack/reload → payload）。
+
+### P0-6 客户端启动期重放是手写清单
+
+17 处 `acceptEvent(new ...)`；历史上每漏一个就是一类 bug（tooltip、shader、层定义）。注册审计能**发现**未覆盖事件，
+但不能**覆盖**。根治方向是让 mod loading 在真实 reload 上下文里跑（启动期语义），与 P0-5 的重排是同一件事。
+
+### P1-12 不可逆与可回滚操作混流
+
+注册表 commit、datapack、资源包、类 redefine 不可逆；失败只剩 `ROLLBACK_PARTIAL`/dirty 文案（问题 50 的回滚
+`VerifyError` 就是回滚自身失败）。缺一个正式的 RunState（clean/dirty）来拒绝后续 add、提示重启。
+
+### P1-13 反射面大且深
+
+228 处、32 文件；能力守卫只验名字不验语义。问题 54 的修复一次性依赖三个事实：
+`transforming_class_loader` 属性、`MixinLaunchPlugin extends Legacy`、锁字段在父类。升级 NeoForge/Mixin 的风险是结构性的。
+
+### P1-14 并发模型是局部补丁
+
+`ServerThreadHop`、render-thread 假设、worldgen 死锁、Mixin blanket 抑制、异步 reload 各管一段；
+没有“阶段 → 线程 / 锁序”的全局规则。
+
+### P2-15 测试与文档
+
+93→98 个单测几乎不碰引擎主流程；L2 缺失、harness 约 600 行重复、本机 noFocus 失效。
+本文档的统计也已从 11-16 的版本刷新（见上表）。
 
 ## P0：会让我们「悄悄说错话」的
 
@@ -109,13 +151,17 @@
 ## 刻意不做（避免过度设计）
 
 - 不引入 DI 容器、不抽象事件总线、不做通用插件系统。
-- 不把 `HotAddEngine.add` 拆成阶段框架：它是 360 行的顺序流程，但回滚与失败分类已经验证过，重写收益不抵风险。
+- 不把 `HotAddEngine.add` 一次性重写成阶段框架：回滚与失败分类已经验证过，重写收益不抵风险。
+  **2026-11-19 起改为渐进式**：先阶段表（`AddStagePlan` + 单测），再逐段抽方法，每次行为可回归；
+  53 的重排（pack/reload → payload）是这条渐进路线的第一个真实用例。
 - 不为"未来可能支持任意 mod"预留适配器接口——等贵妃级真的按 mod 写适配器时再抽。
 
 ## 建议的动手顺序
 
-1. ✅ P1-4（`command ↔ client` 循环，客户端装饰命令树；已完成 2026-11-16）
-2. P1-5（`OneShotReplay`，同时把贵妃级的 `RegisterEvent` 重放位置留好）
-3. P1-6（harness 抽 `TestWorld` / `TestConnection`）
-4. P2-10（CI：分析器单测 + `./gradlew build`；`libs/` 反射化已于 2026-11-16 完成）
-5. P2-11（✅ 已完成 2026-11-16）
+1. ✅ 阶段表与顺序测试（2026-11-19：`AddStagePlan` + `AddStagePlanTest`，98 测试绿）
+2. 逐段抽方法：VALIDATE/MODULE 先抽（纯校验，最安全），再 MIXIN/COREMOD
+3. 借问题 53 重排 PACK 与 payload 阶段（用阶段表约束，不再散落修改）
+4. `OneShotReplay` 统一出口（P1-5），同时覆盖 client 重放清单
+5. harness 抽 `TestWorld` / `TestConnection`（P1-6）
+6. CI 远端正跑一次（P2-10）
+7. 旧条目：P1-4 ✅、P2-11 ✅（见下）
