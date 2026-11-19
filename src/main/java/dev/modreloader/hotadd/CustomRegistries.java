@@ -5,6 +5,7 @@ import net.minecraft.core.WritableRegistry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.fml.ModContainer;
+import net.neoforged.neoforge.registries.BaseMappedRegistry;
 import net.neoforged.neoforge.registries.NewRegistryEvent;
 import net.neoforged.neoforge.registries.RegistryManager;
 
@@ -52,10 +53,14 @@ import java.util.Set;
 public final class CustomRegistries {
     private static final MethodHandle EVENT_CTOR = eventConstructor();
     private static final MethodHandle FILL = fillHandle();
+    private static final MethodHandle UNFREEZE = unfreezeHandle();
 
     private static boolean open;
     private static Object previousPending;
     private static final Set<ResourceLocation> added = new LinkedHashSet<>();
+    /** Root registry keys before the window opened (construct may add registries directly). */
+    private static Set<ResourceLocation> beforeOpen = Set.of();
+    private static boolean rootUnfrozen;
 
     private CustomRegistries() {
     }
@@ -70,6 +75,20 @@ public final class CustomRegistries {
                 new HashSet<ResourceLocation>());
         open = true;
         added.clear();
+        beforeOpen = new LinkedHashSet<>(BuiltInRegistries.REGISTRY.keySet());
+        // Startup order: mods construct while the root registry is still writable;
+        // NeoForge only freezes it in NewRegistryEvent.fill(). Create registers its
+        // registries straight into the root during construct (CreateBuiltInRegistries),
+        // which fails on a frozen runtime root otherwise (known issue 59).
+        try {
+            UNFREEZE.invoke((BaseMappedRegistry<?>) BuiltInRegistries.REGISTRY);
+            rootUnfrozen = true;
+            ModReloader.LOGGER.info(
+                    "[ModReloader] root registry unfrozen for construct (startup order)");
+        } catch (Throwable t) {
+            restore(false);
+            throw new IllegalStateException("cannot unfreeze the root registry", t);
+        }
         rollback.add("custom registries", CustomRegistries::restoreOnRollback);
         ModReloader.LOGGER.info(
                 "[ModReloader] custom-registry window open (mods may create registries during construct)");
@@ -85,7 +104,7 @@ public final class CustomRegistries {
         if (!open) {
             return List.of();
         }
-        Set<ResourceLocation> before = new LinkedHashSet<>(BuiltInRegistries.REGISTRY.keySet());
+        Set<ResourceLocation> before = beforeOpen;
         NewRegistryEvent event = (NewRegistryEvent) EVENT_CTOR.invoke();
         for (ModContainer container : containers) {
             container.acceptEvent(event);
@@ -135,6 +154,12 @@ public final class CustomRegistries {
         UnsafeAccess.setStatic(RegistryManager.class, "pendingModdedRegistries", previousPending);
         previousPending = null;
         added.clear();
+        beforeOpen = Set.of();
+        if (rootUnfrozen) {
+            rootUnfrozen = false;
+            // fill() freezes at the end of replay; this also covers failure before replay.
+            freezeRootQuietly();
+        }
     }
 
     /**
@@ -184,6 +209,15 @@ public final class CustomRegistries {
         try {
             return UnsafeAccess.trusted().findVirtual(
                     NewRegistryEvent.class, "fill", MethodType.methodType(void.class));
+        } catch (Throwable t) {
+            throw new ExceptionInInitializerError(t);
+        }
+    }
+
+    private static MethodHandle unfreezeHandle() {
+        try {
+            return UnsafeAccess.trusted().findVirtual(
+                    BaseMappedRegistry.class, "unfreeze", MethodType.methodType(void.class));
         } catch (Throwable t) {
             throw new ExceptionInInitializerError(t);
         }

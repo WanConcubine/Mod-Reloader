@@ -934,6 +934,18 @@
       ],
       "expect": {},
       "notes": "Sodium 的 AT 在内嵌 sodium-mod jar；验证 nested late AT。"
+    },
+    {
+      "id": "moonlight-lateat",
+      "title": "内容前置 + late AT：Moonlight → Supplementaries",
+      "jbr": true,
+      "late_at": true,
+      "jars": [
+        "moonlight",
+        "supplementaries"
+      ],
+      "expect": {},
+      "notes": "回归：CustomRegistries 窗口（NewRegistryEvent + fill）在根注册表解冻改动后仍应 ok。"
     }
   ]
 }

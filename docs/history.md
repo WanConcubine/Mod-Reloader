@@ -1786,3 +1786,22 @@ mcwifipnp 1.9.0，并登记 10 个场景（含 lateAt 对照）。全部在 macO
 
 构建：`./gradlew build` 绿（93 单测）。
 结论：嵌套 AT 不再是 Sodium/Iris/Create 的主因；三者分别卡在同 modId 模块、类级 AT、注册表冻结。
+
+## 2026-11-19（Create 通过：构造期解冻根注册表）
+
+根因：Create 的 `CreateBuiltInRegistries` 在构造期直接 `RegistryBuilder.create()` + `BuiltInRegistries.REGISTRY.register`；
+启动期根注册表在 construct 阶段仍可写（`NewRegistryEvent.fill()` 才冻结），运行期是冻结的，于是
+`Registry is already frozen (minecraft:root / create:arm_interaction_point_type)`。
+
+改动：`CustomRegistries.open` 用 trusted lookup 调 `BaseMappedRegistry.unfreeze()` 解冻根注册表，
+`fill()`/`close()`/回滚时重新冻结；`beforeOpen` 快照改在 open 时取，使构造期直接注册的表也计入 `added`。
+
+验证：
+- `create-lateat`：**ok=true**，blocks 1060→1703、items 1333→2032；hot-added [flywheel, ponder, create]，
+  6 个 mixin config、约 70 个类 redefine（含 RenderSystem/GlStateManager/Gui）。L1，玩法未验。
+- `moonlight-lateat` 回归：Moonlight ok=true（3 个自定义注册表、blocks 1060→1061、items 1333→1335）。
+  Supplementaries 随后在 MIXIN 失败：`MapRenderer$MapInstance: MixinTransformerError`，回滚 late AT 成功；
+  该目标先被 Moonlight 的 late AT 重定义，属问题 47 同族，与注册表改动无关（问题 60）。
+- 构建：`./gradlew build` 绿。
+
+白名单：Create（JBR）→ J1 candidate；计数变为 JBR J1×25 / J2×1 / BLACK×5。

@@ -49,6 +49,7 @@
 | **专用服热加** | 命令 93→94、tick 到达、payload E1/E2/E3（含跨进程）、dist 门禁 + 回滚、`resource_packs=n/a` | [server-hotadd.md](features/server-hotadd.md) |
 | **GUI / 监听** | EasyLAN 检测→加载、坏 jar 失败屏、贵妃级实验加载、LSP 回滚屏、ignore→restore、世界内 toast、删除→拷回 | [gui-mod-watcher.md](features/gui-mod-watcher.md) |
 | **贵妃级 add-only** | blocks 1060→1061 / items 1333→1334 / states +1、stoneId 稳定；放置存盘 + 重启读档；创造栏 `rebuilt 14 tab(s)` | [t4-registry-hotadd.md](features/t4-registry-hotadd.md) |
+| **大内容热加（Create）** | JBR+lateAt 下 ok=true；blocks 1060→1703、items 1333→2032；同批 flywheel/ponder、6 个 mixin config、约 70 类 redefine（L1，玩法未验） | pipeline `create-lateat`；[status 问题 59](status.md) |
 | **自定义注册表** | `NewRegistryEvent` 重放：构造期窗口 + 只对新容器 fire + `fill()`；夹具 `registryfixture:trades` `custom registry RESULT: PASS`；Moonlight 建 3 个注册表、commit 90→92、`ok=true` | `-PverifyCompat=<jar> -PverifyCustomRegistry=<id>`；[research-newregistry-hotadd.md](research-newregistry-hotadd.md) |
 | **datapack 热加载** | dogfood recipes 0→164 / loot 0→75、真实合成与掉落；标题屏 + 新世界可用维度；**删除/更新实测不可行** | [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) §9/§10；`-PverifyDatapack`、`-PverifyWorldgen` |
 | **dogfood 玩法** | 七表非空；锤/筛/合成命中；`beRenderers 6/6`、图标 `181/181`；创造栏第 2/2 页、182 项 | [dogfood-gameplay.md](features/dogfood-gameplay.md) |
@@ -201,10 +202,15 @@
     启动期顺序是“注册表冻结 → common setup → client setup → renderers”；现已把 staged 的层/渲染器重放移到
     `FmlEvents.finishAll` + `RegistryStage.commit` 之后（仍在资源包注入之前），层先于渲染器、全容器先层不变。
     **修复后的 jar 尚未在真机重跑 Mekanism**（用户时间到）；下次直接热加 Mekanism 复验。
-59. **Create 的自定义注册表在构造期报「已冻结」（2026-11-19）**：`stage=CONSTRUCT` 抛
-    `IllegalStateException: Registry is already frozen (trying to add key ResourceKey[minecraft:root / create:arm_interaction_point_type])`。
-    嵌套 AT 已支持后暴露的新边界；`CustomRegistries` 的 `NewRegistryEvent` + `fill()` 没有覆盖该注册表的创建/写入时机，
-    待查（可能是静态初始化或直接 `RegistryBuilder` 冻结）。
+59. ✅ **Create 的自定义注册表在构造期报「已冻结」（2026-11-19，已修）**：Create 的 `CreateBuiltInRegistries` 在构造期
+    直接用 `RegistryBuilder.create()` 建表并注册进 `BuiltInRegistries.REGISTRY`。启动期根注册表在 construct 时仍可写
+    （`NewRegistryEvent.fill()` 才冻结），运行期却是冻结的。现在 `CustomRegistries.open` 同步解冻根注册表
+    （`BaseMappedRegistry.unfreeze`，经 trusted lookup），`fill()`/`close()`/回滚时重新冻结。
+    复跑 `create-lateat`：**ok=true**，blocks 1060→1703、items 1333→2032，同批 flywheel/ponder（L1，玩法未验）。
+60. **Moonlight 之后热加 Supplementaries 的 Mixin 失败（2026-11-19 复跑）**：`moonlight-lateat` 中 Moonlight ok=true，
+    Supplementaries 在 `MIXIN` 阶段失败：`transform net.minecraft.client.gui.MapRenderer$MapInstance:
+    MixinTransformerError: An unexpected critical error was encountered`（回滚 late AT 成功）。该目标先被 Moonlight
+    的 late AT 重定义（1 条规则），再被自己的 mixin 处理，属问题 47 同族；与本次注册表改动无关，待复现。
 
 ## 玩家侧原则（ADR-0015，2026-11-18 最终）
 
@@ -219,7 +225,7 @@
 > **当前交接（2026-11-19，已推送 `47a06cd`）**：Windows/PCL2/JBR 真机联调收尾：构建链 93/93、late AT 保 AT（architectury 311 规则）、
 > Jade 热加成功；新增问题 56（新增字段不初始化旧实例，字体变暗）、57（轮询把替换 jar 当候选，已修）、
 > 58（层/渲染器重放早于注册表提交，已修待 Mekanism 复验）。
-> JBR 计数 **J1×24 / J2×1 / BLACK×6**。下一项：① Mekanism 复验（问题 58）；② 问题 54（xaerolib mixin 挂起，先 jstack）
+> JBR 计数 **J1×25 / J2×1 / BLACK×5**。下一项：① Mekanism 复验（问题 58）；② 问题 54（xaerolib mixin 挂起，先 jstack）
 > 与 53（client setup 早于热加包注入）；③ 问题 52/50（服务端事件重放未验证、回滚 VerifyError）；④ CraftTweaker 复跑；
 > ⑤ 类级 `-f` 启动期替代与流水线 L2。
 > 证据在 [history.md](history.md)；JBR 在 `run/jbr-21.0.11`（gitignored），语料 `/tmp/modreloader-corpus`。
@@ -232,7 +238,7 @@
 | **P1-3** | Git 收尾 | 本轮及 JBR/Windows 联调已推送（`47a06cd`）；观察 Actions、需要时打 tag | Actions 绿 |
 | **P0-新** | 流水线 L2 | 标题屏热加 → 建世界 → N tick → HUD/按键/截图；先 minimap/mouse-gestures | 断言 + 截图证据 |
 | **P0-新** | 语料扩到 20–30 个常用模组 | 小地图/JEI/HUD/输入/前置库；`check` 进 PR | 报告 + 矩阵 |
-| **P0-新** | 模组白名单实测（所有者驱动） | 61 行：stock T1×7 / BLACK×23；JBR J1×24 / J2×1 / BLACK×6；candidate 由所有者复测转 verified | TSV + 视图同步 |
+| **P0-新** | 模组白名单实测（所有者驱动） | 61 行：stock T1×7 / BLACK×23；JBR J1×25 / J2×1 / BLACK×5；candidate 由所有者复测转 verified | TSV + 视图同步 |
 | **P0-新** | ✅ Xaero's World Map config channel | `XaeroLibChannels` 窗口（`ConfigChannelRegistry.frozen`），仅对引用该类的 jar 生效；World Map `ok=true isLoaded=true` | 已转 J2 |
 | **P0-新** | 服务端一次性事件（问题 52） | `ServerLifecycleReplay` 已实现（定向调用新增监听器 + integrated server 兜底），**未验证**：进入世界复跑卡在 54 | World Map J1 |
 | **P0-新** | xaerolib mixin 阶段挂起（问题 54） | 先 `jstack` 留线程栈再杀；怀疑 Mixin/transform 锁或常驻 guard | 复跑不挂 |
@@ -244,7 +250,8 @@
 | **P0-新** | ✅ 模型层/Skull 模型（问题 49） | `RegisterLayerDefinitions` 重放 + `EntityModelSet` roots 重建；全容器先层后渲染器；FMLClientSetup 窗口内放开 client-loading 门禁。Supplementaries 层 213→234、`ok=true` | 批次复跑 |
 | **P1-新** | 回滚 VerifyError（问题 50） | 失败回滚 late-AT 类时 `VerifyError`；保证失败后是可重启的干净状态并明确提示 | 复跑 |
 | **P1-新** | 同 modId 嵌套（Sodium 式外壳） | 外壳 jar 与内嵌实现同 modId → 模块名 `sodium` 冲突（stage=MODULE）；需把内嵌实现作为模块/容器、外壳降级为库 | Sodium 越过 MODULE |
-| **P1-新** | Create 的自定义注册表冻结（问题 59） | `create:arm_interaction_point_type` 在构造期已冻结；对齐 `CustomRegistries` 窗口与创建时机 | Create 越过 CONSTRUCT |
+| **P1-新** | ✅ Create 的自定义注册表冻结（问题 59） | `CustomRegistries.open` 在构造期解冻根注册表、`fill/close/回滚` 再冻结；复跑 `create-lateat` ok=true（blocks→1703、items→2032） | Create J1 |
+| **P1-新** | Moonlight 之后 Supplementaries 的 Mixin 失败（问题 60） | `MapRenderer$MapInstance` 先被 late AT 重定义，再被 mixin 处理；问题 47 同族，待复现 | 复跑 |
 | **P0-新** | late AT 硬化 | L2 功能（Jade tooltip/JEI 界面）、Mekanism/AE2、多 mod 冲突、嵌套 AT、Windows/Linux、默认 UX | [late-at.md](features/late-at.md) |
 | **P0-新** | 消除“JBR 后仍需重启”的缺口 | JBR BLACK 逐个修；**不得**把重启当正常路径（ADR-0015）。结构性的（JourneyMap 类级 AT）写明原因 | 缺口清零或写明结构性不可行 |
 | **P1-新** | JBR 端到端 + 探针 | 剩余 Windows/PCL2 真机、GUI 按钮、真实 redefine 探针 | [jbr-support.md](features/jbr-support.md) §6 |
