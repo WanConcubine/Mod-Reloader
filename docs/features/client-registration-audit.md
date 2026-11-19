@@ -9,7 +9,7 @@
 ## 1. 问题
 
 NeoForge 的 mod bus 上有一批**只在启动时 fire 一次**的注册事件。热加的模组永远错过它们，
-所以它的注册要么不存在、要么在第一次用到时炸。我们一直是**手写枚举**：漏一个就是一类 bug。
+所以它的注册要么不存在、要么在第一次用到时炸。重放项一直是**手写枚举**：漏一个就是一类 bug。
 
 代价已经付过六次：`RegisterMenuScreensEvent`（机器 GUI 打不开）、`EntityRenderersEvent.RegisterRenderers`（内部内容不渲染）、
 `RegisterColorHandlersEvent`（瓷桶不染色）、`RegisterClientExtensionsEvent`（流体外观）、`RegisterClientReloadListenersEvent`（客户端表不读），
@@ -28,13 +28,14 @@ NeoForge 的 mod bus 上有一批**只在启动时 fire 一次**的注册事件�
 
 - 每个事件的注册面不同（map / registry / listener list / lambda），构造实参也不一样；
 - 往**真身**重放会给已加载模组重复注册 → 我们已经踩过（`RegisterClientExtensionsEvent` 的静态 map 重复 key 直接抛）；
-- 有些事件只在特定生命周期有效（`NewRegistryEvent` / `DataPackRegistryEvent` 在启动后关闭），重放只会炸；
+- 有些事件只在特定生命周期有效（`DataPackRegistryEvent` 在启动后关闭；`NewRegistryEvent` 要靠 `CustomRegistries` 的构造期窗口才能重放）；
 - 有些事件**不是一次性**的（`RenderLevelStageEvent` 每帧、`TextureAtlasStitchedEvent` 每次重载、`BuildCreativeModeTabContentsEvent` 每次重建页签），
   它们本来就会再次 fire，不需要重放。
 
 现有做法（临时 sink → 只合并新条目 → 换回真 map + `container.acceptEvent` 只投给新容器）是对的，但**逐事件**，不能反射一把梭。
 
 所以分工是：**审计负责把「漏」变成清单，replay 仍然逐个事件手写**。
+2026-11-19 起，两条路径共用 [`inspect/ReplayCatalog`](../../src/main/java/dev/modreloader/inspect/ReplayCatalog.java)：重放调用点通过 `OneShotReplay.fire(container, ReplayCatalog.X, event)` 传入同一个常量，helper 在运行期校验“声明的名字 == 实际发布的事件类”，审计的 `covered` 也直接读这个列表。层定义此前被审计误标为 behavior，就是两份清单漂移的例子。
 
 ## 3. 实现
 
@@ -130,10 +131,11 @@ reload listener）时补一次。夹具新增 `clientfixture:marker`（JSON 在�
 
 **已知崩溃（拒绝）**：`RegisterSpriteSourceTypesEvent`。
 
-**行为类（warn）**：`ModifyDefaultComponentsEvent`、`NewRegistryEvent`、`DataPackRegistryEvent.*`、
+**行为类（warn）**：`ModifyDefaultComponentsEvent`、`DataPackRegistryEvent.*`、
 `ModifyRegistriesEvent`、`EntityAttributeCreationEvent`、`EntityAttributeModificationEvent`、`RegisterSpawnPlacementsEvent`、
 `BlockEntityTypeAddBlocksEvent`、`RegisterDataMapTypesEvent`、`RegisterCauldronFluidContentEvent`、`AddPackFindersEvent`、
-`ExtendPoiTypesEvent`、`EntityRenderersEvent.RegisterLayerDefinitions`。
+`ExtendPoiTypesEvent`。（`NewRegistryEvent` 与 `RegisterLayerDefinitions` 已于 2026-11-18 重放，2026-11-19 起归入
+`ReplayCatalog` 的 covered。）
 
 **无已知症状（warn）**：`RegisterDimensionSpecialEffectsEvent`、
 `RegisterDimensionTransitionScreenEvent`、`RegisterEntitySpectatorShadersEvent`、`RegisterJsonAnimationTypesEvent`、
@@ -265,7 +267,8 @@ registration audit [appleskin]: 4 mod-bus event(s); covered [fml.event.lifecycle
 | `EntityRenderersEvent.RegisterLayerDefinitions` | ~~behavior~~ → **covered**（2026-11-18） | `client/ClientRegistrationReplay#replayLayerDefinitions`：fire 事件后调用 `EntityModelSet.onResourceManagerReload` 重建 roots（`ClientHooks` 的静态表合并进来）；层回放与 renderer 重建按"全容器先层后渲染器"分阶段。Supplementaries 实测 213→234 层、skull 模型可用 |
 | `RegisterColorHandlersEvent.ColorResolvers` | silent | **不做（成本/收益）**：群系着色 resolver 是 `ColorResolver` 列表，重放本身不难，但受影响的只有群系色调（草地/树叶/水），而狗头语料里没有只有 resolver 才正确的模组；等有真实 subject 再做，现有 `.Block/.Item` 两种已覆盖 |
 | `ModifyDefaultComponentsEvent` | behavior | **不做**：默认组件在启动时被烘进每个 `Item` 的组件表，重放要逐 item 重建 `DataComponentMap` 并替换 `Item.components`；属于"改已注册对象"而不是"往 map 里加"，风险高于收益（缺组件的症状是"物品行为少一点"） |
-| `NewRegistryEvent` / `ModifyRegistriesEvent` | behavior | **不做（框架禁止）**：NeoForge 启动后关闭自建注册表（`pendingModdedRegistries = null`），运行时创建 registry 无处可挂 |
+| `NewRegistryEvent` | ~~behavior~~ → **covered**（2026-11-18） | `hotadd/CustomRegistries`：构造期解冻根注册表、只对新容器 fire、再调 `fill()`；夹具 `registryfixture:trades` + Moonlight 3 个注册表实测 |
+| `ModifyRegistriesEvent` | behavior | **不做**：修改已存在的注册表内容；缺的是"往别人的表里塞"，等价于删除/更新路径，未支持 |
 | `DataPackRegistryEvent.*` | behavior | **不做**：datapack registry 的内容由数据加载（`RegistryDataLoader`）在 reload 时构建；热加 mod 的这类内容本来就要等世界加载/`/reload`，不属于"注册面漏了" |
 | `EntityAttributeCreationEvent` / `EntityAttributeModificationEvent` | behavior | **不做（没有 subject）**：都是实体属性表（`DefaultAttributes.ATTRIBUTE_MAP` 静态不可变），重放要重建整表；我们的热加语料没有实体模组，失败症状是"新实体没有属性"——等实体支持时一起做 |
 | `RegisterSpawnPlacementsEvent` | behavior | 同上（`SpawnPlacements.DATA_BY_TYPE`），没有实体模组就没有验证对象 |

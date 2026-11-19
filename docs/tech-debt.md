@@ -38,6 +38,12 @@ payload 之前）。剩下的顺序风险从“700 行隐式流程”收敛为�
 17 处 `acceptEvent(new ...)`；历史上每漏一个就是一类 bug（tooltip、shader、层定义）。注册审计能**发现**未覆盖事件，
 但不能**覆盖**。根治方向是让 mod loading 在真实 reload 上下文里跑（启动期语义），与 P0-5 的重排是同一件事。
 
+**2026-11-19 增量**：统一出口落地为 `inspect/ReplayCatalog` + `hotadd/OneShotReplay.fire`。
+21 个重放调用点传同一个事件名常量，helper 运行期校验名字与实际事件类；`RegistrationAudit` 的 `covered`
+直接读 catalog，不再有第二份手写清单（顺带纠正：层定义 2026-11-18 已重放，却一直被审计标为 behavior）。
+单测 `ReplayCatalogTest` 固定唯一性/关键成员/条数；真机 clientfixture、minimap、moonlight-lateat 无 mismatch 日志。
+**剩余**：这仍是“逐事件手写 + 审计兜底”，不是让 mod loading 回到真实 reload 上下文；事件类替换时靠 warn 而非编译期约束。
+
 ### P1-12 不可逆与可回滚操作混流
 
 注册表 commit、datapack、资源包、类 redefine 不可逆；失败只剩 `ROLLBACK_PARTIAL`/dirty 文案（问题 50 的回滚

@@ -1956,3 +1956,22 @@ tasks 在重载内执行——此时 live manager 已含 mod 包。所以 53 只
   GUI 层与物品装饰 `RESULT: PASS`。
 - **payload 回归为既有失败**：`-PverifyPayload`（标题屏加 payloadfix 后建世界）在 HEAD `8e1523d`
   同样 `FAIL`（40s 无 ping；适配日志正常），非本次改动引入；记入 status 验证缺口。
+
+## 2026-11-19（技术债 P0-6：一次性重放单一出口）
+
+病灶：注册审计的 `COVERED` 是第二份手写清单，且已漂移——层定义 2026-11-18 起由
+`ClientRegistrationReplay.replayLayerDefinitions` 重放（含 `EntityModelSet` roots 重建），审计却仍把它列在
+`BEHAVIOR`，报告与实际能力不一致。
+
+实现：
+- `inspect/ReplayCatalog`：21 个启动期事件的唯一列表（纯字符串，专用服也能加载）。
+- `hotadd/OneShotReplay.fire(container, expectedEvent, event)`：所有重放调用点（FmlEvents、ClientPlatformHooks、
+  ClientRegistrationReplay、GuiLayerReplay、ItemDecoratorReplay、RecipeBookCategoryReplay、ShaderReplay、
+  NetworkAdaptation、RegistryStage、CapabilityReplay）统一走这里；helper 校验事件类名，不匹配只 warn
+  （失败策略仍留在调用点：生命周期/payload/注册表要 fail，装饰性重放只 warn）。
+- `RegistrationAudit` 的 `covered` 改读 catalog；层定义从 BEHAVIOR 移入 covered。
+
+验证：单测 **103**（`ReplayCatalogTest` 3 个 + 审计层定义/自定义注册表各 1 个）；`./gradlew build` 绿；
+clientfixture（GUI 层/物品装饰）PASS、`minimap` PASS、`moonlight-lateat` 两个 `ok=true`，三个日志均无
+`replay event mismatch`。
+剩余：重放仍是逐个事件手写 + 审计兜底，不是让 mod loading 回到真实 reload 上下文；事件类替换靠运行期 warn。

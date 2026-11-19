@@ -1,6 +1,8 @@
 package dev.modreloader.client;
 
 import dev.modreloader.ModReloader;
+import dev.modreloader.inspect.ReplayCatalog;
+import dev.modreloader.hotadd.OneShotReplay;
 import dev.modreloader.hotadd.UnsafeAccess;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.item.Item;
@@ -76,7 +78,8 @@ public final class ItemDecoratorReplay {
                 before += list.size();
             }
 
-            container.acceptEvent(new RegisterItemDecorationsEvent(decorators));
+            OneShotReplay.fire(container, ReplayCatalog.REGISTER_ITEM_DECORATIONS,
+                    new RegisterItemDecorationsEvent(decorators));
 
             int after = 0;
             for (List<IItemDecorator> list : decorators.values()) {

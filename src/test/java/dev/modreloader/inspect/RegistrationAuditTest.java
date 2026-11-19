@@ -51,6 +51,17 @@ class RegistrationAuditTest {
     }
 
     @Test
+    void layerDefinitionsAreCoveredSinceTheReplayExists() {
+        // 2026-11-18 replay rebuilds EntityModelSet roots; the audit kept grading
+        // them as a behaviour gap until the coverage list moved to ReplayCatalog.
+        RegistrationAudit.Report report = classify(true,
+                "net.neoforged.neoforge.client.event.EntityRenderersEvent$RegisterLayerDefinitions");
+        assertEquals(RegistrationAudit.Severity.COVERED,
+                report.entries().get(0).severity());
+        assertFalse(report.fatal());
+    }
+
+    @Test
     void shadersAreCoveredByTheReplay() {
         // 2026-11-18: ShaderReplay waits for the hot-add resource reload, then
         // posts the event and fills GameRenderer's shader map.
@@ -95,6 +106,16 @@ class RegistrationAuditTest {
         assertFalse(report.fatal());
         assertTrue(report.line().contains("behavior [event.ModifyDefaultComponentsEvent]"),
                 report.line());
+    }
+
+    @Test
+    void customRegistriesAreCoveredSinceTheReplayExists() {
+        // CustomRegistries replays NewRegistryEvent and calls fill(); the audit
+        // graded it as a behaviour gap until the coverage list moved to ReplayCatalog.
+        RegistrationAudit.Report report = classify(true,
+                "net.neoforged.neoforge.registries.NewRegistryEvent");
+        assertEquals(RegistrationAudit.Severity.COVERED, report.entries().get(0).severity());
+        assertFalse(report.fatal());
     }
 
     @Test

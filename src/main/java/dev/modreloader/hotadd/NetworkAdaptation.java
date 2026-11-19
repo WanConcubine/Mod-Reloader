@@ -4,6 +4,7 @@ import dev.modreloader.ModReloader;
 import net.minecraft.network.Connection;
 import net.minecraft.network.ConnectionProtocol;
 import net.minecraft.resources.ResourceLocation;
+import dev.modreloader.inspect.ReplayCatalog;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.ChannelAttributes;
@@ -60,7 +61,8 @@ public final class NetworkAdaptation {
         }
 
         try {
-            container.acceptEvent(new RegisterPayloadHandlersEvent());
+            OneShotReplay.fire(container, ReplayCatalog.REGISTER_PAYLOAD_HANDLERS,
+                    new RegisterPayloadHandlersEvent());
         } catch (Throwable t) {
             return new Result(Set.of(), "payload registration failed: " + rootCause(t));
         } finally {

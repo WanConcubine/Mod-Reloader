@@ -54,7 +54,7 @@
 | **datapack 热加载** | dogfood recipes 0→164 / loot 0→75、真实合成与掉落；标题屏 + 新世界可用维度；**删除/更新实测不可行** | [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) §9/§10；`-PverifyDatapack`、`-PverifyWorldgen` |
 | **dogfood 玩法** | 七表非空；锤/筛/合成命中；`beRenderers 6/6`、图标 `181/181`；创造栏第 2/2 页、182 项 | [dogfood-gameplay.md](features/dogfood-gameplay.md) |
 | **多人** | 相反顺序热加 → `ids match ... (29475 lines)`；未装 jar 的客户端先收通知再被 datapack 同步踢；ack 落日志 | [t4-registry-hotadd.md](features/t4-registry-hotadd.md) §9/§10 |
-| **注册审计**（[ADR-0012](decisions/0012-registration-audit-severity.md)） | 16 jar / 129 引用：71 covered / 24 recurring / 6 datagen / 16 silent / 10 behavior / **1 crash**（Mekanism shader）/ 1 base；crash 在 module 注入前拒绝 | `-PverifyRegAudit=<jars>`；[client-registration-audit.md](features/client-registration-audit.md) §5 |
+| **注册审计**（[ADR-0012](decisions/0012-registration-audit-severity.md)） | 16 jar / 129 引用：71 covered / 24 recurring / 6 datagen / 16 silent / 10 behavior / **1 crash**（Mekanism shader）/ 1 base；crash 在 module 注入前拒绝。**2026-11-19 起 `covered` 由 `inspect/ReplayCatalog` 单一维护**（层定义由 behavior 纠正为 covered；数字待下次审计刷新） | `-PverifyRegAudit=<jars>`；[client-registration-audit.md](features/client-registration-audit.md) §5 |
 | **tier 注册信号** | 按「注册调用 / `*DeferredRegister` 引用」：Jade 贵妃→妃、mekanismgenerators 嫔→贵妃；与 analyzer 一致 | `RegistrySignalTest`（5 单测） |
 | **托管重启（A′/B）** | 「保存并重启」与「用 JBR 重启」：`ProcessBuilder` 直接起 JVM（Windows `javaw`）、子进程标记、argv 用 ProcessHandle/PowerShell；**Windows/PCL2 未验证** | `RelaunchScriptsTest`、`JbrProvisionerTest` |
 | **客户端注册重放** | menu screens / renderers（+dispatcher）/ 颜色 / 扩展 / reload listener / tooltip / item→model / HUD 层 25→31 / 物品装饰 diamond 0→1 / 配方书 `1 new` / **层定义 213→234（staged）**；逐个结论见 §7.1 | `-PverifyAddCommand=<clientfixture> -PverifyGuiLayers=true -PverifyItemDecorators=true`；[client-registration-audit.md](features/client-registration-audit.md) §7.1 |
@@ -68,6 +68,10 @@
 
 ### 已验证
 
+- **一次性重放单一出口（技术债 P0-6，2026-11-19）**：`inspect/ReplayCatalog` 列 21 个会被重放的启动期事件；
+  所有调用点走 `OneShotReplay.fire(container, catalog 常量, event)`，helper 运行期校验“声明名 == 实际事件类”；
+  `RegistrationAudit.covered` 直接读该列表。顺带纠正层定义被审计误标为 behavior（2026-11-18 起其实已重放）。
+  证据：`ReplayCatalogTest` 3 + 审计层定义/自定义注册表测试（单测 **103**）；clientfixture、minimap、moonlight-lateat 均无 mismatch 日志。
 - **资源顺序（问题 53，2026-11-19）**：阶段改为 `… EVENT → PACK → CLIENT → DATAPACK`；先注册 client reload listener，
   再注入包并启动重载（`createReload` 同步换入新 manager），然后跑 `FMLClientSetupEvent` 任务、层/渲染器重放、
   payload、命令。`minimap-addon`：World Map + Minimap 同会话 `ok=true`（此前 World Map 必失败），XaeroPlus 干净拒绝 AT；
@@ -369,7 +373,7 @@
 | **P3-1** | GUI/watcher Phase 3/4 | 主菜单弹窗、失败面板、多候选/依赖排序、同 mod id 冲突 | [gui-mod-watcher.md](features/gui-mod-watcher.md) |
 | **P3-2** | 产品化下一步 | 托管重启端到端、嵌套 mod 容器、可分发形态、coremod target 报告 | [managed-relaunch.md](features/managed-relaunch.md) 未验证项 |
 | **P3-3** | 分析器 Fabric 校准 | intermediary 名 → 核心类识别；置信度校准 | 校准表扩充 |
-| **tech-debt** | `OneShotReplay` 统一出口、harness 样板抽取 | [tech-debt.md](tech-debt.md) | 构建绿 + 回归 |
+| **tech-debt** | ✅ `OneShotReplay` 统一出口（21 个调用点 + `ReplayCatalog` 单一覆盖清单）；剩余 harness 样板抽取 | [tech-debt.md](tech-debt.md) | 构建绿 + 回归 |
 
 ## 最近变更
 

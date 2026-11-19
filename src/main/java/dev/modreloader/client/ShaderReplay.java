@@ -2,6 +2,8 @@ package dev.modreloader.client;
 
 import com.mojang.datafixers.util.Pair;
 import dev.modreloader.ModReloader;
+import dev.modreloader.inspect.ReplayCatalog;
+import dev.modreloader.hotadd.OneShotReplay;
 import dev.modreloader.hotadd.UnsafeAccess;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
@@ -36,8 +38,8 @@ public final class ShaderReplay {
         }
         List<Pair<ShaderInstance, Consumer<ShaderInstance>>> shaders = new ArrayList<>();
         try {
-            container.acceptEvent(new RegisterShadersEvent(
-                    minecraft.getResourceManager(), shaders));
+            OneShotReplay.fire(container, ReplayCatalog.REGISTER_SHADERS,
+                    new RegisterShadersEvent(minecraft.getResourceManager(), shaders));
         } catch (Throwable t) {
             close(shaders);
             ModReloader.LOGGER.warn("[ModReloader] shader registration replay failed", t);

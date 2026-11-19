@@ -1,6 +1,7 @@
 package dev.modreloader.hotadd;
 
 import dev.modreloader.ModReloader;
+import dev.modreloader.inspect.ReplayCatalog;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.Block;
 import net.neoforged.fml.ModContainer;
@@ -98,7 +99,7 @@ public final class CapabilityReplay {
                 bus.addListener(RegisterCapabilitiesEvent.class, probe);
             }
             try {
-                container.acceptEvent(event);
+                OneShotReplay.fire(container, ReplayCatalog.REGISTER_CAPABILITIES, event);
             } finally {
                 if (bus != null) {
                     bus.unregister(probe);

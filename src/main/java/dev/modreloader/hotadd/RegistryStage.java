@@ -1,6 +1,7 @@
 package dev.modreloader.hotadd;
 
 import dev.modreloader.ModReloader;
+import dev.modreloader.inspect.ReplayCatalog;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceKey;
@@ -98,7 +99,8 @@ public final class RegistryStage {
                 continue;
             }
             for (ModContainer container : containers) {
-                container.acceptEvent(newRegisterEvent(key, registry));
+                OneShotReplay.fire(container, ReplayCatalog.REGISTER_EVENT,
+                        newRegisterEvent(key, registry));
             }
             registries++;
         }

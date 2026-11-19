@@ -1,5 +1,6 @@
 package dev.modreloader.hotadd;
 
+import dev.modreloader.inspect.ReplayCatalog;
 import net.neoforged.fml.DeferredWorkQueue;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.ModLoadingContext;
@@ -48,7 +49,8 @@ public final class FmlEvents {
         }
 
         DeferredWorkQueue constructQueue = queue(container, "construct");
-        container.acceptEvent(new FMLConstructModEvent(container, constructQueue));
+        OneShotReplay.fire(container, ReplayCatalog.FML_CONSTRUCT,
+                new FMLConstructModEvent(container, constructQueue));
         constructQueue.runTasks();
     }
 
@@ -77,7 +79,8 @@ public final class FmlEvents {
         List<DeferredWorkQueue> commonQueues = new ArrayList<>();
         for (ModContainer container : containers) {
             DeferredWorkQueue commonQueue = queue(container, "common");
-            container.acceptEvent(new FMLCommonSetupEvent(container, commonQueue));
+            OneShotReplay.fire(container, ReplayCatalog.FML_COMMON_SETUP,
+                    new FMLCommonSetupEvent(container, commonQueue));
             commonQueues.add(commonQueue);
         }
         for (DeferredWorkQueue commonQueue : commonQueues) {
@@ -101,7 +104,8 @@ public final class FmlEvents {
             PlatformHooks.get().acceptClientLifecycle(container);
 
             DeferredWorkQueue completeQueue = queue(container, "complete");
-            container.acceptEvent(new FMLLoadCompleteEvent(container, completeQueue));
+            OneShotReplay.fire(container, ReplayCatalog.FML_LOAD_COMPLETE,
+                    new FMLLoadCompleteEvent(container, completeQueue));
             completeQueue.runTasks();
         }
     }

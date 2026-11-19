@@ -1,6 +1,7 @@
 package dev.modreloader.hotadd;
 
 import dev.modreloader.ModReloader;
+import dev.modreloader.inspect.ReplayCatalog;
 import net.minecraft.core.WritableRegistry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -107,7 +108,7 @@ public final class CustomRegistries {
         Set<ResourceLocation> before = beforeOpen;
         NewRegistryEvent event = (NewRegistryEvent) EVENT_CTOR.invoke();
         for (ModContainer container : containers) {
-            container.acceptEvent(event);
+            OneShotReplay.fire(container, ReplayCatalog.REGISTER_NEW_REGISTRY, event);
         }
         try {
             FILL.invoke(event);

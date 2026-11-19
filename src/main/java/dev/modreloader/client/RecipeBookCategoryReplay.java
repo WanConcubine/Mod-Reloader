@@ -2,6 +2,8 @@ package dev.modreloader.client;
 
 import com.google.common.collect.ImmutableList;
 import dev.modreloader.ModReloader;
+import dev.modreloader.inspect.ReplayCatalog;
+import dev.modreloader.hotadd.OneShotReplay;
 import dev.modreloader.hotadd.UnsafeAccess;
 import net.minecraft.client.RecipeBookCategories;
 import net.minecraft.world.inventory.RecipeBookType;
@@ -60,8 +62,9 @@ public final class RecipeBookCategoryReplay {
                     new HashMap<>(lookups);
 
             int before = aggregate.size() + types.size() + lookups.size();
-            container.acceptEvent(new RegisterRecipeBookCategoriesEvent(
-                    freshAggregate, freshTypes, freshLookups));
+            OneShotReplay.fire(container, ReplayCatalog.REGISTER_RECIPE_BOOK_CATEGORIES,
+                    new RegisterRecipeBookCategoriesEvent(
+                            freshAggregate, freshTypes, freshLookups));
             aggregate.putAll(freshAggregate);
             types.putAll(freshTypes);
             lookups.putAll(freshLookups);

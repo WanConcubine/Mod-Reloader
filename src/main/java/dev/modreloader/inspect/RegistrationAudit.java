@@ -98,49 +98,10 @@ public final class RegistrationAudit {
     }
 
     // ---------------------------------------------------------------------
-    // The three name lists. Keep them in sync with the replay code.
+    // The grading lists. COVERED lives in ReplayCatalog, next to the replay
+    // call sites; the lists below only classify events the runtime does not
+    // (or must not) replay.
     // ---------------------------------------------------------------------
-
-    /**
-     * Events this runtime replays or constructs.
-     *
-     * <p>Client entries are implemented by {@code ClientRegistrationReplay} /
-     * {@code ClientPlatformHooks}; the lifecycle and registry entries by
-     * {@code FmlEvents} / {@code RegistryStage}; payloads by
-     * {@code NetworkAdaptation}.
-     */
-    private static final Set<String> COVERED = Set.of(
-            // FmlEvents (both sides)
-            "net.neoforged.fml.event.lifecycle.FMLConstructModEvent",
-            "net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent",
-            "net.neoforged.fml.event.lifecycle.FMLLoadCompleteEvent",
-            // FmlEvents -> PlatformHooks#acceptClientLifecycle
-            "net.neoforged.fml.event.lifecycle.FMLClientSetupEvent",
-            // ClientRegistrationReplay / ClientPlatformHooks
-            "net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent",
-            "net.neoforged.neoforge.client.event.RegisterMenuScreensEvent",
-            "net.neoforged.neoforge.client.event.EntityRenderersEvent$RegisterRenderers",
-            "net.neoforged.neoforge.client.event.RegisterColorHandlersEvent$Block",
-            "net.neoforged.neoforge.client.event.RegisterColorHandlersEvent$Item",
-            "net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent",
-            "net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent",
-            "net.neoforged.neoforge.client.event.RegisterClientTooltipComponentFactoriesEvent",
-            // client/GuiLayerReplay (copy of the live GuiLayerManager list, then swap)
-            "net.neoforged.neoforge.client.event.RegisterGuiLayersEvent",
-            // client/ItemDecoratorReplay (copy of the live DECORATOR_LOOKUP, then swap)
-            "net.neoforged.neoforge.client.event.RegisterItemDecorationsEvent",
-            // ClientRegistrationReplay: put-only into the live ParticleEngine's map,
-            // replayed against the new container (Balm puts the listener on the
-            // consuming mod's bus, so a targeted replay is what makes it work)
-            "net.neoforged.neoforge.client.event.RegisterParticleProvidersEvent",
-            // client/RecipeBookCategoryReplay (copy of the live manager maps, then putAll)
-            "net.neoforged.neoforge.client.event.RegisterRecipeBookCategoriesEvent",
-            // client/ShaderReplay (after the hot-add resource reload; GameRenderer map)
-            "net.neoforged.neoforge.client.event.RegisterShadersEvent",
-            // NetworkAdaptation / RegistryStage / CapabilityReplay
-            "net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent",
-            "net.neoforged.neoforge.registries.RegisterEvent",
-            "net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent");
 
     /**
      * Fired again after start-up, so a hot-added mod's listener will run on the
@@ -165,7 +126,7 @@ public final class RegistrationAudit {
      * a shader/sprite source is requested). Refused before the module is injected,
      * like an access transformer.
      *
-     * <p>Particle providers used to be on this list; they moved to {@link #COVERED}
+     * <p>Particle providers used to be on this list; they moved to {@link ReplayCatalog}
      * on 2026-11-16 when the replay landed (measured with Balm 21.0.67, whose
      * listener lives on the consuming mod's bus).
      */
@@ -180,7 +141,6 @@ public final class RegistrationAudit {
      */
     private static final Set<String> BEHAVIOR = Set.of(
             "net.neoforged.neoforge.event.ModifyDefaultComponentsEvent",
-            "net.neoforged.neoforge.registries.NewRegistryEvent",
             "net.neoforged.neoforge.registries.ModifyRegistriesEvent",
             "net.neoforged.neoforge.event.entity.EntityAttributeCreationEvent",
             "net.neoforged.neoforge.event.entity.EntityAttributeModificationEvent",
@@ -189,10 +149,7 @@ public final class RegistrationAudit {
             "net.neoforged.neoforge.registries.datamaps.RegisterDataMapTypesEvent",
             "net.neoforged.neoforge.fluids.RegisterCauldronFluidContentEvent",
             "net.neoforged.neoforge.event.AddPackFindersEvent",
-            "net.neoforged.neoforge.common.world.poi.ExtendPoiTypesEvent",
-            // Model layers are baked at start-up: a renderer that needs a new
-            // layer will fail when the entity is first drawn.
-            "net.neoforged.neoforge.client.event.EntityRenderersEvent$RegisterLayerDefinitions");
+            "net.neoforged.neoforge.common.world.poi.ExtendPoiTypesEvent");
 
     private static final Set<String> BEHAVIOR_PREFIXES = Set.of(
             "net.neoforged.neoforge.registries.DataPackRegistryEvent");
@@ -238,7 +195,7 @@ public final class RegistrationAudit {
         if (abstractBases.contains(event)) {
             return Severity.BASE;
         }
-        if (COVERED.contains(event)) {
+        if (ReplayCatalog.covered().contains(event)) {
             return Severity.COVERED;
         }
         if (RECURRING.contains(event) || event.startsWith(MODEL_EVENT_PREFIX)) {

@@ -1,6 +1,8 @@
 package dev.modreloader.client;
 
 import dev.modreloader.ModReloader;
+import dev.modreloader.inspect.ReplayCatalog;
+import dev.modreloader.hotadd.OneShotReplay;
 import dev.modreloader.hotadd.UnsafeAccess;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
@@ -78,7 +80,8 @@ public final class GuiLayerReplay {
                 before.add(layer.name());
             }
             List<GuiLayerManager.NamedLayer> copy = new ArrayList<>(live);
-            container.acceptEvent(new RegisterGuiLayersEvent(copy));
+            OneShotReplay.fire(container, ReplayCatalog.REGISTER_GUI_LAYERS,
+                    new RegisterGuiLayersEvent(copy));
 
             List<ResourceLocation> added = new ArrayList<>();
             for (GuiLayerManager.NamedLayer layer : copy) {

@@ -1,6 +1,8 @@
 package dev.modreloader.client;
 
 import dev.modreloader.ModReloader;
+import dev.modreloader.inspect.ReplayCatalog;
+import dev.modreloader.hotadd.OneShotReplay;
 import dev.modreloader.hotadd.UnsafeAccess;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.packs.PackType;
@@ -140,7 +142,7 @@ public final class ClientRegistrationReplay {
                     minecraft.getEntityModels(),
                     net.minecraft.client.model.geom.EntityModelSet.class, "roots");
             int beforeSize = before == null ? -1 : before.size();
-            container.acceptEvent(
+            OneShotReplay.fire(container, ReplayCatalog.REGISTER_LAYER_DEFINITIONS,
                     new net.neoforged.neoforge.client.event.EntityRenderersEvent.RegisterLayerDefinitions());
             minecraft.getEntityModels().onResourceManagerReload(minecraft.getResourceManager());
             java.util.Map<?, ?> after = UnsafeAccess.get(
@@ -204,7 +206,8 @@ public final class ClientRegistrationReplay {
             }
             ParticleEngine engine = minecraft.particleEngine;
             int before = particleProviderCount(engine);
-            container.acceptEvent(new RegisterParticleProvidersEvent(engine));
+            OneShotReplay.fire(container, ReplayCatalog.REGISTER_PARTICLE_PROVIDERS,
+                    new RegisterParticleProvidersEvent(engine));
             int after = particleProviderCount(engine);
             ModReloader.LOGGER.info("[ModReloader] particle providers replayed: {} new, {} total",
                     before < 0 || after < 0 ? "?" : String.valueOf(after - before),
@@ -245,7 +248,8 @@ public final class ClientRegistrationReplay {
         try {
             Map<Class<? extends TooltipComponent>,
                     Function<TooltipComponent, ClientTooltipComponent>> fresh = new HashMap<>();
-            container.acceptEvent(new RegisterClientTooltipComponentFactoriesEvent(fresh));
+            OneShotReplay.fire(container, ReplayCatalog.REGISTER_CLIENT_TOOLTIP_FACTORIES,
+                    new RegisterClientTooltipComponentFactoriesEvent(fresh));
             if (fresh.isEmpty()) {
                 ModReloader.LOGGER.info(
                         "[ModReloader] tooltip component factories replayed: 0 new");
@@ -294,7 +298,8 @@ public final class ClientRegistrationReplay {
                 return 0;
             }
             ReloadableResourceManager probe = new ReloadableResourceManager(PackType.CLIENT_RESOURCES);
-            container.acceptEvent(new RegisterClientReloadListenersEvent(probe));
+            OneShotReplay.fire(container, ReplayCatalog.REGISTER_CLIENT_RELOAD_LISTENERS,
+                    new RegisterClientReloadListenersEvent(probe));
             List<PreparableReloadListener> fresh = UnsafeAccess.get(
                     probe, ReloadableResourceManager.class, "listeners");
             List<PreparableReloadListener> existing = UnsafeAccess.get(
@@ -353,7 +358,8 @@ public final class ClientRegistrationReplay {
     public static void replayRenderers(ModContainer container) {
         try {
             Minecraft minecraft = Minecraft.getInstance();
-            container.acceptEvent(new EntityRenderersEvent.RegisterRenderers());
+            OneShotReplay.fire(container, ReplayCatalog.REGISTER_RENDERERS,
+                    new EntityRenderersEvent.RegisterRenderers());
             // The providers are only templates; the dispatchers bake the real
             // renderers from them on a resource reload.
             minecraft.getBlockEntityRenderDispatcher()
@@ -370,9 +376,11 @@ public final class ClientRegistrationReplay {
     private static void replayColorHandlers(ModContainer container) {
         try {
             Minecraft minecraft = Minecraft.getInstance();
-            container.acceptEvent(new RegisterColorHandlersEvent.Block(minecraft.getBlockColors()));
-            container.acceptEvent(new RegisterColorHandlersEvent.Item(
-                    minecraft.getItemColors(), minecraft.getBlockColors()));
+            OneShotReplay.fire(container, ReplayCatalog.REGISTER_COLOR_HANDLERS_BLOCK,
+                    new RegisterColorHandlersEvent.Block(minecraft.getBlockColors()));
+            OneShotReplay.fire(container, ReplayCatalog.REGISTER_COLOR_HANDLERS_ITEM,
+                    new RegisterColorHandlersEvent.Item(
+                            minecraft.getItemColors(), minecraft.getBlockColors()));
             ModReloader.LOGGER.info("[ModReloader] color handlers replayed");
         } catch (Throwable t) {
             ModReloader.LOGGER.warn("[ModReloader] color handler replay failed", t);
@@ -401,7 +409,7 @@ public final class ClientRegistrationReplay {
                     .findConstructor(RegisterClientExtensionsEvent.class,
                             MethodType.methodType(void.class))
                     .invoke();
-            container.acceptEvent(event);
+            OneShotReplay.fire(container, ReplayCatalog.REGISTER_CLIENT_EXTENSIONS, event);
 
             int added = 0;
             for (int i = 0; i < fields.length; i++) {

@@ -2,6 +2,8 @@ package dev.modreloader.client;
 
 import dev.modreloader.ModReloader;
 import dev.modreloader.hotadd.DatapackStage;
+import dev.modreloader.hotadd.OneShotReplay;
+import dev.modreloader.inspect.ReplayCatalog;
 import dev.modreloader.hotadd.PlatformHooks;
 import dev.modreloader.hotadd.ModNoticeAckPayload;
 import dev.modreloader.hotadd.RegistrySyncRequestPayload;
@@ -110,7 +112,8 @@ public final class ClientPlatformHooks implements PlatformHooks {
                     net.neoforged.neoforge.client.loading.ClientModLoader.class, "loading", true);
         }
         try {
-            container.acceptEvent(new FMLClientSetupEvent(container, queue));
+            OneShotReplay.fire(container, ReplayCatalog.FML_CLIENT_SETUP,
+                    new FMLClientSetupEvent(container, queue));
             queue.runTasks();
         } finally {
             if (!wasLoading) {
@@ -118,7 +121,8 @@ public final class ClientPlatformHooks implements PlatformHooks {
                         net.neoforged.neoforge.client.loading.ClientModLoader.class, "loading", false);
             }
         }
-        container.acceptEvent(new RegisterKeyMappingsEvent(Minecraft.getInstance().options));
+        OneShotReplay.fire(container, ReplayCatalog.REGISTER_KEY_MAPPINGS,
+                new RegisterKeyMappingsEvent(Minecraft.getInstance().options));
         replayMenuScreens(container);
     }
 
@@ -136,7 +140,8 @@ public final class ClientPlatformHooks implements PlatformHooks {
     private static void replayMenuScreens(ModContainer container) {
         try {
             Map<MenuType<?>, MenuScreens.ScreenConstructor<?, ?>> fresh = new HashMap<>();
-            container.acceptEvent(new RegisterMenuScreensEvent(fresh));
+            OneShotReplay.fire(container, ReplayCatalog.REGISTER_MENU_SCREENS,
+                    new RegisterMenuScreensEvent(fresh));
             Map<MenuType<?>, MenuScreens.ScreenConstructor<?, ?>> screens =
                     UnsafeAccess.getStatic(MenuScreens.class, "SCREENS");
             int added = 0;
