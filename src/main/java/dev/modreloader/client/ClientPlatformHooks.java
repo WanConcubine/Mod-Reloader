@@ -12,6 +12,7 @@ import dev.modreloader.ui.ModReloaderToasts;
 import dev.modreloader.hotadd.UnsafeAccess;
 import dev.modreloader.server.ServerCommands;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraft.network.chat.Component;
@@ -19,6 +20,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.packs.resources.ResourceProvider;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.CreativeModeTabs;
@@ -34,6 +36,8 @@ import net.neoforged.neoforge.registries.RegistryManager;
 import net.neoforged.neoforge.registries.RegistrySnapshot;
 import net.neoforged.neoforgespi.language.IModFileInfo;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodType;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -51,6 +55,30 @@ public final class ClientPlatformHooks implements PlatformHooks {
     private int lastReloadListeners;
     /** Whether the current add requested a resource reload (its shader pass fires the event). */
     private boolean lastReloadRequested;
+    private static MethodHandle reloadShaders;
+
+    @Override
+    public void rebuildShaderInstances() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft == null || minecraft.gameRenderer == null) {
+            return;
+        }
+        try {
+            if (reloadShaders == null) {
+                // Package-private in 1.21.1; it closes the old programs and builds
+                // every ShaderInstance through the (mixin-patched) constructor.
+                reloadShaders = UnsafeAccess.trusted().findVirtual(
+                        GameRenderer.class, "reloadShaders",
+                        MethodType.methodType(void.class, ResourceProvider.class));
+            }
+            reloadShaders.invoke(minecraft.gameRenderer, minecraft.getResourceManager());
+            ModReloader.LOGGER.info(
+                    "[ModReloader] shader instances recreated after the mixin redefine");
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn("[ModReloader] cannot recreate shader instances; rendering "
+                    + "may crash until the game restarts", t);
+        }
+    }
 
     @Override
     public int keyMappingCount() {

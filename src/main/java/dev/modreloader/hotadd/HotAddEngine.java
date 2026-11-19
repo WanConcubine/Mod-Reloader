@@ -676,6 +676,13 @@ public final class HotAddEngine {
 
             // 5. resource packs, after the mod had a chance to register content.
             //    A dedicated server has no resource pack repository.
+            //    A mixin may have added fields to already-created ShaderInstance
+            //    objects (Sodium's uniformCache); the next thing that renders is the
+            //    reload's loading overlay, which would dereference the JVM default
+            //    (null). Rebuild them while nothing is being drawn.
+            if (mixinsApplied) {
+                hooks.rebuildShaderInstances();
+            }
             stage = Stage.PACK;
             Capabilities.Result packCapability =
                     Capabilities.get(Capabilities.Capability.RESOURCE_PACKS);

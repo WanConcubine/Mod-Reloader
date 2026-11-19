@@ -6,6 +6,7 @@ import dev.modreloader.hotadd.Rollback;
 import dev.modreloader.hotadd.UnsafeAccess;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.repository.Pack;
 import net.neoforged.fml.loading.moddiscovery.ModFile;
@@ -147,6 +148,27 @@ public final class ClientResourcePacks {
     private static Screen hiddenScreen;
     private static String reloadLabel = "?";
 
+    /**
+     * Stands in for the hidden screen. A null {@code mc.screen} makes
+     * {@code GameRenderer} call {@code pauseGame} whenever the window loses
+     * focus; at the title screen that builds {@code PauseScreen} with a null
+     * player (known issue 51). A blank, non-pausing Screen keeps the reload
+     * chain from tripping that path. It is initialized manually: setScreen would
+     * fire ScreenEvent.Opening for a screen nobody asked for.
+     */
+    private static final class BlankScreen extends Screen {
+        private BlankScreen() {
+            super(Component.empty());
+        }
+
+        @Override
+        public boolean isPauseScreen() {
+            return false;
+        }
+    }
+
+    private static Screen hiddenBlank;
+
     /** Marks that another reload is needed once the running one finishes. */
     public static void requestReload(Minecraft mc, String label) {
         reloadLabel = label;
@@ -161,7 +183,11 @@ public final class ClientResourcePacks {
         // new mod's screen listeners before its language file is in the manager.
         if (hiddenScreen == null && mc.screen != null) {
             hiddenScreen = mc.screen;
-            mc.screen = null;
+            Screen blank = new BlankScreen();
+            blank.init(mc, mc.getWindow().getGuiScaledWidth(),
+                    mc.getWindow().getGuiScaledHeight());
+            hiddenBlank = blank;
+            mc.screen = blank;
         }
         mc.reloadResourcePacks().whenComplete((ignored, error) ->
                 Platform.runOnMainThread(() -> {
@@ -177,8 +203,10 @@ public final class ClientResourcePacks {
                     ModReloader.LOGGER.info(
                             "[ModReloader] resource reload finished after adding {}", reloadLabel);
                     Screen restore = hiddenScreen;
+                    Screen blank = hiddenBlank;
                     hiddenScreen = null;
-                    if (restore != null && mc.screen == null) {
+                    hiddenBlank = null;
+                    if (restore != null && mc.screen == blank) {
                         mc.setScreen(restore);
                         ModReloader.LOGGER.info(
                                 "[ModReloader] screen restored after resource reload: {}",

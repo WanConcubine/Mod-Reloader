@@ -130,8 +130,8 @@
 
 ## 已知问题 / 坑
 
-> 追加式账本，**编号稳定**（引用不变）。共 61 条：待解决 8 / 验证缺口 5 / 结构性边界 16 / 历史与注记 16 / 已修 16。
-> **当前 actionable（8）**：61 Sodium 旧渲染对象 · 60 Supplementaries 在 Moonlight 之后 · 54 xaerolib 挂起（先 jstack）·
+> 追加式账本，**编号稳定**（引用不变）。共 61 条：待解决 8 / 验证缺口 5 / 结构性边界 16 / 历史与注记 15 / 已修 17。
+> **当前 actionable（8）**：61 Sodium 单例 mixin 字段（结构边界，需产品决策）· 60 Supplementaries 在 Moonlight 之后 · 54 xaerolib 挂起（先 jstack）·
 > 53 资源顺序 · 50 回滚 VerifyError · 35 post-construct 注册残留 · 2 AE2 的 L2 与皇后判定 · 29 reload/chunk 并发。
 
 ### 待解决（需改代码）
@@ -153,10 +153,11 @@
     MixinTransformerError: An unexpected critical error was encountered`（回滚 late AT 成功）。该目标先被 Moonlight
     的 late AT 重定义（1 条规则），再被自己的 mixin 处理，属问题 47 同族；与本次注册表改动无关，待复现。
 
-61. **Sodium 热加后旧渲染对象崩溃（2026-11-19）**：`sodium-lateat` 中 Sodium ok=true（含 4 个 fabric 库、约 64 类 redefine），
-    随后渲染 overlay 抛 NPE：`ShaderInstance.uniformCache` 为 null。同 modId 适配后暴露出问题 45/56 的致命版：
-    mixin 给已存在的 `ShaderInstance` 加字段，旧实例保持 JVM 默认值（null）。当前结论 J2（能加、崩溃）；
-    需在 add 后强制重建受影响的渲染对象（或明确“需重启才正确渲染”）。
+61. **Sodium 热加后旧渲染对象崩溃（2026-11-19）**：`sodium-lateat` 中 Sodium ok=true（含 4 个 fabric 库、约 64 类 redefine）。
+    已修：`ShaderInstance` 的 `uniformCache` NPE —— add 流程在资源重载前调用 `PlatformHooks.rebuildShaderInstances`
+    （trusted lookup 调 `GameRenderer.reloadShaders`），用 mixin 后的构造器重建全部 shader 实例，overlay 不再崩。
+    剩余：`Minecraft.fences`（`MinecraftMixin.preRender`）等**单例**上的 mixin 新增字段仍为 null——构造器注入不会重跑，
+    运行期无法通用重建该单例 → `runTick` NPE。结论 J2；需重启才完全正确，属问题 45/56 的结构边界。
 
 ### 验证缺口（已实现/已修，缺证据）
 
@@ -244,8 +245,6 @@
 
 39. **dev client 预装 Moonlight 启动崩（环境问题）**：`ExtraCodecs` 引用 `codecui.Schema` 时 CNFE；只在 dev 观察到，阻塞 Supplementaries 完整复跑。
 
-51. **无焦点 + 热加重载隐藏 screen 会撞 `PauseScreen` NPE（2026-11-18，测试环境）**：`-PnoFocus=true` 时窗口失焦，`GameRenderer.render` 调 `pauseGame`；而 `ClientResourcePacks` 在 reload 链期间把 `mc.screen` 置空，`PauseScreen.createPauseMenu` 读到 `minecraft.player == null` → NPE（crash-2026-11-18_19.18.27）。**多 add/重载场景用聚焦窗口跑**（不带 `-PnoFocus`）；无焦点只用于单 add/短重载。
-
 55. **「已选 JBR 仍要重启」是产品失败（2026-11-18 所有者）**：玩家已在启动器选了 JBR，却因缺 `-XX:+AllowEnhancedClassRedefinition` 被要求再重启——把实现细节转嫁给玩家，不可接受。**2026-11-18 收口为单一动作「为热加载增强环境做准备」**：菜单（未就绪时常驻）与失败屏都指向同一入口；已安装/正在运行的 JBR 直接复用；缺失时官方下载 → SHA-512 → 解压到 `gameDir/jbr-21.0.11`；随后自动重启并带齐 `-XX:+AllowEnhancedClassRedefinition` + `-Dmodreloader.lateAt=true`。**仍余缺口**：参数只能启动时给，启动器每次不带参数则每会话最多一次自动重启；跨会话永久生效需要启动器/整合包预设或 classloader 隔离/软重启。
 
 ### 已修
@@ -277,6 +276,8 @@
 48. ✅ **嵌套 `MixinSquared` bootstrap（2026-11-18，已修）**：`JarInJar` 递归拆包后，Supplementaries 的 3 个嵌套库（`mixinsquared.forge` / `MixinSquared` / `sable.companion.common`）全部进入 module path，`mixinsquared.forge.init.mixins.json` 能加载其 `MixinSquaredBootstrap`；Supplementaries 越过 MIXIN/CONSTRUCT，注册了 blocks 1061→1306、items 1335→1584。
 
 49. ✅ **模型层/Skull 模型（2026-11-18，已修）**：`RegisterLayerDefinitions` 现在会被重放，随后调用 `EntityModelSet.onResourceManagerReload` 重建 roots（`LayerDefinitions.createRoots()` 会合并 `ClientHooks` 的静态表）；层回放与“重建 renderer”拆成两阶段、**全容器先层后渲染器**（否则嵌套容器先重建，外层层的模型还没注册）。`ItemBlockRenderTypes.setRenderLayer` 的 client-loading 门禁在 FMLClientSetup 重放窗口内临时放开（`ClientModLoader.loading`，消费者只有该门禁和 options 保存保护）。实测 Supplementaries 层 213→234、无 `No model for layer`、`ok=true`。
+
+51. ✅ **无焦点 + 热加重载隐藏 screen 会撞 `PauseScreen` NPE（2026-11-18 发现，2026-11-19 已修）**：`GameRenderer.render` 在窗口失焦时调 `pauseGame`，而 `pauseGame` 只在 `mc.screen == null` 时动作；`ClientResourcePacks` 原先在 reload 链期间把 screen 置空，`PauseScreen.createPauseMenu` 读到 `minecraft.player == null` → NPE。现在改用**已初始化**的空白占位 `Screen`（`isPauseScreen=false`，手动 `init`，不触发 ScreenEvent），重载结束再还原。
 
 57. ✅ **轮询把已加载 mod 的替换 jar 当新候选（2026-11-18 真机，已修）**：轮询 `scan()` 只过滤 ignored/failed，
     没有“modId 已加载”检查（手动 `scanNow()` 有）。在游戏运行时覆盖 `modreloader` 自身 jar 后，它被当成新候选并

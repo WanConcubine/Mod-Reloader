@@ -71,6 +71,15 @@ public interface PlatformHooks {
     }
 
     /**
+     * Client: recreates the live shader instances. A mixin that adds a field to
+     * an already-loaded {@code ShaderInstance} leaves existing instances at JVM
+     * defaults (Sodium's {@code uniformCache} becomes null), and the loading
+     * overlay draws with one of them. Server: no-op.
+     */
+    default void rebuildShaderInstances() {
+    }
+
+    /**
      * The add completed. The client queues shader replay until its resource reload
      * has finished (shader JSONs live in the new pack); the server does nothing.
      */

@@ -1825,3 +1825,20 @@ mcwifipnp 1.9.0，并登记 10 个场景（含 lateAt 对照）。全部在 macO
 - 构建：`./gradlew build` 绿。
 
 白名单：Sodium（JBR）BLACK → J2 candidate；计数 JBR J1×25 / J2×2 / BLACK×4。
+
+## 2026-11-19（问题 61：重建 ShaderInstance；问题 51：空白占位 Screen）
+
+改动：
+- 新增 `PlatformHooks.rebuildShaderInstances()`（客户端实现）：用 trusted lookup 调包私有的
+  `GameRenderer.reloadShaders(ResourceProvider)`，在资源重载与任何渲染之前重建全部 shader 实例，
+  让 mixin 后的构造器初始化生效（Sodium 给 `ShaderInstance` 加的 `uniformCache`）。
+- `ClientResourcePacks`：重载链期间不再把 `mc.screen` 置空，改用已手动 `init` 的空白 `Screen`
+  （`isPauseScreen=false`，不触发 `ScreenEvent.Opening`），重载结束再还原——顺带修复问题 51。
+
+验证：
+- `sodium-lateat`：shader overlay NPE 消失；随后 `MinecraftMixin.preRender` 读 `Minecraft.fences`
+  （同族：单例上的 mixin 新增字段）→ `runTick` NPE，exit 1。结论 J2：需重启才完全正确，属问题 45/56 边界。
+- `minimap`：修 51 前因窗口失焦命中 `PauseScreen` NPE；修后 **PASS**（`shader instances recreated` 正常执行）。
+- 构建：`./gradlew build` 绿。
+
+白名单：Sodium 行更新原因与证据（桶不变，J2）；计数不变。

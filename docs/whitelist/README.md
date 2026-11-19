@@ -106,7 +106,7 @@
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|
 | Xaero 世界地图（Xaero's World Map） | xaeroworldmap-neoforge-1.21.1-1.47.0.jar | HUANGHOU | candidate | 热加成功；进世界后服务端初始化缺失（ServerStartedEvent 未重放，serverPlayerTickHandler null）；标题屏 loadLater 崩（需已有世界） | JBR harness 2026-11-18：ConfigChannelRegistry frozen 窗口生效，CompatCheck ok=true isLoaded=true；标题屏 tick 抛 NoSuchElementException（模组自身 loadLater）；世界内 add 返回 1 后 integrated server 玩家 tick NPE（WorldMap.serverPlayerTickHandler null）。需重放 ServerStartedEvent / 用已有存档复测；2026-11-18 晚：`ServerStarting/Started` 定向重放已实现但未验证（进入世界复跑卡在 xaerolib mixin 阶段，需 jstack） |
-| 钠（Sodium） | sodium-neoforge-0.8.13+mc1.21.1.jar | FEI | fixing | 热加 ok=true，但旧 ShaderInstance 的 uniformCache 为 null → 渲染 overlay NPE（新增字段不初始化旧实例，问题 56 同族） | pipeline sodium-lateat 2026-11-19：hot-added（sodium + 4 个 fabric 库、约 64 类 redefine）后退出码 1（Rendering overlay NPE） |
+| 钠（Sodium） | sodium-neoforge-0.8.13+mc1.21.1.jar | FEI | fixing | ShaderInstance 已可在 add 时重建；Minecraft.fences 等单例上的 mixin 新增字段仍为 null → runTick NPE（结构边界：构造器注入不会重跑） | pipeline sodium-lateat 2026-11-19：ok=true 后 overlay 不再崩；随后 `MinecraftMixin.preRender` 读 `fences` NPE（exit=1） |
 
 ### BLACK · 结构性不可热加（4）
 
