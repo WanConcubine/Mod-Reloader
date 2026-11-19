@@ -130,7 +130,7 @@
 ## 已知问题 / 坑
 
 1. **静态分析仍会漏/误判**：反射/跨模组代理注册抓不到；注册轴已按「注册调用 / `*DeferredRegister` 引用」对齐（`RegistrySignalTest`）。
-2. **皇后级可能过保守**：AE2 因渲染 model mixin 判皇后，是否真需完整重启未验。
+2. **皇后级判定偏保守（2026-11-19 部分解决）**：AE2 在 JBR+lateAt 下 L1 热加成功（blocks 1060→1162、items 1334→1698），GUI 未验；不再按“必须重启”处理。
 3. **Fabric 生产 jar 是 intermediary 名**（`class_310`），核心类识别退化。
 4. **JiJ 递归拆包（2026-11-18）**：`JarInJar` 现在递归展开到 3 层（Supplementaries → mixinsquared-forge → MixinSquared core），嵌套库进 module path 并收集 manifest `MixinConfigs`；更深的 bundle 仍不展开，**嵌套 jar 的真 AT 仍不覆盖**（见 24/36）。
 5. **Python 分析器 vs Java 运行时**：注册轴已对齐，其它轴（native/JNI、render-core mixin）仍不一致；`VALIDATE` 没有 tier 门禁（UI 才有）。
@@ -215,7 +215,7 @@
 > **当前交接（2026-11-19，已推送 `47a06cd`）**：Windows/PCL2/JBR 真机联调收尾：构建链 93/93、late AT 保 AT（architectury 311 规则）、
 > Jade 热加成功；新增问题 56（新增字段不初始化旧实例，字体变暗）、57（轮询把替换 jar 当候选，已修）、
 > 58（层/渲染器重放早于注册表提交，已修待 Mekanism 复验）。
-> JBR 计数 **J1×20 / J2×1 / BLACK×3**。下一项：① Mekanism 复验（问题 58）；② 问题 54（xaerolib mixin 挂起，先 jstack）
+> JBR 计数 **J1×24 / J2×1 / BLACK×6**。下一项：① Mekanism 复验（问题 58）；② 问题 54（xaerolib mixin 挂起，先 jstack）
 > 与 53（client setup 早于热加包注入）；③ 问题 52/50（服务端事件重放未验证、回滚 VerifyError）；④ CraftTweaker 复跑；
 > ⑤ 类级 `-f` 启动期替代与流水线 L2。
 > 证据在 [history.md](history.md)；JBR 在 `run/jbr-21.0.11`（gitignored），语料 `/tmp/modreloader-corpus`。
@@ -228,7 +228,7 @@
 | **P1-3** | Git 收尾 | 本轮及 JBR/Windows 联调已推送（`47a06cd`）；观察 Actions、需要时打 tag | Actions 绿 |
 | **P0-新** | 流水线 L2 | 标题屏热加 → 建世界 → N tick → HUD/按键/截图；先 minimap/mouse-gestures | 断言 + 截图证据 |
 | **P0-新** | 语料扩到 20–30 个常用模组 | 小地图/JEI/HUD/输入/前置库；`check` 进 PR | 报告 + 矩阵 |
-| **P0-新** | 模组白名单实测（所有者驱动） | 54 行：stock T1×7 / BLACK×23；JBR J1×20 / J2×1 / BLACK×3；candidate 由所有者复测转 verified | TSV + 视图同步 |
+| **P0-新** | 模组白名单实测（所有者驱动） | 61 行：stock T1×7 / BLACK×23；JBR J1×24 / J2×1 / BLACK×6；candidate 由所有者复测转 verified | TSV + 视图同步 |
 | **P0-新** | ✅ Xaero's World Map config channel | `XaeroLibChannels` 窗口（`ConfigChannelRegistry.frozen`），仅对引用该类的 jar 生效；World Map `ok=true isLoaded=true` | 已转 J2 |
 | **P0-新** | 服务端一次性事件（问题 52） | `ServerLifecycleReplay` 已实现（定向调用新增监听器 + integrated server 兜底），**未验证**：进入世界复跑卡在 54 | World Map J1 |
 | **P0-新** | xaerolib mixin 阶段挂起（问题 54） | 先 `jstack` 留线程栈再杀；怀疑 Mixin/transform 锁或常驻 guard | 复跑不挂 |

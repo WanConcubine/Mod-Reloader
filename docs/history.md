@@ -1744,3 +1744,25 @@ late AT 从 class 资源（AT/mixin 之前的原始字节）重写已加载类�
 `7568a91`（late AT 复验 / 问题 56 文档）、`788d40f`（渲染器顺序）、`f16d938`（监听过滤）、
 `47a06cd`（联调收尾文档）。
 未验证：Mekanism 修复后重跑、Jade 重启后字体确认、计数 UI 来源、Windows 下「准备环境」全链路。
+
+## 2026-11-19（渲染/内容/联机一轮：AE2 通过，嵌套 AT 成为主边界）
+
+语料新增 Sodium 0.8.13、Iris 1.8.14、Create 6.0.10、AE2 19.2.20、GuideME 21.1.22、e4mc 6.2.3、
+mcwifipnp 1.9.0，并登记 10 个场景（含 lateAt 对照）。全部在 macOS dev + JBR、`--visible`、L1 断言下运行。
+
+结果：
+- mcwifipnp：ok=true isLoaded=true（redefine PauseScreen/MinecraftServer/UUIDUtil/PlayerList）。
+- e4mc：ok=true isLoaded=true（模块 kaleido+e4mc）；分析器 HUANGHOU 来自内嵌库 native 误判。
+- GuideME → AE2（lateAt）：均 ok=true；blocks 1060→1162、items 1334→1698。AE2 的“皇后嫌疑”不成立
+  （L1 结论，GUI/物品功能未验）。
+- Create / Sodium / Iris：全部 `stage=VALIDATE kind=ACCESS_TRANSFORMER`，原因是**嵌套 mod 的 AT 不在覆盖**：
+  Ponder 3 条、sodium-mod 18 条、fabric-block-view-api 1 条；Create 加 `lateAt` 对照仍拒绝（嵌套 AT 检查与 lateAt 无关）。
+  Iris 自身另有 2 条类级 `public-f`（OptionInstance、RegistryAccess$RegistryEntry），属 JBR 结构边界。
+- 工具：`facts.py` 放行 `META-INF/jars/` 下无 `mods.toml` 的嵌套纯库（e4mc 的 kaleido），否则 check 误阻断。
+- no-focus 回归：日志有 `[no-focus] patched Window`，但窗口仍 `focused=true`，首轮 mcwifipnp 判 FOCUS_STOLEN；
+  本轮改用 `--visible`。待查（怀疑 MixinRuntime agent 转换顺序或 macOS 27 行为变化）。
+
+证据：`tools/pipeline/reports/20261119-111924-lan-mcwifipnp`（及同批 7 个目录）、`corpus.json` 场景
+`sodium-only` / `sodium-iris` / `iris-after-sodium` / `iris-after-sodium-lateat` / `create-only` / `create-lateat` /
+`ae2` / `ae2-lateat` / `lan-e4mc` / `lan-mcwifipnp`。
+未验证：sodium-iris 同批（sodium 已先拒，未单独跑）、AE2 的 L2 GUI、Sodium/Iris 若支持嵌套 AT 后的行为。
