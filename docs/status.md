@@ -68,6 +68,8 @@
 
 ### 已验证
 
+- **payload 标题屏路径（2026-11-19 复核）**：`-PverifyPayload` 用重建后的 fixture PASS；诊断日志会打印
+  `PAYLOAD_REGISTRATIONS`、登录后客户端/服务端连接的 `PayloadSetup` 与 `hasChannel`。
 - **脏状态与拒绝（RunState，技术债 P1-12，2026-11-19）**：注册表提交、自定义注册表窗口、构造、mixin 落定、
   payload/capability/命令重放等任一不可逆操作之后再失败，`RunState` 置脏；后续 `add` 在 `VALIDATE`
   以 `FailureKind.RUNTIME_DIRTY` 拒绝，文案区分客户端/专用服。失败 `Result` 末尾附加脏原因。
@@ -149,9 +151,9 @@
 
 ## 已知问题 / 坑
 
-> 追加式账本，**编号稳定**（引用不变）。共 63 条：待解决 5 / 验证缺口 6 / 结构性边界 16 / 历史与注记 15 / 已修 21。
-> **当前 actionable（6）**：61 Sodium 单例 mixin 字段（结构边界，需产品决策）· 50 回滚 VerifyError ·
-> 35 post-construct 注册残留 · 2 AE2 的 L2 与皇后判定 · 29 reload/chunk 并发 · 63 payload harness 回归。
+> 追加式账本，**编号稳定**（引用不变）。共 63 条：待解决 5 / 验证缺口 5 / 结构性边界 16 / 历史与注记 15 / 已修 22。
+> **当前 actionable（5）**：61 Sodium 单例 mixin 字段（结构边界，需产品决策）· 50 回滚 VerifyError ·
+> 35 post-construct 注册残留 · 2 AE2 的 L2 与皇后判定 · 29 reload/chunk 并发。
 
 ### 待解决（需改代码）
 
@@ -185,12 +187,6 @@
     启动期顺序是“注册表冻结 → common setup → client setup → renderers”；现已把 staged 的层/渲染器重放移到
     `FmlEvents.finishAll` + `RegistryStage.commit` 之后（仍在资源包注入之前），层先于渲染器、全容器先层不变。
     **修复后的 jar 尚未在真机重跑 Mekanism**（用户时间到）；下次直接热加 Mekanism 复验。
-
-63. **`-PverifyPayload` 标题屏路径回归（2026-11-19 发现，既有问题）**：payloadfix 在标题屏热加后建世界，
-    适配日志正常（`adapted payloads ... [payloadfix:ping]`），但 40s 内客户端收不到 ping；
-    `PayloadFix` 的 `PlayerLoggedInEvent`/tick 均未走 `send` 分支（`hasChannel=false`）。
-    **HEAD `8e1523d`（未含本次重排）同样 FAIL**，因此不是 53 重排引入；需要单独查连接 setup 的
-    `PayloadSetup` 是新世界登录时从哪里取的。恢复前不要把 payload 标成“当前已验证”。
 
 ### 结构性边界（长期限制，不是待修 bug）
 
@@ -264,6 +260,12 @@
 55. **「已选 JBR 仍要重启」是产品失败（2026-11-18 所有者）**：玩家已在启动器选了 JBR，却因缺 `-XX:+AllowEnhancedClassRedefinition` 被要求再重启——把实现细节转嫁给玩家，不可接受。**2026-11-18 收口为单一动作「为热加载增强环境做准备」**：菜单（未就绪时常驻）与失败屏都指向同一入口；已安装/正在运行的 JBR 直接复用；缺失时官方下载 → SHA-512 → 解压到 `gameDir/jbr-21.0.11`；随后自动重启并带齐 `-XX:+AllowEnhancedClassRedefinition` + `-Dmodreloader.lateAt=true`。**仍余缺口**：参数只能启动时给，启动器每次不带参数则每会话最多一次自动重启；跨会话永久生效需要启动器/整合包预设或 classloader 隔离/软重启。
 
 ### 已修
+
+63. ✅ **`-PverifyPayload` 标题屏路径 FAIL（2026-11-19 查明）**：不是产品问题——`/tmp/payloadfix` 里的 jar 是
+    2026-11-15 的旧构建，构造函数只有 `onPayloads`，没有 `onLogin`/`onServerTick`，也没有写 marker 的代码。
+    诊断日志证明注册、协商与两侧连接 setup 都包含 `payloadfix:ping`（`hasChannel=true`），`PlayerLoggedInEvent`
+    正常到达。用当前源码 `experiments/server-fixture/build-payload.sh` 重建后，`sending ping → PING RECEIVED →
+    marker`，`-PverifyPayload` PASS。教训：**harness 用的 /tmp 夹具也要跟着源码重建**。
 
 53. ✅ **client setup 的 deferred task 早于热加资源包注入（2026-11-19 已修）**：World Map 的 `loadLater` 在
     `FMLClientSetupEvent` 的 deferred queue 里用 live `ResourceManager` 读自己的 `vanilla_states.dat`，

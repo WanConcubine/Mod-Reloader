@@ -2010,3 +2010,20 @@ clientfixture（GUI 层/物品装饰）PASS、`minimap` PASS、`moonlight-lateat
 - 验证：客户端 `-PverifyRunState` PASS 并截图；专用服 `-PserverRunState -PdirtyLogSeconds=2` PASS（2 条重复告警）；
   `hud`/`input` 无脏日志；单测 **110**。`-PverifyMenu` 仍因本机缺 `/tmp/lanmods/EasyLAN...` 样本 jar 报 FAIL
   （环境依赖，非本次改动；菜单本身正常渲染）。
+
+## 2026-11-19（问题 63 结案：过期 fixture，不是产品回归）
+
+现象：`-PverifyPayload` 在标题屏热加 payloadfix 后建世界，40s 收不到 ping；HEAD `8e1523d` 同样失败。
+
+诊断（`PayloadCheck` 新增）：
+- `PAYLOAD_REGISTRATIONS` 的 PLAY 列表含 `payloadfix:ping`；`NetworkRegistry.setup=true`。
+- 登录后客户端连接与服务端玩家连接的 `PayloadSetup` PLAY 通道都含 `payloadfix:ping`，`hasChannel=true`。
+- 独立探针证明 `PlayerLoggedInEvent` 与 `ServerTickEvent.Post` 都能到达游戏总线。
+- 但 fixture 自己的两条事件分支完全不打印。
+
+根因：`/tmp/payloadfix/payloadfix-1.0.0.jar` 是 2026-11-15 的旧构建，javap 显示构造函数只注册了
+`onPayloads`，`onPing` 是空实现，也没有 `onLogin`/`onServerTick`。用
+`experiments/server-fixture/build-payload.sh` 重建后：`sending ping → PING RECEIVED → marker`，PASS。
+
+结论：问题 63 结案；`PayloadCheck` 保留诊断输出（注册表 / 两侧 setup / 总线探针），以后 payload 问题能直接分辨
+“注册/协商”还是“监听器/处理”层。

@@ -2,15 +2,25 @@ package dev.modreloader.dev;
 
 import dev.modreloader.ModReloader;
 import dev.modreloader.hotadd.HotAddEngine;
+import dev.modreloader.hotadd.UnsafeAccess;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.Connection;
+import net.minecraft.network.ConnectionProtocol;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.client.gui.components.AbstractButton;
 import net.minecraft.client.gui.screens.worldselection.CreateWorldScreen;
 import net.minecraft.client.resources.language.I18n;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.neoforged.neoforge.network.registration.ChannelAttributes;
+import net.neoforged.neoforge.network.registration.NetworkPayloadSetup;
+import net.neoforged.neoforge.network.registration.NetworkRegistry;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 
 /**
  * Dev-only end-to-end check for payload adaptation ({@code -PverifyPayload=<jar>}).
@@ -24,6 +34,8 @@ public final class PayloadCheck {
 
     private static final int TIMEOUT_TICKS = 20 * 180;
     private static final Path MARKER = Path.of("payload-received.txt");
+    private static final ResourceLocation PING =
+            ResourceLocation.fromNamespaceAndPath("payloadfix", "ping");
 
     private static Stage stage = Stage.WAIT_TITLE;
     private static int ticks;
@@ -34,6 +46,8 @@ public final class PayloadCheck {
     private static final boolean AFTER_JOIN =
             Boolean.getBoolean("modreloader.verifyPayloadAfterJoin");
     private static int worldTicks;
+    private static int serverTicks;
+    private static boolean dumpedWorldSides;
 
     private PayloadCheck() {
     }
@@ -51,7 +65,70 @@ public final class PayloadCheck {
         }
         ModReloader.LOGGER.info("[PayloadCheck] started; hot-adding {}", jar);
         NeoForge.EVENT_BUS.addListener(ClientTickEvent.Post.class, event -> tick());
+        installProbes();
         startDiagnostics();
+    }
+
+    /**
+     * Independent probes: do not rely on the fixture's own listeners. If these stay
+     * silent, the problem is bus dispatch, not the payload negotiation.
+     */
+    private static void installProbes() {
+        NeoForge.EVENT_BUS.addListener(PlayerEvent.PlayerLoggedInEvent.class, event ->
+                ModReloader.LOGGER.info("[PayloadCheck] probe: PlayerLoggedInEvent fired for {}",
+                        event.getEntity().getName().getString()));
+        NeoForge.EVENT_BUS.addListener(ServerTickEvent.Post.class, event -> {
+            if (serverTicks++ == 20) {
+                ModReloader.LOGGER.info("[PayloadCheck] probe: ServerTickEvent.Post reached (tick {})",
+                        serverTicks);
+            }
+        });
+    }
+
+    private static void logRegistrations(String when) {
+        try {
+            Map<?, ?> registrations = UnsafeAccess.getStatic(NetworkRegistry.class, "PAYLOAD_REGISTRATIONS");
+            if (registrations == null) {
+                ModReloader.LOGGER.info("[PayloadCheck] {}: PAYLOAD_REGISTRATIONS unavailable", when);
+                return;
+            }
+            for (Map.Entry<?, ?> entry : registrations.entrySet()) {
+                if (entry.getValue() instanceof Map<?, ?> byId) {
+                    ModReloader.LOGGER.info("[PayloadCheck] {}: registrations {} -> {} (ping={})",
+                            when, entry.getKey(), byId.keySet(), byId.containsKey(PING));
+                }
+            }
+            ModReloader.LOGGER.info("[PayloadCheck] {}: NetworkRegistry.setup={}", when,
+                    UnsafeAccess.getStaticBoolean(NetworkRegistry.class, "setup"));
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn("[PayloadCheck] cannot read the payload registrations", t);
+        }
+    }
+
+    private static void logSetup(String side, Connection connection) {
+        if (connection == null) {
+            ModReloader.LOGGER.info("[PayloadCheck] {}: no connection", side);
+            return;
+        }
+        NetworkPayloadSetup setup = ChannelAttributes.getPayloadSetup(connection);
+        if (setup == null) {
+            ModReloader.LOGGER.info("[PayloadCheck] {}: no PayloadSetup on the connection", side);
+            return;
+        }
+        ModReloader.LOGGER.info("[PayloadCheck] {}: PLAY channels={} pingChannel={} hasChannel={}",
+                side, setup.getChannels(ConnectionProtocol.PLAY).keySet(),
+                setup.getChannel(ConnectionProtocol.PLAY, PING) != null,
+                NetworkRegistry.hasChannel(connection, ConnectionProtocol.PLAY, PING));
+    }
+
+    private static void logWorldSides(Minecraft mc) {
+        logSetup("client connection",
+                mc.getConnection() == null ? null : mc.getConnection().getConnection());
+        if (mc.getSingleplayerServer() != null) {
+            mc.getSingleplayerServer().getPlayerList().getPlayers().forEach(player ->
+                    logSetup("server player " + player.getName().getString(),
+                            player.connection.getConnection()));
+        }
     }
 
     /** Client ticks stall inside {@code doWorldLoad}, so a separate thread reports state. */
@@ -113,6 +190,7 @@ public final class PayloadCheck {
         HotAddEngine.Result result = HotAddEngine.add(jar);
         ModReloader.LOGGER.info("[PayloadCheck] hot-add result: ok={}, kind={}, message={}",
                 result.ok(), result.kind(), result.message());
+        logRegistrations("after add");
         if (!result.ok()) {
             fail("hot-add failed: " + result.kind() + ": " + result.message());
             return;
@@ -195,6 +273,11 @@ public final class PayloadCheck {
             return;
         }
         ModReloader.LOGGER.info("[PayloadCheck] in world; waiting for the payload marker");
+        if (!dumpedWorldSides) {
+            dumpedWorldSides = true;
+            logRegistrations("in world");
+            logWorldSides(mc);
+        }
         stage = Stage.WAIT_PING;
         ticks = 0;
     }
