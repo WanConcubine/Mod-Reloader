@@ -35,8 +35,9 @@ import java.util.Set;
  *
  * <p>Pipeline: read the jar → inject its module into the game layer → register
  * its mixin configs (redefining already-loaded targets with JBR) → rebuild
- * {@link ModList} → construct the mod and replay client events → inject its
- * resource pack → apply its server data pack (recipes/loot/tags).
+ * {@link ModList} → construct the mod and commit registry content → replay
+ * common setup → inject its resource pack and start the reload → replay the
+ * side setup tasks and payloads → apply its server data pack (recipes/loot/tags).
  *
  * <p>Each stage lives in its own method and reports a {@link Result} on failure
  * (or {@code null} to continue); the order itself is pinned by
@@ -47,7 +48,7 @@ import java.util.Set;
  */
 public final class HotAddEngine {
     public enum Stage {
-        NONE, VALIDATE, MODULE, MIXIN, COREMOD, MODLIST, CONSTRUCT, REGISTRY, EVENT, PACK, DATAPACK
+        NONE, VALIDATE, MODULE, MIXIN, COREMOD, MODLIST, CONSTRUCT, REGISTRY, EVENT, PACK, CLIENT, DATAPACK
     }
 
     public enum FailureKind {
@@ -136,8 +137,9 @@ public final class HotAddEngine {
             if ((failure = registerModList(run)) != null) return failure;
             if ((failure = construct(run)) != null) return failure;
             if ((failure = commitRegistry(run)) != null) return failure;
-            if ((failure = finishStartup(run)) != null) return failure;
+            if ((failure = replayCommonStartup(run)) != null) return failure;
             if ((failure = injectPacks(run)) != null) return failure;
+            if ((failure = runSidedStartup(run)) != null) return failure;
             if ((failure = reloadData(run)) != null) return failure;
             return succeed(run);
         } catch (Throwable t) {
@@ -766,11 +768,8 @@ public final class HotAddEngine {
         return null;
     }
 
-    /** EVENT: capabilities, staged lifecycle replay, payloads and commands. */
-    private static Result finishStartup(Run run) throws Throwable {
-        Rollback rollback = run.rollback;
-        PlatformHooks hooks = run.hooks;
-        Set<String> ids = run.ids;
+    /** EVENT: capabilities and common setup. */
+    private static Result replayCommonStartup(Run run) throws Throwable {
         // 4a. capabilities: RegisterCapabilitiesEvent fires once at start-up
         //     (after the registry events, before common setup). A hot-added mod
         //     missed it, so item handlers / fluid tanks / energy providers are
@@ -787,7 +786,67 @@ public final class HotAddEngine {
                     capabilityReplay.describe());
         }
         run.stagePlan.enter(Stage.EVENT);
-        FmlEvents.finishAll(run.containers);
+        FmlEvents.commonSetupAll(run.containers);
+        return null;
+    }
+
+    /** PACK: client registrations, resource packs and the reload they need. */
+    private static Result injectPacks(Run run) throws Throwable {
+        Rollback rollback = run.rollback;
+        PlatformHooks hooks = run.hooks;
+        Set<String> ids = run.ids;
+        Set<String> nestedIds = run.nestedIds;
+        // 5. resource packs, after the mod had a chance to register content.
+        //    A dedicated server has no resource pack repository.
+        //    A mixin may have added fields to already-created ShaderInstance
+        //    objects (Sodium's uniformCache); the next thing that renders is the
+        //    reload's loading overlay, which would dereference the JVM default
+        //    (null). Rebuild them while nothing is being drawn.
+        if (run.mixinsApplied) {
+            hooks.rebuildShaderInstances();
+        }
+        run.stagePlan.enter(Stage.PACK);
+        // Startup-only client registrations (reload listeners among them) must be
+        // in the manager before the reload starts: createReload snapshots the
+        // listener list and only the live ResourceManager contains the mod pack.
+        // This also is what makes client setup see the pack (issue 53): startup
+        // runs the deferred tasks inside the initial reload, after the new
+        // MultiPackResourceManager (which already lists every mod pack) is live.
+        for (ModContainer container : run.containers) {
+            hooks.registerClientRegistrations(container);
+        }
+        Capabilities.Result packCapability =
+                Capabilities.get(Capabilities.Capability.RESOURCE_PACKS);
+        if (packCapability.available()) {
+            List<ModFileInfo> packInfos = new ArrayList<>(NestedMods.fileInfos(run.nestedMods));
+            if (run.primaryNested == null) {
+                packInfos.add(run.newFileInfo);
+            }
+            Set<String> packIds = new LinkedHashSet<>(ids);
+            packIds.addAll(nestedIds);
+            hooks.injectResourcePacks(packInfos, packIds, rollback);
+        } else {
+            // Resources are cosmetic; never fail an otherwise good add for this.
+            ModReloader.LOGGER.warn("[ModReloader] resource pack injection skipped: {}",
+                    packCapability.describe());
+        }
+        if (Boolean.getBoolean("modreloader.failAfterPack")) {
+            return fail(rollback, Stage.PACK, FailureKind.UNKNOWN, "injected failure after resource pack");
+        }
+        return null;
+    }
+
+    /** CLIENT: side setup tasks, staged replay, payloads and commands. */
+    private static Result runSidedStartup(Run run) throws Throwable {
+        Rollback rollback = run.rollback;
+        PlatformHooks hooks = run.hooks;
+        // Client setup runs after the pack reload was started (PACK stage): its
+        // deferred tasks read resources through the live ResourceManager, which
+        // already lists the hot-added pack, exactly as at startup. Payload
+        // adaptation must wait until those tasks ran (XaeroLib freezes its packet
+        // handler registry in one of them), hence this stage sits in between.
+        run.stagePlan.enter(Stage.CLIENT);
+        FmlEvents.sidedSetupAll(run.containers);
         try {
             // Startup order: registries frozen -> common setup -> client setup ->
             // renderers. A mod's RegisterRenderers may resolve its own registry
@@ -826,43 +885,6 @@ public final class HotAddEngine {
         //     this targets the integrated server (and is a no-op at the title
         //     screen); the side decides, the engine does not.
         hooks.replayCommands();
-        return null;
-    }
-
-    /** PACK: resource packs, after the mod had a chance to register content. */
-    private static Result injectPacks(Run run) throws Throwable {
-        Rollback rollback = run.rollback;
-        PlatformHooks hooks = run.hooks;
-        Set<String> ids = run.ids;
-        Set<String> nestedIds = run.nestedIds;
-        // 5. resource packs, after the mod had a chance to register content.
-        //    A dedicated server has no resource pack repository.
-        //    A mixin may have added fields to already-created ShaderInstance
-        //    objects (Sodium's uniformCache); the next thing that renders is the
-        //    reload's loading overlay, which would dereference the JVM default
-        //    (null). Rebuild them while nothing is being drawn.
-        if (run.mixinsApplied) {
-            hooks.rebuildShaderInstances();
-        }
-        run.stagePlan.enter(Stage.PACK);
-        Capabilities.Result packCapability =
-                Capabilities.get(Capabilities.Capability.RESOURCE_PACKS);
-        if (packCapability.available()) {
-            List<ModFileInfo> packInfos = new ArrayList<>(NestedMods.fileInfos(run.nestedMods));
-            if (run.primaryNested == null) {
-                packInfos.add(run.newFileInfo);
-            }
-            Set<String> packIds = new LinkedHashSet<>(ids);
-            packIds.addAll(nestedIds);
-            hooks.injectResourcePacks(packInfos, packIds, rollback);
-        } else {
-            // Resources are cosmetic; never fail an otherwise good add for this.
-            ModReloader.LOGGER.warn("[ModReloader] resource pack injection skipped: {}",
-                    packCapability.describe());
-        }
-        if (Boolean.getBoolean("modreloader.failAfterPack")) {
-            return fail(rollback, Stage.PACK, FailureKind.UNKNOWN, "injected failure after resource pack");
-        }
         return null;
     }
 

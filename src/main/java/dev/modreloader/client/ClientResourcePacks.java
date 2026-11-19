@@ -179,6 +179,17 @@ public final class ClientResourcePacks {
             return;
         }
         reloading = true;
+        if (pendingReload(mc)) {
+            // Vanilla already has a reload in flight whose pack list was captured
+            // before we selected ours; reloadResourcePacks() would return that
+            // future instead of starting a new one. Ask for a follow-up once it
+            // finishes, otherwise the new pack would be selected but never loaded.
+            dirty = true;
+            ModReloader.LOGGER.warn(
+                    "[ModReloader] a resource reload was already running; {} is loaded by a "
+                            + "follow-up reload. Client setup tasks run before it and only see "
+                            + "packs from the running reload", label);
+        }
         // Hide the screen for the whole chain: a re-init mid-chain would fire the
         // new mod's screen listeners before its language file is in the manager.
         if (hiddenScreen == null && mc.screen != null) {
@@ -218,6 +229,24 @@ public final class ClientResourcePacks {
     /** True while a hot-add reload (or a queued follow-up) is still running. */
     public static boolean isReloading() {
         return reloading || dirty;
+    }
+
+    /** True while any reload is running, ours or vanilla's (F3+T, pack change…). */
+    public static boolean reloadInProgress() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null) {
+            return false;
+        }
+        return isReloading() || pendingReload(mc);
+    }
+
+    private static boolean pendingReload(Minecraft mc) {
+        try {
+            return UnsafeAccess.get(mc, Minecraft.class, "pendingReload") != null;
+        } catch (Throwable t) {
+            // Field renamed: assume no pending reload rather than blocking adds.
+            return false;
+        }
     }
 
     /** True when the jar carries client resources. */

@@ -20,7 +20,7 @@ class AddStagePlanTest {
     void canonicalOrderIsPinned() {
         assertEquals(List.of(
                 Stage.VALIDATE, Stage.MODULE, Stage.MIXIN, Stage.COREMOD, Stage.MODLIST,
-                Stage.CONSTRUCT, Stage.REGISTRY, Stage.EVENT, Stage.PACK, Stage.DATAPACK),
+                Stage.CONSTRUCT, Stage.REGISTRY, Stage.EVENT, Stage.PACK, Stage.CLIENT, Stage.DATAPACK),
                 AddStagePlan.ORDER);
     }
 

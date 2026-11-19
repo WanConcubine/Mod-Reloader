@@ -51,7 +51,7 @@ import java.util.Set;
  * of live connections, and command replay for the integrated server.
  */
 public final class ClientPlatformHooks implements PlatformHooks {
-    /** Reload listeners added by the current add; reset on every {@link #acceptClientLifecycle}. */
+    /** Reload listeners added by the current add; set in {@link #registerClientRegistrations}. */
     private int lastReloadListeners;
     /** Whether the current add requested a resource reload (its shader pass fires the event). */
     private boolean lastReloadRequested;
@@ -87,10 +87,20 @@ public final class ClientPlatformHooks implements PlatformHooks {
     }
 
     @Override
+    public void registerClientRegistrations(ModContainer container) {
+        // Startup fires these events (RegisterClientReloadListenersEvent and the
+        // rest) while Minecraft is being constructed, before the initial reload:
+        // the reload only runs listeners that are already in the manager when it
+        // snapshots them. A hot-add therefore has to register here, before the
+        // pack reload starts - not in client setup.
+        lastReloadRequested = false;
+        lastReloadListeners = ClientRegistrationReplay.replay(container);
+    }
+
+    @Override
     public void acceptClientLifecycle(ModContainer container) {
         DeferredWorkQueue queue = new DeferredWorkQueue(
                 "modreloader-" + container.getModId() + "-client");
-        lastReloadRequested = false;
         // Some mods call ItemBlockRenderTypes.setRenderLayer from client setup (or
         // a deferred task). NeoForge guards that with ClientModLoader.isLoading();
         // re-open the flag for the replay window, like the other internal toggles.
@@ -110,9 +120,6 @@ public final class ClientPlatformHooks implements PlatformHooks {
         }
         container.acceptEvent(new RegisterKeyMappingsEvent(Minecraft.getInstance().options));
         replayMenuScreens(container);
-        // Kept for the resource-pack stage: a newly registered reload listener only
-        // runs if a reload happens, so the pack stage may not skip the reload then.
-        lastReloadListeners = ClientRegistrationReplay.replay(container);
     }
 
     /**

@@ -68,6 +68,12 @@ public final class FmlEvents {
      * could register its own handlers.
      */
     public static void finishAll(List<ModContainer> containers) throws Throwable {
+        commonSetupAll(containers);
+        sidedSetupAll(containers);
+    }
+
+    /** {@code FMLCommonSetupEvent} for every container, then their queued tasks. */
+    public static void commonSetupAll(List<ModContainer> containers) throws Throwable {
         List<DeferredWorkQueue> commonQueues = new ArrayList<>();
         for (ModContainer container : containers) {
             DeferredWorkQueue commonQueue = queue(container, "common");
@@ -77,7 +83,18 @@ public final class FmlEvents {
         for (DeferredWorkQueue commonQueue : commonQueues) {
             commonQueue.runTasks();
         }
+    }
 
+    /**
+     * Side-specific setup ({@code FMLClientSetupEvent} on a client) and
+     * {@code FMLLoadCompleteEvent}.
+     *
+     * <p>Split from {@link #commonSetupAll} because of issue 53: at startup the
+     * client tasks run inside the initial resource reload, where the live
+     * {@code ResourceManager} already contains every mod pack. The engine starts
+     * the hot-add reload before calling this, so the same is true here.
+     */
+    public static void sidedSetupAll(List<ModContainer> containers) throws Throwable {
         for (ModContainer container : containers) {
             // Client-only events: a dedicated server must not replay these, so the
             // side hook decides instead of the engine.

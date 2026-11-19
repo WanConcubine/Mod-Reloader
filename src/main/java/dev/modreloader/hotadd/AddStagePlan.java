@@ -12,6 +12,13 @@ import java.util.List;
  * constraint that until now lived only inside {@link HotAddEngine#add}; this
  * class pins the order so a change is deliberate and testable without the game.
  *
+ * <p>PACK precedes CLIENT because of issue 53: at startup the mod packs are in
+ * the resource pack repository before the initial reload, and the client's
+ * deferred tasks run while that reload's new {@code ResourceManager} (which
+ * already contains every mod pack) is live. A hot-add must reproduce that:
+ * register reload listeners, inject the pack and start the reload, only then
+ * run {@code FMLClientSetupEvent} tasks and payload adaptation.
+ *
  * <p>Optional stages may be skipped (a plain mod has no COREMOD, a mod without
  * registry content has no REGISTRY). Repeating the current stage is allowed;
  * going back is not.
@@ -30,6 +37,7 @@ public final class AddStagePlan {
             HotAddEngine.Stage.REGISTRY,
             HotAddEngine.Stage.EVENT,
             HotAddEngine.Stage.PACK,
+            HotAddEngine.Stage.CLIENT,
             HotAddEngine.Stage.DATAPACK);
 
     private int index;
@@ -67,6 +75,7 @@ public final class AddStagePlan {
             case REGISTRY -> HotAddEngine.FailureKind.REGISTRY;
             case EVENT -> HotAddEngine.FailureKind.EVENT;
             case PACK -> HotAddEngine.FailureKind.RESOURCE_PACK;
+            case CLIENT -> HotAddEngine.FailureKind.EVENT;
             case DATAPACK -> HotAddEngine.FailureKind.DATAPACK;
             case VALIDATE -> HotAddEngine.FailureKind.INVALID_METADATA;
             case NONE -> HotAddEngine.FailureKind.UNKNOWN;

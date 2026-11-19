@@ -3,39 +3,63 @@ package dev.modreloader.hotadd;
 import dev.modreloader.ModReloader;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * Re-opens XaeroLib's config-channel registry for one hot-add.
+ * Re-opens XaeroLib's one-shot registries for one hot-add.
  *
- * <p>{@code xaero.lib.common.config.channel.register.ConfigChannelRegistry} has a
- * {@code frozen} flag that is set once at startup; {@code register(...)} then
- * throws {@code IllegalStateException: Attempted to register a config channel ...
- * too late}. A hot-added Xaero mod (World Map, Minimap, XaeroPlus) registers its
- * channels during these startup events and would fail.
+ * <p>Startup freezes these singletons once every Xaero mod has registered:
  *
- * <p>The window is targeted: it only runs for jars that reference that registry
- * class, so no other mod's state is touched. It is also version sensitive (the
+ * <ul>
+ * <li>{@code xaero.lib.common.config.channel.register.ConfigChannelRegistry} -
+ *     {@code register(...)} throws {@code IllegalStateException: Attempted to
+ *     register a config channel ... too late};</li>
+ * <li>{@code xaero.lib.common.permission.PermissionRegistry} - same {@code frozen}
+ *     flag, and a hot-added Xaero mod registers built-in channel permissions
+ *     during its own construction (measured: World Map first, then Minimap ->
+ *     {@code IllegalStateException} from {@code BuiltInConfigChannelPermissions}).</li>
+ * </ul>
+ *
+ * <p>The window is targeted: it only runs for jars that reference one of those
+ * classes, so no other mod's state is touched. It is also version sensitive (the
  * field name), which is why this lives next to the other capability anchors and
  * logs loudly instead of failing the add.
  */
 public final class XaeroLibChannels {
-    private static final String REGISTRY =
-            "xaero.lib.common.config.channel.register.ConfigChannelRegistry";
-    private static final String TARGET =
-            "xaero/lib/common/config/channel/register/ConfigChannelRegistry";
+    /** Registries with a private {@code boolean frozen} and a public INSTANCE. */
+    private static final String[] REGISTRIES = {
+            "xaero.lib.common.config.channel.register.ConfigChannelRegistry",
+            "xaero.lib.common.permission.PermissionRegistry",
+            "xaero.lib.common.permission.system.PermissionSystemRegistry",
+            "xaero.lib.common.packet.PacketHandlerRegistry",
+    };
+    private static final String[] TARGETS = {
+            "xaero/lib/common/config/channel/register/ConfigChannelRegistry",
+            "xaero/lib/common/permission/PermissionRegistry",
+            "xaero/lib/common/permission/system/PermissionSystemRegistry",
+            "xaero/lib/common/packet/PacketHandlerRegistry",
+    };
 
-    private static boolean open;
-    private static Class<?> registryType;
-    private static Object registry;
+    private record Opened(String name, Class<?> type, Object instance) {
+    }
+
+    private static final List<Opened> opened = new ArrayList<>();
 
     private XaeroLibChannels() {
     }
 
-    /** True when the jar (its own classes) references XaeroLib's channel registry. */
+    /** True when the jar (its own classes) references one of the guarded registries. */
     public static boolean appliesTo(Path jar) {
         try {
-            return dev.modreloader.inspect.RegistrationAuditScanner.referencedTypes(jar)
-                    .contains(TARGET);
+            java.util.Set<String> referenced =
+                    dev.modreloader.inspect.RegistrationAuditScanner.referencedTypes(jar);
+            for (String target : TARGETS) {
+                if (referenced.contains(target)) {
+                    return true;
+                }
+            }
+            return false;
         } catch (Throwable t) {
             return false;
         }
@@ -43,36 +67,47 @@ public final class XaeroLibChannels {
 
     /** Opens the registration window; must be paired with {@link #close()}. */
     public static void open(Rollback rollback) {
-        if (open) {
+        if (!opened.isEmpty()) {
             return;
         }
+        List<Opened> freezeAgain = new ArrayList<>();
         try {
-            Class<?> type = Class.forName(REGISTRY, false,
-                    XaeroLibChannels.class.getClassLoader());
-            Object instance = UnsafeAccess.getStatic(type, "INSTANCE");
-            if (instance == null) {
-                return;
-            }
-            boolean frozen = UnsafeAccess.getBoolean(instance, type, "frozen");
-            if (!frozen) {
+            for (String name : REGISTRIES) {
+                Class<?> type;
+                try {
+                    type = Class.forName(name, false, XaeroLibChannels.class.getClassLoader());
+                } catch (ClassNotFoundException e) {
+                    // The jar references the class but it is not on this side (e.g. a
+                    // client-only mod on a server); nothing to guard.
+                    continue;
+                }
+                Object instance = UnsafeAccess.getStatic(type, "INSTANCE");
+                if (instance == null) {
+                    continue;
+                }
+                boolean frozen = UnsafeAccess.getBoolean(instance, type, "frozen");
+                if (!frozen) {
+                    ModReloader.LOGGER.info(
+                            "[ModReloader] {} is already open; not guarding", name);
+                    continue;
+                }
+                UnsafeAccess.setBoolean(instance, type, "frozen", false);
+                freezeAgain.add(new Opened(name, type, instance));
                 ModReloader.LOGGER.info(
-                        "[ModReloader] XaeroLib config channels are already open; not guarding");
-                return;
+                        "[ModReloader] XaeroLib window open: {} (frozen -> false)", name);
             }
-            UnsafeAccess.setBoolean(instance, type, "frozen", false);
-            registryType = type;
-            registry = instance;
-            open = true;
-            rollback.add("xaero config channels", XaeroLibChannels::restore);
-            ModReloader.LOGGER.info(
-                    "[ModReloader] XaeroLib config-channel window open (frozen -> false)");
-        } catch (ClassNotFoundException e) {
-            // The jar references the class but it is not on this side (e.g. a
-            // client-only mod on a server); nothing to guard.
+            if (!freezeAgain.isEmpty()) {
+                opened.addAll(freezeAgain);
+                rollback.add("xaero registries", XaeroLibChannels::restore);
+            }
         } catch (Throwable t) {
+            // Undo a partial open; the add continues and may still succeed if the
+            // mod does not touch the registry we could not open.
             ModReloader.LOGGER.warn(
-                    "[ModReloader] cannot open the XaeroLib config-channel window (version "
+                    "[ModReloader] cannot open the XaeroLib registration window (version "
                             + "mismatch?); the add may fail with 'too late'", t);
+            opened.addAll(freezeAgain);
+            restore();
         }
     }
 
@@ -82,20 +117,16 @@ public final class XaeroLibChannels {
     }
 
     private static void restore() {
-        if (!open) {
-            return;
+        for (Opened entry : opened) {
+            try {
+                UnsafeAccess.setBoolean(entry.instance(), entry.type(), "frozen", true);
+                ModReloader.LOGGER.info(
+                        "[ModReloader] XaeroLib window closed: {} (frozen -> true)", entry.name());
+            } catch (Throwable t) {
+                ModReloader.LOGGER.warn(
+                        "[ModReloader] cannot restore the freeze state of {}", entry.name(), t);
+            }
         }
-        try {
-            UnsafeAccess.setBoolean(registry, registryType, "frozen", true);
-            ModReloader.LOGGER.info(
-                    "[ModReloader] XaeroLib config-channel window closed (frozen -> true)");
-        } catch (Throwable t) {
-            ModReloader.LOGGER.warn(
-                    "[ModReloader] cannot restore the XaeroLib channel freeze state", t);
-        } finally {
-            open = false;
-            registry = null;
-            registryType = null;
-        }
+        opened.clear();
     }
 }

@@ -35,6 +35,16 @@ public interface PlatformHooks {
     void acceptClientLifecycle(ModContainer container) throws Throwable;
 
     /**
+     * Client: startup-only registrations that must exist before the resource
+     * reload (reload listeners, item models, particle providers, colors, HUD
+     * layers, item decorations). Startup performs them while {@code Minecraft} is
+     * being constructed, i.e. before the initial reload, so a hot-add has to call
+     * this before {@link #injectResourcePacks}. Server: no-op.
+     */
+    default void registerClientRegistrations(ModContainer container) {
+    }
+
+    /**
      * Client: adds and selects the packs of the outer mod and its nested mods in
      * one reload. Server: logs that it is skipped.
      *
