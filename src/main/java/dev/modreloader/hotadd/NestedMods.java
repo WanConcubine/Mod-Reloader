@@ -1,6 +1,7 @@
 package dev.modreloader.hotadd;
 
 import cpw.mods.jarhandling.JarContents;
+import dev.modreloader.inspect.AccessTransformerRules;
 import net.neoforged.fml.loading.moddiscovery.ModFile;
 import net.neoforged.fml.loading.moddiscovery.ModFileInfo;
 import net.neoforged.fml.loading.moddiscovery.ModFileParser;
@@ -10,7 +11,6 @@ import net.neoforged.neoforgespi.language.IModInfo;
 import net.neoforged.neoforgespi.locating.IModFile;
 import net.neoforged.neoforgespi.locating.ModFileDiscoveryAttributes;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -35,7 +35,7 @@ import java.util.Set;
 public final class NestedMods {
     /** One nested jar that declares at least one mod. */
     public record Loaded(Path path, ModFile file, ModFileInfo info, List<ModInfo> infos,
-                         List<ModFileParser.MixinConfig> mixins) {
+                         List<ModFileParser.MixinConfig> mixins, List<Path> accessTransformers) {
     }
 
     /** A nested jar that declares an access transformer: still startup-only. */
@@ -51,9 +51,12 @@ public final class NestedMods {
     /**
      * @param alreadyLoaded mod ids that are already in the ModList (a dependency
      *                      was installed normally); that nested jar is not rebuilt
+     * @param allowLateAt   true when {@code -Dmodreloader.lateAt=true}: nested ATs
+     *                      are collected for the same JBR late-AT path as the outer
+     *                      jar instead of refusing the add
      */
-    public static List<Loaded> prepare(JarInJar.Result extracted, Set<String> alreadyLoaded)
-            throws Exception {
+    public static List<Loaded> prepare(JarInJar.Result extracted, Set<String> alreadyLoaded,
+                                       boolean allowLateAt) throws Exception {
         List<Loaded> prepared = new ArrayList<>();
         for (JarInJar.Nested nested : extracted.nested()) {
             if (!nested.declaresMod()) {
@@ -74,22 +77,15 @@ public final class NestedMods {
                         + nested.declaredPath());
             }
             file.setScanResult(scanData, null);
-            // FML lists an empty AT file too (codecui ships one); only files with
-            // content are a real access need.
-            List<Path> usedAts = new ArrayList<>();
-            for (Path at : file.getAccessTransformers()) {
-                try {
-                    if (Files.size(at) > 0) {
-                        usedAts.add(at);
-                    }
-                } catch (Throwable unreadable) {
-                    usedAts.add(at);
+            // FML lists an empty AT file too (codecui ships one); only files that
+            // parse to rules are a real access need (comment-only files are inert).
+            List<Path> usedAts = List.of();
+            if (AccessTransformerRules.read(nested.file()).ruleCount() > 0) {
+                if (!allowLateAt) {
+                    throw new AccessTransformer("nested mod " + nested.declaredPath()
+                            + " ships an access transformer file; access transformers only apply at startup");
                 }
-            }
-            if (!usedAts.isEmpty()) {
-                throw new AccessTransformer("nested mod " + nested.declaredPath()
-                        + " ships " + usedAts.size()
-                        + " access transformer file(s); access transformers only apply at startup");
+                usedAts = List.of(nested.file());
             }
             net.neoforged.neoforgespi.language.IModFileInfo rawInfo = file.getModFileInfo();
             if (!(rawInfo instanceof ModFileInfo info)) {
@@ -113,7 +109,7 @@ public final class NestedMods {
                 continue;
             }
             prepared.add(new Loaded(nested.file(), file, info, List.copyOf(infos),
-                    file.getMixinConfigs() == null ? List.of() : file.getMixinConfigs()));
+                    file.getMixinConfigs() == null ? List.of() : file.getMixinConfigs(), usedAts));
         }
         return prepared;
     }

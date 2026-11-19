@@ -59,7 +59,7 @@
 | **客户端注册重放** | menu screens / renderers（+dispatcher）/ 颜色 / 扩展 / reload listener / tooltip / item→model / HUD 层 25→31 / 物品装饰 diamond 0→1 / 配方书 `1 new` / **层定义 213→234（staged）**；逐个结论见 §7.1 | `-PverifyAddCommand=<clientfixture> -PverifyGuiLayers=true -PverifyItemDecorators=true`；[client-registration-audit.md](features/client-registration-audit.md) §7.1 |
 | **shader 重放** | 热加资源重载本身 fire `RegisterShadersEvent`（所有容器）；夹具 `clientfixture:marker` 实测 `shaders 56 -> 57`，只注册一次；`ShaderReplay` 仅无 reload 时兜底 | `-PverifyCompat=<clientfixture> -PverifyShaderCount=1 -PverifyCompatSettle=240`；[client-registration-audit.md](features/client-registration-audit.md) |
 | **capability 重放** | 五项全 present；`-PskipCapabilityReplay=true` 时五项 MISSING（反证） | `-PverifyCapabilities=<jar>`；[dogfood-gameplay.md](features/dogfood-gameplay.md) §1.1 |
-| **late AT（实验性）** | Jade 57/39、JEI 34/16、Controlling 1/1；Jade 回滚 39/39 ok；**类级 `public-f` 拒绝**（`stage=VALIDATE kind=ACCESS_TRANSFORMER`） | `-PlateAt=true`；[late-at.md](features/late-at.md) |
+| **late AT（实验性）** | Jade 57/39、JEI 34/16、Controlling 1/1；Jade 回滚 39/39 ok；**类级 `public-f` 拒绝**（`stage=VALIDATE kind=ACCESS_TRANSFORMER`）；**嵌套 mod AT 已接入**（2026-11-19：Create/Iris 越过嵌套 AT） | `-PlateAt=true`；[late-at.md](features/late-at.md) |
 | **失败回滚** | post-ModList / post-pack 恢复 ModList/module/config/类/资源包；post-construct 监听器按实例摘除 | `-PverifyRollback` / `-PfailAfterModList` / `-PfailAfterPack` / `-PfailAfterConstruct` |
 | **工程底座** | `capabilities` 10 组全 ok；无 `libs/` 可 `clean build`；**93 个无游戏 Java 单测**；i18n 两语言**各 197 key** | `./gradlew build`/`test`；[tech-debt.md](tech-debt.md) |
 
@@ -152,7 +152,7 @@
 21. **客户端启动期注册仍是手写清单**：已重放 FMLClientSetup/key/menu/renderers/颜色/扩展/reload listener/tooltip/配方书/**shader**/HUD/物品装饰/粒子+item→model；未做 `ColorResolvers`；`RegisterLayerDefinitions` 2026-11-18 起重放（含 `EntityModelSet` roots 重建与 staged 顺序）。漏一个就是一类 bug，所以有注册审计。
 22. ✅ **专用服妃级（已修）**：`runServer` 也用 JBR + enhanced；ZeroCore2 `redefined Slot` 成功。
 23. **AT：stock 硬边界；JBR late AT 实验性可行**：成员级 access/final 可改；**类级 `-f` 见 44**。默认拒绝（`ACCESS_TRANSFORMER`），`-PlateAt=true` 才走实验路径；托管重启会自动带开关。ADR-0014 否决“改写调用方”。
-24. **JiJ/coremod 剩余边界**：嵌套 GAMELIBRARY 无 container（独立分发的 MezzConfig 类）；嵌套 mod 的 AT 仍拒绝、`data/` 不单独注入；审计只扫外层；coremod 只覆盖 class 级 `ITransformer`，redefine 路径未实测。
+24. **JiJ/coremod 剩余边界**：嵌套 GAMELIBRARY 无 container（独立分发的 MezzConfig 类）；**嵌套 mod 的 AT 自 2026-11-19 起在 `-PlateAt=true` 下走 late AT**（无 lateAt 仍拒绝），嵌套 **GAMELIBRARY** 的 AT 与 `data/` 仍不单独注入；审计只扫外层；coremod 只覆盖 class 级 `ITransformer`，redefine 路径未实测。另有 Sodium 式“外壳 jar 与内嵌实现同 modId”会撞模块名（stage=MODULE），尚未适配。
 25. **JBR 只对「已加载类的布局变更」必需**：数据/方法级 mixin 在 JBR 下可 redefine；未加载目标免 JBR；缺 JBR 时干净 `JBR_REQUIRED` 并点名目标。
 26. ✅ **`RegisterCapabilitiesEvent` 重放（已修）**：commit 后、common setup 前只投新容器；审计移入 covered；模型层未重放。
 27. **「主菜单热加后创造栏没出现」无法复现**：本机四条路径 PASS；需要那台机器的 `latest.log`（[dogfood-gameplay.md](features/dogfood-gameplay.md) §2.1.1）。
@@ -164,7 +164,7 @@
 33. **L1 的“干净拒绝”不等于“功能正常”**：`overall_verdict` 要求 `DONE n/n` 且 exit 0。
 34. ✅ **失败热加留下半应用状态（已修）**：回滚改为 LIFO（先摘 mixin config 再还原类）；ModernFix 复跑不再崩。
 35. **post-construct 失败仍留注册表内容**：Waystones 在 Balm 之后失败，`BuiltInRegistries` 已 +44/+55，只能重启；与 18 同源，需要更早的校验点。
-36. **JiJ 嵌套 AT/元数据的误判（2026-11-18 已修）**：codecui 的 `META-INF/accesstransformer.cfg` 是**空文件**，且 `modType="LIBRARY"` 写在 toml（manifest 没有 `FMLModType`）；旧预检把“空 AT”和“没有 manifest 标记的库”都当成真 mod/真 AT。现在 AT 只认 FML 会应用且**有内容**的文件（含 toml `[[accessTransformers]]`），`isGameLibrary` 也认 toml `modType=LIBRARY`；`NestedMods` 跳过空 AT。Moonlight 因此越过 MODULE + late AT（126 条规则应用并回滚 ok），改卡在自定义注册表（见 46）。**嵌套 jar 的真 AT 仍不覆盖**（late AT 只读外层）。
+36. **JiJ 嵌套 AT/元数据的误判（2026-11-18 已修）**：codecui 的 `META-INF/accesstransformer.cfg` 是**空文件**，且 `modType="LIBRARY"` 写在 toml（manifest 没有 `FMLModType`）；旧预检把“空 AT”和“没有 manifest 标记的库”都当成真 mod/真 AT。现在 AT 只认 FML 会应用且**有内容**的文件（含 toml `[[accessTransformers]]`），`isGameLibrary` 也认 toml `modType=LIBRARY`；`NestedMods` 跳过空 AT。Moonlight 因此越过 MODULE + late AT（126 条规则应用并回滚 ok），改卡在自定义注册表（见 46）。**嵌套 mod 的 AT 自 2026-11-19 起在 lateAt 下由 `LateAccessTransformers` 应用**（Create 的 Ponder、Iris 的 fabric-block-view-api 已越过）；GAMELIBRARY 嵌套 AT 仍不覆盖。
 37. **JBR 自动准备/一键重启的 Windows 全链路未验证**：macOS dev 端到端 PASS（真实下载/校验/解压/重启/热加）；PCL2/Windows 的 argv、`javaw`、GUI 按钮未覆盖。
 38. **自动下载只覆盖 5 个平台资产**：Intel macOS 无 JBR 21 资产，需手动/预置；下载 95–200 MB。
 39. **dev client 预装 Moonlight 启动崩（环境问题）**：`ExtraCodecs` 引用 `codecui.Schema` 时 CNFE；只在 dev 观察到，阻塞 Supplementaries 完整复跑。
@@ -201,6 +201,10 @@
     启动期顺序是“注册表冻结 → common setup → client setup → renderers”；现已把 staged 的层/渲染器重放移到
     `FmlEvents.finishAll` + `RegistryStage.commit` 之后（仍在资源包注入之前），层先于渲染器、全容器先层不变。
     **修复后的 jar 尚未在真机重跑 Mekanism**（用户时间到）；下次直接热加 Mekanism 复验。
+59. **Create 的自定义注册表在构造期报「已冻结」（2026-11-19）**：`stage=CONSTRUCT` 抛
+    `IllegalStateException: Registry is already frozen (trying to add key ResourceKey[minecraft:root / create:arm_interaction_point_type])`。
+    嵌套 AT 已支持后暴露的新边界；`CustomRegistries` 的 `NewRegistryEvent` + `fill()` 没有覆盖该注册表的创建/写入时机，
+    待查（可能是静态初始化或直接 `RegistryBuilder` 冻结）。
 
 ## 玩家侧原则（ADR-0015，2026-11-18 最终）
 
@@ -239,6 +243,8 @@
 | **P0-新** | ✅ 嵌套 MixinSquared bootstrap（问题 48） | `JarInJar` 递归 3 层拆包；3 个嵌套库进 module path，MixinSquared config 可加载。Supplementaries 越过 MIXIN/CONSTRUCT | 批次复跑 |
 | **P0-新** | ✅ 模型层/Skull 模型（问题 49） | `RegisterLayerDefinitions` 重放 + `EntityModelSet` roots 重建；全容器先层后渲染器；FMLClientSetup 窗口内放开 client-loading 门禁。Supplementaries 层 213→234、`ok=true` | 批次复跑 |
 | **P1-新** | 回滚 VerifyError（问题 50） | 失败回滚 late-AT 类时 `VerifyError`；保证失败后是可重启的干净状态并明确提示 | 复跑 |
+| **P1-新** | 同 modId 嵌套（Sodium 式外壳） | 外壳 jar 与内嵌实现同 modId → 模块名 `sodium` 冲突（stage=MODULE）；需把内嵌实现作为模块/容器、外壳降级为库 | Sodium 越过 MODULE |
+| **P1-新** | Create 的自定义注册表冻结（问题 59） | `create:arm_interaction_point_type` 在构造期已冻结；对齐 `CustomRegistries` 窗口与创建时机 | Create 越过 CONSTRUCT |
 | **P0-新** | late AT 硬化 | L2 功能（Jade tooltip/JEI 界面）、Mekanism/AE2、多 mod 冲突、嵌套 AT、Windows/Linux、默认 UX | [late-at.md](features/late-at.md) |
 | **P0-新** | 消除“JBR 后仍需重启”的缺口 | JBR BLACK 逐个修；**不得**把重启当正常路径（ADR-0015）。结构性的（JourneyMap 类级 AT）写明原因 | 缺口清零或写明结构性不可行 |
 | **P1-新** | JBR 端到端 + 探针 | 剩余 Windows/PCL2 真机、GUI 按钮、真实 redefine 探针 | [jbr-support.md](features/jbr-support.md) §6 |

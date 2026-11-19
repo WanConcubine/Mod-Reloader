@@ -162,8 +162,9 @@ public final class HotAddEngine {
                 loadedIds.add(modInfo.getModId());
             }
             List<NestedMods.Loaded> nestedMods;
+            boolean lateAt = LateAccessTransformers.enabled();
             try {
-                nestedMods = NestedMods.prepare(nested, loadedIds);
+                nestedMods = NestedMods.prepare(nested, loadedIds, lateAt);
             } catch (NestedMods.AccessTransformer e) {
                 return fail(rollback, Stage.VALIDATE, FailureKind.ACCESS_TRANSFORMER,
                         ids + ": " + e.getMessage() + "; restart with the jar in mods/.");
@@ -171,6 +172,24 @@ public final class HotAddEngine {
                 ModReloader.LOGGER.error("[ModReloader] cannot prepare nested mods of {}", jar, t);
                 return fail(rollback, Stage.MODULE, FailureKind.JAR_IN_JAR,
                         "cannot prepare the mods nested in " + jar.getFileName() + ": " + t);
+            }
+            // Nested ATs use the same late path as the outer jar; applying them here
+            // is still before any class of this add loads.
+            for (NestedMods.Loaded nestedMod : nestedMods) {
+                for (Path nestedAt : nestedMod.accessTransformers()) {
+                    LateAccessTransformers.Result late =
+                            LateAccessTransformers.apply(nestedAt, rollback);
+                    if (!late.ok()) {
+                        return fail(rollback, Stage.VALIDATE, FailureKind.ACCESS_TRANSFORMER,
+                                ids + ": nested " + nestedAt.getFileName()
+                                        + " late AT failed: " + late.messages()
+                                        + ". Hot-add failed (runtime gap).");
+                    }
+                    ModReloader.LOGGER.info("[ModReloader] nested late AT for {} ({}): {}",
+                            ids, nestedAt.getFileName(), late.summary());
+                    late.messages().forEach(message ->
+                            ModReloader.LOGGER.info("[ModReloader] nested late AT {}", message));
+                }
             }
             Set<String> nestedIds = NestedMods.ids(nestedMods);
             if (!nested.nested().isEmpty()) {

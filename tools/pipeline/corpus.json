@@ -923,6 +923,17 @@
       ],
       "expect": {},
       "notes": "嵌套 AT 检查与 lateAt 无关，用来确认拒绝点不在 late AT。"
+    },
+    {
+      "id": "sodium-lateat",
+      "title": "渲染：Sodium（late AT，嵌套 AT 路径）",
+      "jbr": true,
+      "late_at": true,
+      "jars": [
+        "sodium"
+      ],
+      "expect": {},
+      "notes": "Sodium 的 AT 在内嵌 sodium-mod jar；验证 nested late AT。"
     }
   ]
 }

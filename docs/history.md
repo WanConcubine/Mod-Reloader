@@ -1766,3 +1766,23 @@ mcwifipnp 1.9.0，并登记 10 个场景（含 lateAt 对照）。全部在 macO
 `sodium-only` / `sodium-iris` / `iris-after-sodium` / `iris-after-sodium-lateat` / `create-only` / `create-lateat` /
 `ae2` / `ae2-lateat` / `lan-e4mc` / `lan-mcwifipnp`。
 未验证：sodium-iris 同批（sodium 已先拒，未单独跑）、AE2 的 L2 GUI、Sodium/Iris 若支持嵌套 AT 后的行为。
+
+## 2026-11-19（嵌套 mod 的 AT 接入 late AT）
+
+实现：
+- `NestedMods.prepare(..., allowLateAt)` 不再对嵌套 AT 无条件抛错；改用 `AccessTransformerRules.read(nested jar)`
+  判断是否真有规则（空文件 / 注释-only 不算）。lateAt 关闭时维持原拒绝（`ACCESS_TRANSFORMER`）。
+- `HotAddEngine` 在模块注入前，对每个嵌套 AT jar 调用 `LateAccessTransformers.apply`；失败按 `ACCESS_TRANSFORMER` 处理，
+  late AT 的类级 `-f` 前置拒绝照旧生效。`NestedMods.Loaded` 新增 `accessTransformers`。
+
+验证（pipeline，JBR，`--visible`，L1）：
+- `create-lateat`：越过 VALIDATE（Ponder 3 条嵌套 AT 应用），停在 `stage=CONSTRUCT` —
+  `Registry is already frozen (create:arm_interaction_point_type)`（新问题 59）。
+- `iris-after-sodium-lateat`：嵌套 AT（fabric-block-view-api 1 条）通过，停在自身 2 条类级 `public-f`
+  （`OptionInstance`、`RegistryAccess$RegistryEntry` 在运行期为 final，已知 JBR 边界）。
+- `sodium-lateat`：嵌套 18 条 AT 应用后停在 `stage=MODULE` —— 外壳 jar 与内嵌实现同 modId，模块名 `sodium` 冲突
+  （已知问题 24 记录的新边界，未适配）。
+- `sodium-only` 回归：无 lateAt 仍在 VALIDATE 以 `ACCESS_TRANSFORMER` 拒绝。
+
+构建：`./gradlew build` 绿（93 单测）。
+结论：嵌套 AT 不再是 Sodium/Iris/Create 的主因；三者分别卡在同 modId 模块、类级 AT、注册表冻结。
