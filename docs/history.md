@@ -1739,6 +1739,8 @@ late AT 从 class 资源（AT/mixin 之前的原始字节）重写已加载类�
 - 左下角模组数 4→4→6：两次 add 后 ModList 实际都增长；architectury 无资源包不重建标题屏，文本保持旧值，
   Jade 的资源重载重建标题屏后刷新为 6。计数文本的具体 UI 来源尚未确认。
 
-提交：`3e0ebf2`（late AT 保 AT）、`664d084`（Windows 测试断言）、`6d409c7`（新增字段警告）、
-`93d68be`（status/history）、`685aa5a`（渲染器顺序）、`29ef9e6`（监听过滤）。
+提交（推送前 amend 过，写作时记录的 hash 已失效；以下为 origin/main 上的实际提交）：
+`cb7b8a8`（late AT 保 AT）、`bbfa45d`（Windows 测试断言）、`f4ba9d1`（新增字段警告）、
+`7568a91`（late AT 复验 / 问题 56 文档）、`788d40f`（渲染器顺序）、`f16d938`（监听过滤）、
+`47a06cd`（联调收尾文档）。
 未验证：Mekanism 修复后重跑、Jade 重启后字体确认、计数 UI 来源、Windows 下「准备环境」全链路。

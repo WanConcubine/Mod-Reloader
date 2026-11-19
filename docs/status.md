@@ -212,9 +212,10 @@
 
 ## 下一步
 
-> **当前交接（2026-11-18，已推送 `e75d56e`）**：当前状态：自定义注册表、JiJ 递归、模型层重放、Xaero config channel、
-> JBR 环境收口（三态/标识/单一动作）都在；**所有者转 Windows 真机测试**（环境准备、MouseTweaks 布局热加）。
-> JBR 计数 **J1×20 / J2×1 / BLACK×3**。下一项：① Windows 实测反馈；② 问题 54（xaerolib mixin 挂起，先 jstack）
+> **当前交接（2026-11-19，已推送 `47a06cd`）**：Windows/PCL2/JBR 真机联调收尾：构建链 93/93、late AT 保 AT（architectury 311 规则）、
+> Jade 热加成功；新增问题 56（新增字段不初始化旧实例，字体变暗）、57（轮询把替换 jar 当候选，已修）、
+> 58（层/渲染器重放早于注册表提交，已修待 Mekanism 复验）。
+> JBR 计数 **J1×20 / J2×1 / BLACK×3**。下一项：① Mekanism 复验（问题 58）；② 问题 54（xaerolib mixin 挂起，先 jstack）
 > 与 53（client setup 早于热加包注入）；③ 问题 52/50（服务端事件重放未验证、回滚 VerifyError）；④ CraftTweaker 复跑；
 > ⑤ 类级 `-f` 启动期替代与流水线 L2。
 > 证据在 [history.md](history.md)；JBR 在 `run/jbr-21.0.11`（gitignored），语料 `/tmp/modreloader-corpus`。
@@ -224,10 +225,10 @@
 
 | 优先 | 任务 | 关键点 / 落点 | 验收 |
 |---|---|---|---|
-| **P1-3** | Git 收尾 | 本轮及 JBR 收口已推送（`e75d56e`）；观察 Actions、需要时打 tag | Actions 绿 |
+| **P1-3** | Git 收尾 | 本轮及 JBR/Windows 联调已推送（`47a06cd`）；观察 Actions、需要时打 tag | Actions 绿 |
 | **P0-新** | 流水线 L2 | 标题屏热加 → 建世界 → N tick → HUD/按键/截图；先 minimap/mouse-gestures | 断言 + 截图证据 |
 | **P0-新** | 语料扩到 20–30 个常用模组 | 小地图/JEI/HUD/输入/前置库；`check` 进 PR | 报告 + 矩阵 |
-| **P0-新** | 模组白名单实测（所有者驱动） | 54 行：stock T1×7 / BLACK×23；JBR J1×18 / BLACK×6；candidate 由所有者复测转 verified | TSV + 视图同步 |
+| **P0-新** | 模组白名单实测（所有者驱动） | 54 行：stock T1×7 / BLACK×23；JBR J1×20 / J2×1 / BLACK×3；candidate 由所有者复测转 verified | TSV + 视图同步 |
 | **P0-新** | ✅ Xaero's World Map config channel | `XaeroLibChannels` 窗口（`ConfigChannelRegistry.frozen`），仅对引用该类的 jar 生效；World Map `ok=true isLoaded=true` | 已转 J2 |
 | **P0-新** | 服务端一次性事件（问题 52） | `ServerLifecycleReplay` 已实现（定向调用新增监听器 + integrated server 兜底），**未验证**：进入世界复跑卡在 54 | World Map J1 |
 | **P0-新** | xaerolib mixin 阶段挂起（问题 54） | 先 `jstack` 留线程栈再杀；怀疑 Mixin/transform 锁或常驻 guard | 复跑不挂 |
