@@ -4,6 +4,11 @@ import dev.modreloader.ModReloader;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.fml.loading.moddiscovery.ModFileParser;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FieldNode;
+import org.objectweb.asm.tree.MethodNode;
 import org.spongepowered.asm.mixin.FabricUtil;
 import org.spongepowered.asm.mixin.MixinEnvironment;
 import org.spongepowered.asm.mixin.Mixins;
@@ -167,7 +172,8 @@ public final class MixinSupport {
                 try {
                     MixinRuntimeApi.setConfigs(processor, filterByNames(allActive, newNames));
                     MixinRuntimeApi.setPendingConfigs(processor, filterByNames(allPending, newNames));
-                    applied = applyTargets(targets, loadedNow, originals, rollback, errors);
+                    applied = applyTargets(targets, loadedNow, originals, rollback, errors,
+                            processor, allActive, allPending, newNames);
                 } finally {
                     MixinRuntimeApi.setConfigs(processor, allActive);
                     MixinRuntimeApi.setPendingConfigs(processor, allPending);
@@ -332,7 +338,9 @@ public final class MixinSupport {
 
     private static Applied applyTargets(Set<String> targets, Map<String, Class<?>> loaded,
                                         Map<String, byte[]> originals, Rollback rollback,
-                                        List<String> errors) {
+                                        List<String> errors, Object processor,
+                                        List<Object> allActive, List<Object> allPending,
+                                        Set<String> newNames) {
         List<String> redefined = new ArrayList<>();
         List<String> eager = new ArrayList<>();
         List<String> deferred = new ArrayList<>();
@@ -373,9 +381,19 @@ public final class MixinSupport {
             try {
                 mixed = transformBytes(original, dotted);
             } catch (Throwable t) {
-                errors.add("transform " + dotted + ": " + t.getClass().getSimpleName() + ": "
-                        + t.getMessage());
-                continue;
+                byte[] recomposed = recomposeTarget(dotted, original, processor,
+                        allActive, allPending, newNames);
+                if (recomposed != null) {
+                    mixed = recomposed;
+                    ModReloader.LOGGER.info(
+                            "[ModReloader] {} was mixed by an earlier add (or late AT); recomposed "
+                                    + "it from pre-mixin bytes with all active configs", dotted);
+                } else {
+                    errors.add("transform " + dotted + ": " + describe(t));
+                    ModReloader.LOGGER.error(
+                            "[ModReloader] mixin transform failed for {}", dotted, t);
+                    continue;
+                }
             }
             if (mixed == null) {
                 errors.add("mixin transform returned null: " + dotted);
@@ -471,6 +489,91 @@ public final class MixinSupport {
     private static byte[] transformBytes(byte[] original, String dotted) {
         IMixinTransformer transformer = MixinRuntimeApi.getTransformer();
         return transformer.transformClassBytes(dotted, dotted, original);
+    }
+
+    /**
+     * A target that an earlier add (or a late AT) already rewrote may no longer
+     * contain the call sites a new config expects: two {@code @WrapOperation}s on
+     * the same call leave only the first wrapper behind, so the second transform
+     * scans 0 targets. Recomputing from the class's pre-mixin resource with every
+     * active config reproduces the startup shape, where both wrappers compose;
+     * the live access flags (load-time ATs, earlier rewrites) are copied back.
+     *
+     * @return the composite bytes, or {@code null} when this target was not
+     *         rewritten before or the recomposition itself failed
+     */
+    private static byte[] recomposeTarget(String dotted, byte[] live, Object processor,
+                                          List<Object> allActive, List<Object> allPending,
+                                          Set<String> newNames) {
+        if (ClassBytesCache.get(dotted) == null) {
+            return null;
+        }
+        byte[] pristine = readClassResource(dotted);
+        if (pristine == null) {
+            return null;
+        }
+        try {
+            MixinRuntimeApi.setConfigs(processor, allActive);
+            MixinRuntimeApi.setPendingConfigs(processor, allPending);
+            byte[] composite = transformBytes(pristine, dotted);
+            return composite == null ? null : transplantAccess(live, composite);
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn(
+                    "[ModReloader] recomposing {} from pre-mixin bytes failed", dotted, t);
+            return null;
+        } finally {
+            MixinRuntimeApi.setConfigs(processor, filterByNames(allActive, newNames));
+            MixinRuntimeApi.setPendingConfigs(processor, filterByNames(allPending, newNames));
+        }
+    }
+
+    /** Copies class/field/method access flags from the live class onto the composite. */
+    private static byte[] transplantAccess(byte[] live, byte[] composite) {
+        ClassNode liveNode = new ClassNode();
+        new ClassReader(live).accept(liveNode, 0);
+        ClassReader compositeReader = new ClassReader(composite);
+        ClassNode compositeNode = new ClassNode();
+        compositeReader.accept(compositeNode, 0);
+        compositeNode.access = liveNode.access;
+
+        Map<String, Integer> fieldAccess = new HashMap<>();
+        for (FieldNode field : liveNode.fields) {
+            fieldAccess.put(field.name + field.desc, field.access);
+        }
+        for (FieldNode field : compositeNode.fields) {
+            Integer access = fieldAccess.get(field.name + field.desc);
+            if (access != null) {
+                field.access = access;
+            }
+        }
+        Map<String, Integer> methodAccess = new HashMap<>();
+        for (MethodNode method : liveNode.methods) {
+            methodAccess.put(method.name + method.desc, method.access);
+        }
+        for (MethodNode method : compositeNode.methods) {
+            Integer access = methodAccess.get(method.name + method.desc);
+            if (access != null) {
+                method.access = access;
+            }
+        }
+        ClassWriter writer = new ClassWriter(compositeReader, 0);
+        compositeNode.accept(writer);
+        return writer.toByteArray();
+    }
+
+    /** Mixin wraps the real failure; keep the whole cause chain in the report. */
+    private static String describe(Throwable t) {
+        StringBuilder builder = new StringBuilder();
+        for (Throwable current = t; current != null; current = current.getCause()) {
+            if (!builder.isEmpty()) {
+                builder.append(" <- ");
+            }
+            builder.append(current.getClass().getSimpleName()).append(": ").append(current.getMessage());
+            if (current.getCause() == current) {
+                break;
+            }
+        }
+        return builder.toString();
     }
 
     /**

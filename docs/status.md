@@ -130,8 +130,8 @@
 
 ## 已知问题 / 坑
 
-> 追加式账本，**编号稳定**（引用不变）。共 61 条：待解决 8 / 验证缺口 5 / 结构性边界 16 / 历史与注记 15 / 已修 17。
-> **当前 actionable（8）**：61 Sodium 单例 mixin 字段（结构边界，需产品决策）· 60 Supplementaries 在 Moonlight 之后 · 54 xaerolib 挂起（先 jstack）·
+> 追加式账本，**编号稳定**（引用不变）。共 61 条：待解决 7 / 验证缺口 5 / 结构性边界 16 / 历史与注记 15 / 已修 18。
+> **当前 actionable（7）**：61 Sodium 单例 mixin 字段（结构边界，需产品决策）· 54 xaerolib 挂起（先 jstack）·
 > 53 资源顺序 · 50 回滚 VerifyError · 35 post-construct 注册残留 · 2 AE2 的 L2 与皇后判定 · 29 reload/chunk 并发。
 
 ### 待解决（需改代码）
@@ -147,11 +147,6 @@
 53. **client setup 的 deferred task 早于热加资源包注入（2026-11-18）**：World Map 的 `loadLater` 在 `FMLClientSetupEvent` 的 deferred queue 里读自己的 `vanillaStatesResource`（`Minecraft.getResourceManager()`），此时热加包还没注入 → `Optional.get()` 抛 `NoSuchElementException`。启动期该顺序成立是因为包在 setup 前已注册；运行期需要“包先可用”或把这类 deferred task 放到 资源重载之后重跑。
 
 54. **xaerolib mixin 阶段挂起（2026-11-18，待查）**：两次 `-PverifyAddCommand=<xaeroworldmap>` 都停在 `Mixin compatibility level set to JAVA_21 after xaerolib.neoforge.mixins.json` 之后，10 分钟无日志；两个客户端 JVM 都需 `kill -9`。之前同一场景能跑到 add 返回 1，所以是间歇/时序问题；下次先 `jstack` 留线程栈（重点看 Mixin/transform 锁与我们的 guard），再决定修法。
-
-60. **Moonlight 之后热加 Supplementaries 的 Mixin 失败（2026-11-19 复跑）**：`moonlight-lateat` 中 Moonlight ok=true，
-    Supplementaries 在 `MIXIN` 阶段失败：`transform net.minecraft.client.gui.MapRenderer$MapInstance:
-    MixinTransformerError: An unexpected critical error was encountered`（回滚 late AT 成功）。该目标先被 Moonlight
-    的 late AT 重定义（1 条规则），再被自己的 mixin 处理，属问题 47 同族；与本次注册表改动无关，待复现。
 
 61. **Sodium 热加后旧渲染对象崩溃（2026-11-19）**：`sodium-lateat` 中 Sodium ok=true（含 4 个 fabric 库、约 64 类 redefine）。
     已修：`ShaderInstance` 的 `uniformCache` NPE —— add 流程在资源重载前调用 `PlatformHooks.rebuildShaderInstances`
@@ -278,6 +273,14 @@
 49. ✅ **模型层/Skull 模型（2026-11-18，已修）**：`RegisterLayerDefinitions` 现在会被重放，随后调用 `EntityModelSet.onResourceManagerReload` 重建 roots（`LayerDefinitions.createRoots()` 会合并 `ClientHooks` 的静态表）；层回放与“重建 renderer”拆成两阶段、**全容器先层后渲染器**（否则嵌套容器先重建，外层层的模型还没注册）。`ItemBlockRenderTypes.setRenderLayer` 的 client-loading 门禁在 FMLClientSetup 重放窗口内临时放开（`ClientModLoader.loading`，消费者只有该门禁和 options 保存保护）。实测 Supplementaries 层 213→234、无 `No model for layer`、`ok=true`。
 
 51. ✅ **无焦点 + 热加重载隐藏 screen 会撞 `PauseScreen` NPE（2026-11-18 发现，2026-11-19 已修）**：`GameRenderer.render` 在窗口失焦时调 `pauseGame`，而 `pauseGame` 只在 `mc.screen == null` 时动作；`ClientResourcePacks` 原先在 reload 链期间把 screen 置空，`PauseScreen.createPauseMenu` 读到 `minecraft.player == null` → NPE。现在改用**已初始化**的空白占位 `Screen`（`isPauseScreen=false`，手动 `init`，不触发 ScreenEvent），重载结束再还原。
+
+60. ✅ **Moonlight 之后热加 Supplementaries 的 Mixin 失败（2026-11-19 已修）**：Moonlight 与 Supplementaries 都对
+    `MapRenderer$MapInstance.updateTexture` 的同一 `DynamicTexture.upload()` 调用点做 `@WrapOperation`。
+    Moonlight 先把原调用点包掉后，Supplementaries 的 config 单独应用到已混字节上时 0 匹配
+    （`Critical injection failure ... Scanned 0 target(s)`）。现在 `MixinSupport` 在 transform 失败且目标曾被前一次
+    add/late AT 改写过时，用**类资源原始字节 + 全部活动 configs** 重组，再把 live 的访问标志移植回来；
+    `moonlight-lateat` 复跑 Supplementaries **ok=true**（blocks 1061→1306、items 1335→1584）。
+    证据：`reports/20261119-162209-moonlight-lateat`（`recomposed ... with all active configs`）。
 
 57. ✅ **轮询把已加载 mod 的替换 jar 当新候选（2026-11-18 真机，已修）**：轮询 `scan()` 只过滤 ignored/failed，
     没有“modId 已加载”检查（手动 `scanNow()` 有）。在游戏运行时覆盖 `modreloader` 自身 jar 后，它被当成新候选并

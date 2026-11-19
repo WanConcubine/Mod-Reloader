@@ -87,7 +87,7 @@
 | ModernFix | modernfix-neoforge-5.27.27+mc1.21.1.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18：单独与批次（GeckoLib→FerriteCore→ModernFix→MouseTweaks）均 ok=true isLoaded=true；MixinAgentGuard + 新 config 隔离 |
 | Moonlight Lib | moonlight-1.21.1-3.8.3-neoforge.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18：NewRegistryEvent 重放已实现（3 个注册表创建、commit 90→92、blocks 1060→1061、items 1333→1335、stoneId 稳定），ok=true isLoaded=true；所有者实例复测后转 verified |
 | Simple Voice Chat | voicechat-neoforge-1.21.1-2.6.27.jar | HUANGHOU | candidate | - | JBR harness 2026-11-18 ok=true isLoaded=true（无 AT；lateAt 批次） |
-| Supplementaries | supplementaries-1.21.1-4.1.1-neoforge.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18：JiJ 递归 + 自定义注册表 + 模型层重放后 ok=true isLoaded=true；blocks 1061→1306、items 1335→1584、层 213→234；所有者实例复测后转 verified |
+| Supplementaries | supplementaries-1.21.1-4.1.1-neoforge.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18：JiJ 递归 + 自定义注册表 + 模型层重放后 ok=true isLoaded=true；blocks 1061→1306、items 1335→1584、层 213→234。2026-11-19 复跑：MapRenderer$MapInstance 的两次 @WrapOperation 冲突 → 用预混字节 + 全部 configs 重组后 ok=true；所有者实例复测后转 verified |
 | Xaero 小地图（Xaero's Minimap） | xaerominimap-neoforge-1.21.1-26.6.0.jar | HUANGHOU | candidate | - | JBR harness 2026-11-17 ok=true isLoaded=true（含 JiJ xaerolib） |
 | ZeroCore2 | ZeroCore2-1.21.1-2.4.9.jar | GUIFEI | candidate | - | JBR harness 2026-11-17 ok=true isLoaded=true |
 | 农夫乐事（Farmer's Delight） | FarmersDelight-1.21.1-1.3.4.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（MixinAgentGuard；blocks 1060→1192 items 1333→1518） |

@@ -1842,3 +1842,24 @@ mcwifipnp 1.9.0，并登记 10 个场景（含 lateAt 对照）。全部在 macO
 - 构建：`./gradlew build` 绿。
 
 白名单：Sodium 行更新原因与证据（桶不变，J2）；计数不变。
+
+## 2026-11-19（问题 60：跨 add 的 @WrapOperation 冲突 → 预混字节重组）
+
+根因：Moonlight 与 Supplementaries 都对 `MapRenderer$MapInstance.updateTexture` 里的
+`DynamicTexture.upload()` 调用点做 `@WrapOperation`。Moonlight 先应用后，原调用点已被包成 wrapper；
+Supplementaries 的 config 单独应用到这份已混字节上就 `Scanned 0 target(s)`（MixinExtras 看不到原调用点）。
+此前 late AT 改用活类字节后，缓存里保存的就是已混字节，因此暴露。
+
+改动：
+- `MixinSupport` 在 transform 失败、且该目标曾被前一次 add/late AT 改写过（`ClassBytesCache` 有记录）时，
+  用**类资源原始字节 + 全部活动 configs** 重组（还原启动期顺序，让两个 wrapper 组合），
+  再把 live 的类/字段/方法访问标志移植回重组结果（保住 AT 与既有改写）。
+- transform 失败的错误信息带完整 cause 链并打印堆栈（原先只有 Mixin 的外层 wrapper）。
+
+验证：
+- `moonlight-lateat`：Supplementaries **ok=true**（blocks 1061→1306、items 1335→1584），
+  日志有 `recomposed it from pre-mixin bytes with all active configs`。
+- `ae2-lateat` 回归：guideme/ae2 均 ok=true。
+- 构建：`./gradlew build` 绿。
+
+白名单：Supplementaries 证据补 2026-11-19 复跑（桶不变，J1 candidate）。
