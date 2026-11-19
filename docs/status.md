@@ -130,91 +130,165 @@
 
 ## 已知问题 / 坑
 
-1. **静态分析仍会漏/误判**：反射/跨模组代理注册抓不到；注册轴已按「注册调用 / `*DeferredRegister` 引用」对齐（`RegistrySignalTest`）。
+> 追加式账本，**编号稳定**（引用不变）。共 61 条：待解决 8 / 验证缺口 5 / 结构性边界 16 / 历史与注记 16 / 已修 16。
+> **当前 actionable（8）**：61 Sodium 旧渲染对象 · 60 Supplementaries 在 Moonlight 之后 · 54 xaerolib 挂起（先 jstack）·
+> 53 资源顺序 · 50 回滚 VerifyError · 35 post-construct 注册残留 · 2 AE2 的 L2 与皇后判定 · 29 reload/chunk 并发。
+
+### 待解决（需改代码）
+
 2. **皇后级判定偏保守（2026-11-19 部分解决）**：AE2 在 JBR+lateAt 下 L1 热加成功（blocks 1060→1162、items 1334→1698），GUI 未验；不再按“必须重启”处理。
-3. **Fabric 生产 jar 是 intermediary 名**（`class_310`），核心类识别退化。
-4. **JiJ 递归拆包（2026-11-18）**：`JarInJar` 现在递归展开到 3 层（Supplementaries → mixinsquared-forge → MixinSquared core），嵌套库进 module path 并收集 manifest `MixinConfigs`；更深的 bundle 仍不展开，**嵌套 jar 的真 AT 仍不覆盖**（见 24/36）。
-5. **Python 分析器 vs Java 运行时**：注册轴已对齐，其它轴（native/JNI、render-core mixin）仍不一致；`VALIDATE` 没有 tier 门禁（UI 才有）。
-6. **LAN 模组是妃级布局变更**：需要 JBR；`online-mode` 可能要重启集成服务器。
-7. **A1 剩余边界**：构造器其它副作用（静态状态/全局注册/线程）不可回滚；不能 undefine module；post-construct 重试仍失败（干净回滚 + 重启）。
-8. **Git 收尾一半**：`main`/`origin`/CI/tag 已建但**没 push**，CI 绿未证明。
-9. **没有完整人工标注集**：只校准 11 个有真机结论的 jar；Fabric 与置信度未校准。
-10. **没有删/更新路径**：已加载（尤其织入 mixin）的类无法卸载；datapack 删除实测不可能。
-11. **GUI/监听初版限制**：只有 `zh_cn`/`en_us`；最多显示 7 个候选；`gui`/`scan`、失败重试未自动验证；皇后级只提示重启。
-12. **MixinRuntime 是可选第三方前置**（`type="optional"` + 反射）：缺它时嫔级照常、妃级被拦；构建不需要 `libs/`。
-13. **`mods.toml` 的 side 字段不可信**：静态只 warn（分不清「双端模组的客户端代码」与「启动路径就用」），兜底是 dist 门禁 + 回滚。
-14. **命令重放的边界**：`RegisterCommandsEvent` 是全局事件（所有监听器再跑一遍）；payload 能补进已建立连接，但缺握手（两端必须同一 jar）、锁 1.21.1、一次性事件不支持。
-15. **客户端重放命令的副作用**（与 14 同源）：集成服务器每次热加都重跑所有命令监听器；标题屏不重放。
-16. **Capabilities 只查名字不查行为**：锚点匹配 ≠ 语义未变，不能代替 harness。
-17. **裸 unfreeze/freeze 会移动 BlockState id**：必须先清 `BLOCKSTATE_TO_ID_MAP` 再 freeze（[research-t4-registry.md](research-t4-registry.md)）。
-18. **贵妃级只到 add-only**：客户端不装 jar 的多人仍不行（被 datapack 同步踢，装回前连不回）；实体 post-register 未重放；提交后不可回滚。
-19. **datapack 边界**：只覆盖 `RELOADABLE`；WORLDGEN 需新世界；存档记录 `mod/<modId>`，重启且 jar 在 `mods/` 会合并；失败文案必须强调 dirty/重启。
-20. ✅ **创造页签排序非幂等（已修）**：`sortTabs()` 追加不清空 → 4→8 → 越界崩；`afterRegistryContent()` 先清 `DEFAULT_TABS`。
-21. **客户端启动期注册仍是手写清单**：已重放 FMLClientSetup/key/menu/renderers/颜色/扩展/reload listener/tooltip/配方书/**shader**/HUD/物品装饰/粒子+item→model；未做 `ColorResolvers`；`RegisterLayerDefinitions` 2026-11-18 起重放（含 `EntityModelSet` roots 重建与 staged 顺序）。漏一个就是一类 bug，所以有注册审计。
-22. ✅ **专用服妃级（已修）**：`runServer` 也用 JBR + enhanced；ZeroCore2 `redefined Slot` 成功。
-23. **AT：stock 硬边界；JBR late AT 实验性可行**：成员级 access/final 可改；**类级 `-f` 见 44**。默认拒绝（`ACCESS_TRANSFORMER`），`-PlateAt=true` 才走实验路径；托管重启会自动带开关。ADR-0014 否决“改写调用方”。
-24. **JiJ/coremod 剩余边界**：嵌套 GAMELIBRARY 无 container（独立分发的 MezzConfig 类）；**嵌套 mod 的 AT 自 2026-11-19 起在 `-PlateAt=true` 下走 late AT**（无 lateAt 仍拒绝），嵌套 **GAMELIBRARY** 的 AT 与 `data/` 仍不单独注入；审计只扫外层；coremod 只覆盖 class 级 `ITransformer`，redefine 路径未实测。Sodium 式「外壳 jar 与内嵌实现同 modId」已适配（2026-11-19：内嵌实现作主文件，外壳降级为库模块）。
-25. **JBR 只对「已加载类的布局变更」必需**：数据/方法级 mixin 在 JBR 下可 redefine；未加载目标免 JBR；缺 JBR 时干净 `JBR_REQUIRED` 并点名目标。
-26. ✅ **`RegisterCapabilitiesEvent` 重放（已修）**：commit 后、common setup 前只投新容器；审计移入 covered；模型层未重放。
-27. **「主菜单热加后创造栏没出现」无法复现**：本机四条路径 PASS；需要那台机器的 `latest.log`（[dogfood-gameplay.md](features/dogfood-gameplay.md) §2.1.1）。
-28. ✅ **in-world 热加与区块发送竞态（已修）**：`ServerThreadHop` 把「清 id + freeze」投到服务器线程；单人两端共享同一张表，窗口只是缩小。
+
 29. **资源重载与 chunk 重镶并发（一次性）**：无 assets 时跳过整次重载；reload 已串行化 + 链期间隐藏 Screen（Jade 修复），但 chunk 重镶未串行化。
-30. **客户端「保存→退标题→重开」harness 会卡死**（`glfwSwapBuffers` / 无主显示器）：路径已删，存档回读由专用服覆盖。
-31. **L1 标题屏测不了“需要世界”的模组**：Xaero World Map 的 `loadLater` 会抛；pipeline 把“没到 `DONE`”判 `INCOMPLETE`。
-32. **无 `mods.toml` 的嵌套 GAMELIBRARY 没有 container 语义**（独立分发的 MezzConfig）；GAMELIBRARY manifest 现在返回 `FailureKind.LIBRARY`；带 `mods.toml` 的嵌套 GAMELIBRARY 归为库 + 收集 `MixinConfigs`。
-33. **L1 的“干净拒绝”不等于“功能正常”**：`overall_verdict` 要求 `DONE n/n` 且 exit 0。
-34. ✅ **失败热加留下半应用状态（已修）**：回滚改为 LIFO（先摘 mixin config 再还原类）；ModernFix 复跑不再崩。
+
 35. **post-construct 失败仍留注册表内容**：Waystones 在 Balm 之后失败，`BuiltInRegistries` 已 +44/+55，只能重启；与 18 同源，需要更早的校验点。
-36. **JiJ 嵌套 AT/元数据的误判（2026-11-18 已修）**：codecui 的 `META-INF/accesstransformer.cfg` 是**空文件**，且 `modType="LIBRARY"` 写在 toml（manifest 没有 `FMLModType`）；旧预检把“空 AT”和“没有 manifest 标记的库”都当成真 mod/真 AT。现在 AT 只认 FML 会应用且**有内容**的文件（含 toml `[[accessTransformers]]`），`isGameLibrary` 也认 toml `modType=LIBRARY`；`NestedMods` 跳过空 AT。Moonlight 因此越过 MODULE + late AT（126 条规则应用并回滚 ok），改卡在自定义注册表（见 46）。**嵌套 mod 的 AT 自 2026-11-19 起在 lateAt 下由 `LateAccessTransformers` 应用**（Create 的 Ponder、Iris 的 fabric-block-view-api 已越过）；GAMELIBRARY 嵌套 AT 仍不覆盖。
-37. **JBR 自动准备/一键重启的 Windows 全链路未验证**：macOS dev 端到端 PASS（真实下载/校验/解压/重启/热加）；PCL2/Windows 的 argv、`javaw`、GUI 按钮未覆盖。
-38. **自动下载只覆盖 5 个平台资产**：Intel macOS 无 JBR 21 资产，需手动/预置；下载 95–200 MB。
-39. **dev client 预装 Moonlight 启动崩（环境问题）**：`ExtraCodecs` 引用 `codecui.Schema` 时 CNFE；只在 dev 观察到，阻塞 Supplementaries 完整复跑。
-40. **JBR redefine 的 `ClassFormatError`（已修）**：根因是 JBR 触发 Mixin agent 二次 transform；`MixinAgentGuard` 在 redefine 窗口内暂停目标类，失败 dump 字节。guard 依赖内部字段，找不到时 no-op。
-41. ✅ **同批热加同目标类冲突（已修）**：手动 transform 只保留本次新增 config；`GeckoLib→FerriteCore→ModernFix→MouseTweaks` 4/4 PASS。真正改同一个类的叠加仍未测。
-42. ✅ **late AT 结果被后续 mixin 覆盖（已修）**：`ClassBytesCache` 记住实际字节；`captureOriginals` 优先用缓存。
-43. ✅ **JourneyMap 资源重载崩溃（已修）**：根因是 late AT 去**类** final 把 `NativeImage`/`ModelPart` 的构造打成 null；现在前置拒绝（见 44）。
-44. **类级 AT 去 final 是 JBR 结构性边界**：实例构造返回 null，后续 redefine SIGSEGV；“AT 覆盖 access/final”只指**成员级**；需启动期类变换或 JBR 修复。
-45. **mixin 新增实例字段不初始化已存在对象**：JourneyMap 给 `DynamicTexture` 加字段，老 `LightTexture` 上为 null，退出时 `onClose` 注入 NPE（只影响退出）。
-46. ✅ **自定义注册表（`NewRegistryEvent`）已支持（2026-11-18）**：构造期临时恢复 `pendingModdedRegistries`，构造后只对新容器 fire `NewRegistryEvent` 并调用包私有 `fill()`；`RegisterEvent`/freeze/快照由现有 `RegistryStage` 动态覆盖。夹具 + Moonlight 验证；失败语义：`fill()` 之后失败只能 dirty。datapack 注册表、`ModifyRegistriesEvent` 仍不重放。见 [research-newregistry-hotadd.md](research-newregistry-hotadd.md)。
-47. ✅ **late AT 对已混入的类二次 transform（2026-11-18，已修）**：Supplementaries 的 AT redefine `Entity`（Moonlight 已混入）时，Mixin agent 仍二次注入 → `ClassFormatError`。修法：`MixinAgentGuard` 改为常驻 wrapper（2026-11-18 晚已收窄为只包 Mixin agent，靠 `blanket()` 覆盖其它路径，待复验），并在每次 `redefineClasses` 期间用 `blanket()` **全局抑制**（JBR 该路径不一定传类名，按名匹配不可靠）。复跑日志：`transform guard installed (4 transformer(s) wrapped)`、Moonlight `ok=true`，Entity 不再报错。同类问题（40/41）的第三份。
-48. ✅ **嵌套 `MixinSquared` bootstrap（2026-11-18，已修）**：`JarInJar` 递归拆包后，Supplementaries 的 3 个嵌套库（`mixinsquared.forge` / `MixinSquared` / `sable.companion.common`）全部进入 module path，`mixinsquared.forge.init.mixins.json` 能加载其 `MixinSquaredBootstrap`；Supplementaries 越过 MIXIN/CONSTRUCT，注册了 blocks 1061→1306、items 1335→1584。
-49. ✅ **模型层/Skull 模型（2026-11-18，已修）**：`RegisterLayerDefinitions` 现在会被重放，随后调用 `EntityModelSet.onResourceManagerReload` 重建 roots（`LayerDefinitions.createRoots()` 会合并 `ClientHooks` 的静态表）；层回放与“重建 renderer”拆成两阶段、**全容器先层后渲染器**（否则嵌套容器先重建，外层层的模型还没注册）。`ItemBlockRenderTypes.setRenderLayer` 的 client-loading 门禁在 FMLClientSetup 重放窗口内临时放开（`ClientModLoader.loading`，消费者只有该门禁和 options 保存保护）。实测 Supplementaries 层 213→234、无 `No model for layer`、`ok=true`。
+
 50. **失败回滚对 late-AT 重定义过的类可能 VerifyError（2026-11-18）**：Supplementaries 失败后回滚 `MineshaftPieces$MineShaftPiece` 报 `VerifyError: null`，`kind=ROLLBACK_PARTIAL`。回滚写回的是 late AT 之前的字节，但该类的后续加载/重定义可能已经改变了校验状态；需要专门复现，失败时至少保证“可重启的干净状态”并明确提示。
-51. **无焦点 + 热加重载隐藏 screen 会撞 `PauseScreen` NPE（2026-11-18，测试环境）**：`-PnoFocus=true` 时窗口失焦，`GameRenderer.render` 调 `pauseGame`；而 `ClientResourcePacks` 在 reload 链期间把 `mc.screen` 置空，`PauseScreen.createPauseMenu` 读到 `minecraft.player == null` → NPE（crash-2026-11-18_19.18.27）。**多 add/重载场景用聚焦窗口跑**（不带 `-PnoFocus`）；无焦点只用于单 add/短重载。
-55. **「已选 JBR 仍要重启」是产品失败（2026-11-18 所有者）**：玩家已经在启动器里选了 JBR，却因为缺 `-XX:+AllowEnhancedClassRedefinition` 被要求再重启一次——把实现细节（JVM 启动参数）转嫁给玩家，不是可接受的路径。该参数**只能启动时给**，运行时无法补；因此产品修法是**运行时自己负责**：检测到“JBR 但缺能力”时不弹教学屏，而是记住待加载的 jar、自动用同一 JBR 重启一次并在新进程里完成热加（玩家零决策、最多一次自动重启）；若启动器每次都不带参数，则每次会话需要一次自动重启——这仍是缺口，不能写成“已解决”。界面上的三态标识与准确文案（问题 51 同批改动）只是止血，不是修复。55. **「已选 JBR 仍要重启」是产品失败（2026-11-18 所有者）**：玩家已在启动器选了 JBR，却因缺 `-XX:+AllowEnhancedClassRedefinition` 被要求再重启——把实现细节转嫁给玩家，不可接受。**2026-11-18 收口为单一动作「为热加载增强环境做准备」**：菜单（未就绪时常驻）与失败屏都指向同一入口；已安装/正在运行的 JBR 直接复用，不再下载；缺失时官方下载 → SHA-512 → 解压到 `gameDir/jbr-21.0.11`；随后用该 JBR 自动重启并带齐 `-XX:+AllowEnhancedClassRedefinition` + `-Dmodreloader.lateAt=true`。**仍余缺口**：参数只能启动时给，启动器每次不带参数的话，每次会话最多一次自动重启；跨会话永久生效需要启动器/整合包预设（不默认改玩家配置）或 classloader 隔离/软重启（长期）。
-52. **服务端一次性事件定向重放：已实现，未验证（2026-11-18）**：新增 `hotadd/ServerLifecycleReplay`，用 `EventBusSnapshot.addedSince` 取出本次 add 新增的 game-bus 监听器，只对这些监听器调用 `ServerStartingEvent`/`ServerStartedEvent`（`ListenerList` 不保证与 owner map 同一实例，故有“逐个试调用、类型不符即跳过”的兜底）；服务端实例先取 `ServerLifecycleHooks.getCurrentServer()`，为空再反射 `Minecraft#getSingleplayerServer`。**未验证**：进入世界复跑时，客户端两次卡在 xaerolib mixin 阶段（见 54），没走到重放日志。
+
 53. **client setup 的 deferred task 早于热加资源包注入（2026-11-18）**：World Map 的 `loadLater` 在 `FMLClientSetupEvent` 的 deferred queue 里读自己的 `vanillaStatesResource`（`Minecraft.getResourceManager()`），此时热加包还没注入 → `Optional.get()` 抛 `NoSuchElementException`。启动期该顺序成立是因为包在 setup 前已注册；运行期需要“包先可用”或把这类 deferred task 放到 资源重载之后重跑。
+
 54. **xaerolib mixin 阶段挂起（2026-11-18，待查）**：两次 `-PverifyAddCommand=<xaeroworldmap>` 都停在 `Mixin compatibility level set to JAVA_21 after xaerolib.neoforge.mixins.json` 之后，10 分钟无日志；两个客户端 JVM 都需 `kill -9`。之前同一场景能跑到 add 返回 1，所以是间歇/时序问题；下次先 `jstack` 留线程栈（重点看 Mixin/transform 锁与我们的 guard），再决定修法。
-56. **Mixin 新增实例字段不初始化旧实例（2026-11-18 真机确认）**：Jade 的 `FontMixin` 给已加载的 `Font` 增加
-    `glint1/glint2/glint1Strength/glint2Strength`（构造器里 `glint1/2 = NaN` 表示“无闪烁”）。热加只 redefine 类、
-    不会重跑构造器，旧 `Font` 实例拿到的字段是 `0.0f`，闪烁分支常开，所有文字约 65% 亮度（真机截图：字体变暗）。
-    这是问题 45（新增字段不初始化）的第二个实例；`layoutChange` 现在把字段增减也算作布局变更：无 JBR 前置拒绝，
-    JBR 下照常尝试并额外打印“旧实例保持 JVM 默认值，需重启才完全正确”的警告。Jade 的变暗不是崩溃，
-    实测重启并让 Jade 正常加载即可恢复；是否把 Jade 记为“需重启才正确渲染”由所有者按白名单规则决定。
-57. ✅ **轮询把已加载 mod 的替换 jar 当新候选（2026-11-18 真机，已修）**：轮询 `scan()` 只过滤 ignored/failed，
-    没有“modId 已加载”检查（手动 `scanNow()` 有）。在游戏运行时覆盖 `modreloader` 自身 jar 后，它被当成新候选并
-    弹 toast；底层 `SecureJarHandler` 指向的 jar 已被替换，加载尚未加载的类时 `NoClassDefFoundError`（类在新 jar 里
-    实际存在），客户端崩溃。现在两路径都按 `inspection.alreadyLoaded()`/modId 过滤，日志提示“替换/更新已加载的 jar
-    需要重启”。**运行时不要替换正在使用的 mod jar**；更新路径仍不支持。
+
+60. **Moonlight 之后热加 Supplementaries 的 Mixin 失败（2026-11-19 复跑）**：`moonlight-lateat` 中 Moonlight ok=true，
+    Supplementaries 在 `MIXIN` 阶段失败：`transform net.minecraft.client.gui.MapRenderer$MapInstance:
+    MixinTransformerError: An unexpected critical error was encountered`（回滚 late AT 成功）。该目标先被 Moonlight
+    的 late AT 重定义（1 条规则），再被自己的 mixin 处理，属问题 47 同族；与本次注册表改动无关，待复现。
+
+61. **Sodium 热加后旧渲染对象崩溃（2026-11-19）**：`sodium-lateat` 中 Sodium ok=true（含 4 个 fabric 库、约 64 类 redefine），
+    随后渲染 overlay 抛 NPE：`ShaderInstance.uniformCache` 为 null。同 modId 适配后暴露出问题 45/56 的致命版：
+    mixin 给已存在的 `ShaderInstance` 加字段，旧实例保持 JVM 默认值（null）。当前结论 J2（能加、崩溃）；
+    需在 add 后强制重建受影响的渲染对象（或明确“需重启才正确渲染”）。
+
+### 验证缺口（已实现/已修，缺证据）
+
+27. **「主菜单热加后创造栏没出现」无法复现**：本机四条路径 PASS；需要那台机器的 `latest.log`（[dogfood-gameplay.md](features/dogfood-gameplay.md) §2.1.1）。
+
+37. **JBR 自动准备/一键重启的 Windows 全链路未验证**：macOS dev 端到端 PASS（真实下载/校验/解压/重启/热加）；PCL2/Windows 的 argv、`javaw`、GUI 按钮未覆盖。
+
+38. **自动下载只覆盖 5 个平台资产**：Intel macOS 无 JBR 21 资产，需手动/预置；下载 95–200 MB。
+
+52. **服务端一次性事件定向重放：已实现，未验证（2026-11-18）**：新增 `hotadd/ServerLifecycleReplay`，用 `EventBusSnapshot.addedSince` 取出本次 add 新增的 game-bus 监听器，只对这些监听器调用 `ServerStartingEvent`/`ServerStartedEvent`（`ListenerList` 不保证与 owner map 同一实例，故有“逐个试调用、类型不符即跳过”的兜底）；服务端实例先取 `ServerLifecycleHooks.getCurrentServer()`，为空再反射 `Minecraft#getSingleplayerServer`。**未验证**：进入世界复跑时，客户端两次卡在 xaerolib mixin 阶段（见 54），没走到重放日志。
+
 58. **层/渲染器重放在注册表提交之前（2026-11-18 真机发现，已修待复验）**：Mekanism 10.7.19（预检贵妃档）热加时，
     `EntityRenderersEvent$RegisterRenderers` 在 `RegistryStage.commit` 之前重放，mod 的 `DeferredHolder` 尚未绑定：
     `NPE: unbound value ResourceKey[minecraft:entity_type / mekanism:robit]`，随后标题屏渲染崩溃。
     启动期顺序是“注册表冻结 → common setup → client setup → renderers”；现已把 staged 的层/渲染器重放移到
     `FmlEvents.finishAll` + `RegistryStage.commit` 之后（仍在资源包注入之前），层先于渲染器、全容器先层不变。
     **修复后的 jar 尚未在真机重跑 Mekanism**（用户时间到）；下次直接热加 Mekanism 复验。
+
+### 结构性边界（长期限制，不是待修 bug）
+
+6. **LAN 模组是妃级布局变更**：需要 JBR；`online-mode` 可能要重启集成服务器。
+
+7. **A1 剩余边界**：构造器其它副作用（静态状态/全局注册/线程）不可回滚；不能 undefine module；post-construct 重试仍失败（干净回滚 + 重启）。
+
+10. **没有删/更新路径**：已加载（尤其织入 mixin）的类无法卸载；datapack 删除实测不可能。
+
+12. **MixinRuntime 是可选第三方前置**（`type="optional"` + 反射）：缺它时嫔级照常、妃级被拦；构建不需要 `libs/`。
+
+14. **命令重放的边界**：`RegisterCommandsEvent` 是全局事件（所有监听器再跑一遍）；payload 能补进已建立连接，但缺握手（两端必须同一 jar）、锁 1.21.1、一次性事件不支持。
+
+15. **客户端重放命令的副作用**（与 14 同源）：集成服务器每次热加都重跑所有命令监听器；标题屏不重放。
+
+18. **贵妃级只到 add-only**：客户端不装 jar 的多人仍不行（被 datapack 同步踢，装回前连不回）；实体 post-register 未重放；提交后不可回滚。
+
+19. **datapack 边界**：只覆盖 `RELOADABLE`；WORLDGEN 需新世界；存档记录 `mod/<modId>`，重启且 jar 在 `mods/` 会合并；失败文案必须强调 dirty/重启。
+
+21. **客户端启动期注册仍是手写清单**：已重放 FMLClientSetup/key/menu/renderers/颜色/扩展/reload listener/tooltip/配方书/**shader**/HUD/物品装饰/粒子+item→model；未做 `ColorResolvers`；`RegisterLayerDefinitions` 2026-11-18 起重放（含 `EntityModelSet` roots 重建与 staged 顺序）。漏一个就是一类 bug，所以有注册审计。
+
+23. **AT：stock 硬边界；JBR late AT 实验性可行**：成员级 access/final 可改；**类级 `-f` 见 44**。默认拒绝（`ACCESS_TRANSFORMER`），`-PlateAt=true` 才走实验路径；托管重启会自动带开关。ADR-0014 否决“改写调用方”。
+
+24. **JiJ/coremod 剩余边界**：嵌套 GAMELIBRARY 无 container（独立分发的 MezzConfig 类）；**嵌套 mod 的 AT 自 2026-11-19 起在 `-PlateAt=true` 下走 late AT**（无 lateAt 仍拒绝），嵌套 **GAMELIBRARY** 的 AT 与 `data/` 仍不单独注入；审计只扫外层；coremod 只覆盖 class 级 `ITransformer`，redefine 路径未实测。Sodium 式「外壳 jar 与内嵌实现同 modId」已适配（2026-11-19：内嵌实现作主文件，外壳降级为库模块）。
+
+25. **JBR 只对「已加载类的布局变更」必需**：数据/方法级 mixin 在 JBR 下可 redefine；未加载目标免 JBR；缺 JBR 时干净 `JBR_REQUIRED` 并点名目标。
+
+32. **无 `mods.toml` 的嵌套 GAMELIBRARY 没有 container 语义**（独立分发的 MezzConfig）；GAMELIBRARY manifest 现在返回 `FailureKind.LIBRARY`；带 `mods.toml` 的嵌套 GAMELIBRARY 归为库 + 收集 `MixinConfigs`。
+
+44. **类级 AT 去 final 是 JBR 结构性边界**：实例构造返回 null，后续 redefine SIGSEGV；“AT 覆盖 access/final”只指**成员级**；需启动期类变换或 JBR 修复。
+
+45. **mixin 新增实例字段不初始化已存在对象**：JourneyMap 给 `DynamicTexture` 加字段，老 `LightTexture` 上为 null，退出时 `onClose` 注入 NPE（只影响退出）。
+
+56. **Mixin 新增实例字段不初始化旧实例（2026-11-18 真机确认）**：Jade 的 `FontMixin` 给已加载的 `Font` 增加
+    `glint1/glint2/glint1Strength/glint2Strength`（构造器里 `glint1/2 = NaN` 表示“无闪烁”）。热加只 redefine 类、
+    不会重跑构造器，旧 `Font` 实例拿到的字段是 `0.0f`，闪烁分支常开，所有文字约 65% 亮度（真机截图：字体变暗）。
+    这是问题 45（新增字段不初始化）的第二个实例；`layoutChange` 现在把字段增减也算作布局变更：无 JBR 前置拒绝，
+    JBR 下照常尝试并额外打印“旧实例保持 JVM 默认值，需重启才完全正确”的警告。Jade 的变暗不是崩溃，
+    实测重启并让 Jade 正常加载即可恢复；是否把 Jade 记为“需重启才正确渲染”由所有者按白名单规则决定。
+
+### 历史与注记（分析器/环境/过期）
+
+1. **静态分析仍会漏/误判**：反射/跨模组代理注册抓不到；注册轴已按「注册调用 / `*DeferredRegister` 引用」对齐（`RegistrySignalTest`）。
+
+3. **Fabric 生产 jar 是 intermediary 名**（`class_310`），核心类识别退化。
+
+4. **JiJ 递归拆包（2026-11-18）**：`JarInJar` 现在递归展开到 3 层（Supplementaries → mixinsquared-forge → MixinSquared core），嵌套库进 module path 并收集 manifest `MixinConfigs`；更深的 bundle 仍不展开，嵌套 mod 的 AT 自 2026-11-19 起在 lateAt 下覆盖（见 24/36）；**GAMELIBRARY 嵌套 AT 仍不覆盖**。
+
+5. **Python 分析器 vs Java 运行时**：注册轴已对齐，其它轴（native/JNI、render-core mixin）仍不一致；`VALIDATE` 没有 tier 门禁（UI 才有）。
+
+8. **Git 收尾**：`main`/`origin` 持续 push（最近 `aa21f68`）；CI 仍未观察、tag 未打。
+
+9. **没有完整人工标注集**：只校准 11 个有真机结论的 jar；Fabric 与置信度未校准。
+
+11. **GUI/监听初版限制**：只有 `zh_cn`/`en_us`；最多显示 7 个候选；`gui`/`scan`、失败重试未自动验证；皇后级只提示重启。
+
+13. **`mods.toml` 的 side 字段不可信**：静态只 warn（分不清「双端模组的客户端代码」与「启动路径就用」），兜底是 dist 门禁 + 回滚。
+
+16. **Capabilities 只查名字不查行为**：锚点匹配 ≠ 语义未变，不能代替 harness。
+
+17. **裸 unfreeze/freeze 会移动 BlockState id**：必须先清 `BLOCKSTATE_TO_ID_MAP` 再 freeze（[research-t4-registry.md](research-t4-registry.md)）。
+
+30. **客户端「保存→退标题→重开」harness 会卡死**（`glfwSwapBuffers` / 无主显示器）：路径已删，存档回读由专用服覆盖。
+
+31. **L1 标题屏测不了“需要世界”的模组**：Xaero World Map 的 `loadLater` 会抛；pipeline 把“没到 `DONE`”判 `INCOMPLETE`。
+
+33. **L1 的“干净拒绝”不等于“功能正常”**：`overall_verdict` 要求 `DONE n/n` 且 exit 0。
+
+39. **dev client 预装 Moonlight 启动崩（环境问题）**：`ExtraCodecs` 引用 `codecui.Schema` 时 CNFE；只在 dev 观察到，阻塞 Supplementaries 完整复跑。
+
+51. **无焦点 + 热加重载隐藏 screen 会撞 `PauseScreen` NPE（2026-11-18，测试环境）**：`-PnoFocus=true` 时窗口失焦，`GameRenderer.render` 调 `pauseGame`；而 `ClientResourcePacks` 在 reload 链期间把 `mc.screen` 置空，`PauseScreen.createPauseMenu` 读到 `minecraft.player == null` → NPE（crash-2026-11-18_19.18.27）。**多 add/重载场景用聚焦窗口跑**（不带 `-PnoFocus`）；无焦点只用于单 add/短重载。
+
+55. **「已选 JBR 仍要重启」是产品失败（2026-11-18 所有者）**：玩家已在启动器选了 JBR，却因缺 `-XX:+AllowEnhancedClassRedefinition` 被要求再重启——把实现细节转嫁给玩家，不可接受。**2026-11-18 收口为单一动作「为热加载增强环境做准备」**：菜单（未就绪时常驻）与失败屏都指向同一入口；已安装/正在运行的 JBR 直接复用；缺失时官方下载 → SHA-512 → 解压到 `gameDir/jbr-21.0.11`；随后自动重启并带齐 `-XX:+AllowEnhancedClassRedefinition` + `-Dmodreloader.lateAt=true`。**仍余缺口**：参数只能启动时给，启动器每次不带参数则每会话最多一次自动重启；跨会话永久生效需要启动器/整合包预设或 classloader 隔离/软重启。
+
+### 已修
+
+20. ✅ **创造页签排序非幂等（已修）**：`sortTabs()` 追加不清空 → 4→8 → 越界崩；`afterRegistryContent()` 先清 `DEFAULT_TABS`。
+
+22. ✅ **专用服妃级（已修）**：`runServer` 也用 JBR + enhanced；ZeroCore2 `redefined Slot` 成功。
+
+26. ✅ **`RegisterCapabilitiesEvent` 重放（已修）**：commit 后、common setup 前只投新容器；审计移入 covered；模型层未重放。
+
+28. ✅ **in-world 热加与区块发送竞态（已修）**：`ServerThreadHop` 把「清 id + freeze」投到服务器线程；单人两端共享同一张表，窗口只是缩小。
+
+34. ✅ **失败热加留下半应用状态（已修）**：回滚改为 LIFO（先摘 mixin config 再还原类）；ModernFix 复跑不再崩。
+
+36. ✅ **JiJ 嵌套 AT/元数据的误判（2026-11-18 已修）**：codecui 的 `META-INF/accesstransformer.cfg` 是**空文件**，且 `modType="LIBRARY"` 写在 toml（manifest 没有 `FMLModType`）；旧预检把“空 AT”和“没有 manifest 标记的库”都当成真 mod/真 AT。现在 AT 只认 FML 会应用且**有内容**的文件（含 toml `[[accessTransformers]]`），`isGameLibrary` 也认 toml `modType=LIBRARY`；`NestedMods` 跳过空 AT。Moonlight 因此越过 MODULE + late AT（126 条规则应用并回滚 ok），改卡在自定义注册表（见 46）。**嵌套 mod 的 AT 自 2026-11-19 起在 lateAt 下由 `LateAccessTransformers` 应用**（Create 的 Ponder、Iris 的 fabric-block-view-api 已越过）；GAMELIBRARY 嵌套 AT 仍不覆盖。
+
+40. ✅ **JBR redefine 的 `ClassFormatError`（已修）**：根因是 JBR 触发 Mixin agent 二次 transform；`MixinAgentGuard` 在 redefine 窗口内暂停目标类，失败 dump 字节。guard 依赖内部字段，找不到时 no-op。
+
+41. ✅ **同批热加同目标类冲突（已修）**：手动 transform 只保留本次新增 config；`GeckoLib→FerriteCore→ModernFix→MouseTweaks` 4/4 PASS。真正改同一个类的叠加仍未测。
+
+42. ✅ **late AT 结果被后续 mixin 覆盖（已修）**：`ClassBytesCache` 记住实际字节；`captureOriginals` 优先用缓存。
+
+43. ✅ **JourneyMap 资源重载崩溃（已修）**：根因是 late AT 去**类** final 把 `NativeImage`/`ModelPart` 的构造打成 null；现在前置拒绝（见 44）。
+
+46. ✅ **自定义注册表（`NewRegistryEvent`）已支持（2026-11-18）**：构造期临时恢复 `pendingModdedRegistries`，构造后只对新容器 fire `NewRegistryEvent` 并调用包私有 `fill()`；`RegisterEvent`/freeze/快照由现有 `RegistryStage` 动态覆盖。夹具 + Moonlight 验证；失败语义：`fill()` 之后失败只能 dirty。datapack 注册表、`ModifyRegistriesEvent` 仍不重放。见 [research-newregistry-hotadd.md](research-newregistry-hotadd.md)。
+
+47. ✅ **late AT 对已混入的类二次 transform（2026-11-18，已修）**：Supplementaries 的 AT redefine `Entity`（Moonlight 已混入）时，Mixin agent 仍二次注入 → `ClassFormatError`。修法：`MixinAgentGuard` 改为常驻 wrapper（2026-11-18 晚已收窄为只包 Mixin agent，靠 `blanket()` 覆盖其它路径，待复验），并在每次 `redefineClasses` 期间用 `blanket()` **全局抑制**（JBR 该路径不一定传类名，按名匹配不可靠）。复跑日志：`transform guard installed (4 transformer(s) wrapped)`、Moonlight `ok=true`，Entity 不再报错。同类问题（40/41）的第三份。
+
+48. ✅ **嵌套 `MixinSquared` bootstrap（2026-11-18，已修）**：`JarInJar` 递归拆包后，Supplementaries 的 3 个嵌套库（`mixinsquared.forge` / `MixinSquared` / `sable.companion.common`）全部进入 module path，`mixinsquared.forge.init.mixins.json` 能加载其 `MixinSquaredBootstrap`；Supplementaries 越过 MIXIN/CONSTRUCT，注册了 blocks 1061→1306、items 1335→1584。
+
+49. ✅ **模型层/Skull 模型（2026-11-18，已修）**：`RegisterLayerDefinitions` 现在会被重放，随后调用 `EntityModelSet.onResourceManagerReload` 重建 roots（`LayerDefinitions.createRoots()` 会合并 `ClientHooks` 的静态表）；层回放与“重建 renderer”拆成两阶段、**全容器先层后渲染器**（否则嵌套容器先重建，外层层的模型还没注册）。`ItemBlockRenderTypes.setRenderLayer` 的 client-loading 门禁在 FMLClientSetup 重放窗口内临时放开（`ClientModLoader.loading`，消费者只有该门禁和 options 保存保护）。实测 Supplementaries 层 213→234、无 `No model for layer`、`ok=true`。
+
+57. ✅ **轮询把已加载 mod 的替换 jar 当新候选（2026-11-18 真机，已修）**：轮询 `scan()` 只过滤 ignored/failed，
+    没有“modId 已加载”检查（手动 `scanNow()` 有）。在游戏运行时覆盖 `modreloader` 自身 jar 后，它被当成新候选并
+    弹 toast；底层 `SecureJarHandler` 指向的 jar 已被替换，加载尚未加载的类时 `NoClassDefFoundError`（类在新 jar 里
+    实际存在），客户端崩溃。现在两路径都按 `inspection.alreadyLoaded()`/modId 过滤，日志提示“替换/更新已加载的 jar
+    需要重启”。**运行时不要替换正在使用的 mod jar**；更新路径仍不支持。
+
 59. ✅ **Create 的自定义注册表在构造期报「已冻结」（2026-11-19，已修）**：Create 的 `CreateBuiltInRegistries` 在构造期
     直接用 `RegistryBuilder.create()` 建表并注册进 `BuiltInRegistries.REGISTRY`。启动期根注册表在 construct 时仍可写
     （`NewRegistryEvent.fill()` 才冻结），运行期却是冻结的。现在 `CustomRegistries.open` 同步解冻根注册表
     （`BaseMappedRegistry.unfreeze`，经 trusted lookup），`fill()`/`close()`/回滚时重新冻结。
     复跑 `create-lateat`：**ok=true**，blocks 1060→1703、items 1333→2032，同批 flywheel/ponder（L1，玩法未验）。
-60. **Moonlight 之后热加 Supplementaries 的 Mixin 失败（2026-11-19 复跑）**：`moonlight-lateat` 中 Moonlight ok=true，
-    Supplementaries 在 `MIXIN` 阶段失败：`transform net.minecraft.client.gui.MapRenderer$MapInstance:
-    MixinTransformerError: An unexpected critical error was encountered`（回滚 late AT 成功）。该目标先被 Moonlight
-    的 late AT 重定义（1 条规则），再被自己的 mixin 处理，属问题 47 同族；与本次注册表改动无关，待复现。
-61. **Sodium 热加后旧渲染对象崩溃（2026-11-19）**：`sodium-lateat` 中 Sodium ok=true（含 4 个 fabric 库、约 64 类 redefine），
-    随后渲染 overlay 抛 NPE：`ShaderInstance.uniformCache` 为 null。同 modId 适配后暴露出问题 45/56 的致命版：
-    mixin 给已存在的 `ShaderInstance` 加字段，旧实例保持 JVM 默认值（null）。当前结论 J2（能加、崩溃）；
-    需在 add 后强制重建受影响的渲染对象（或明确“需重启才正确渲染”）。
 
 ## 玩家侧原则（ADR-0015，2026-11-18 最终）
 
