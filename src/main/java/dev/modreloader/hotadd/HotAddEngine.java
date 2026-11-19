@@ -652,7 +652,10 @@ public final class HotAddEngine {
         run.containers = containers;
         run.outerContainers = outerContainers;
 
-        if (Boolean.getBoolean("modreloader.failAfterModList")) {
+        String failAfterModListMod =
+                System.getProperty("modreloader.failAfterModListModId", "").trim();
+        if (Boolean.getBoolean("modreloader.failAfterModList")
+                && (failAfterModListMod.isEmpty() || ids.contains(failAfterModListMod))) {
             return fail(rollback, Stage.MODLIST, FailureKind.UNKNOWN, "injected failure after ModList rebuild");
         }
         return null;
@@ -719,7 +722,10 @@ public final class HotAddEngine {
                                 + ": " + t.getMessage() + ". Restart with the jar in mods/.");
             }
         }
-        if (Boolean.getBoolean("modreloader.failAfterConstruct")) {
+        String failAfterConstructMod =
+                System.getProperty("modreloader.failAfterConstructModId", "").trim();
+        if (Boolean.getBoolean("modreloader.failAfterConstruct")
+                && (failAfterConstructMod.isEmpty() || ids.contains(failAfterConstructMod))) {
             return fail(rollback, Stage.CONSTRUCT, FailureKind.UNKNOWN,
                     "injected failure after construct (listeners are already registered)");
         }

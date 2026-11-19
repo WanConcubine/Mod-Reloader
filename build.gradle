@@ -141,6 +141,9 @@ neoForge {
             }
             if (failAfterModList) {
                 systemProperty 'modreloader.failAfterModList', 'true'
+                providers.gradleProperty('failAfterModListModId').orNull?.with {
+                    systemProperty 'modreloader.failAfterModListModId', it
+                }
             }
             if (failAfterPack) {
                 systemProperty 'modreloader.failAfterPack', 'true'
@@ -158,6 +161,10 @@ neoForge {
                 // Force a failure right after construct: the mod's game-bus listeners
                 // are already registered and cannot be removed (rollback measurement).
                 systemProperty 'modreloader.failAfterConstruct', 'true'
+                // Optional: only fail one add of a multi-jar scenario.
+                providers.gradleProperty('failAfterConstructModId').orNull?.with {
+                    systemProperty 'modreloader.failAfterConstructModId', it
+                }
             }
             if (verifyWatch) {
                 systemProperty 'modreloader.verifyWatch', 'true'

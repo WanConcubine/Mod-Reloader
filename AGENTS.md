@@ -200,6 +200,9 @@ JAVA_HOME=~/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x/jdk-21.0.12.1+1/Conten
 ./gradlew runClient -PverifyRunState=/tmp/t4fixture/t4fixture-1.0.0.jar -PfailAfterRegistry=true
 ./gradlew runServer -PserverRunState=/tmp/t4fixture/t4fixture-1.0.0.jar -PfailAfterRegistry=true -PdirtyLogSeconds=2
 
+# 多 jar 场景只让一个模组失败（配合 failAfterModList / failAfterConstruct）
+#   -PfailAfterModListModId=<modId> / -PfailAfterConstructModId=<modId>
+
 # GUI / 文件夹监听初版验证（把 jar 放进 inbox，等待弹窗并加载）
 ./gradlew runClient \
   -PverifyWatch=true \

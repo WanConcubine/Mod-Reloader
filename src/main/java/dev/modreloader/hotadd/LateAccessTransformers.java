@@ -172,6 +172,16 @@ public final class LateAccessTransformers {
             rollback.add("late AT " + target, () -> {
                 try (AutoCloseable blanket = MixinAgentGuard.blanket()) {
                     instrumentation.redefineClasses(new ClassDefinition(type, captured));
+                } catch (Throwable t) {
+                    // The live class is still the valid widened shape; only the
+                    // revert failed. Keeping it is safe (access widening is
+                    // additive) and is strictly better than ROLLBACK_PARTIAL.
+                    ModReloader.LOGGER.warn(
+                            "[ModReloader] rollback: late AT of {} stays applied; reverting its "
+                                    + "bytes was refused ({}). The widened flags are harmless.",
+                            target, t.getClass().getSimpleName()
+                                    + (t.getMessage() == null ? "" : ": " + t.getMessage()));
+                    return;
                 }
                 ClassBytesCache.put(target, captured);
             });

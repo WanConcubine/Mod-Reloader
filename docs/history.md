@@ -2027,3 +2027,20 @@ clientfixture（GUI 层/物品装饰）PASS、`minimap` PASS、`moonlight-lateat
 
 结论：问题 63 结案；`PayloadCheck` 保留诊断输出（注册表 / 两侧 setup / 总线探针），以后 payload 问题能直接分辨
 “注册/协商”还是“监听器/处理”层。
+
+## 2026-11-19（问题 50 已修：late AT 回滚改为尽力而为）
+
+复现（JBR 21，`-PlateAt=true`）：
+- Moonlight 成功后热加 Supplementaries；新增 `-PfailAfterModListModId` / `-PfailAfterConstructModId`
+  让双 jar 场景只让第二个 add 失败。
+- 构造前失败：`late AT ...MineshaftPieces$MineShaftPiece ok`。
+- 构造后失败：`redefineClasses` 写回被 JBR 拒绝，抛裸 `VerifyError: null` → 旧代码把它计入 rollback errors，
+  `kind=ROLLBACK_PARTIAL`。
+
+修法：`LateAccessTransformers` 的回滚动作 catch 所有 Throwable，warn “late AT stays applied” 并保留当前
+（加宽后的）字节；访问加宽是加法，不会破坏已加载代码，且比把整个回滚判成 partial 更好。`ClassBytesCache`
+保持指向 live 字节，后续 add 的捕获仍然正确。
+
+证据：构造后失败不再有 `rollback errors`（`kind=UNKNOWN`，RunState 因构造/ mixin 置脏）；成功路径
+`moonlight-lateat` 仍为两个 `ok=true`。构造后失败仍会因 Supplementaries 构造器注册的 Moonlight 动态资源回调
+崩在后续 reload —— 属问题 35/7 的构造器副作用边界，不在本条范围。
