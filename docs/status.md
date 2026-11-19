@@ -144,7 +144,13 @@
 
 50. **失败回滚对 late-AT 重定义过的类可能 VerifyError（2026-11-18）**：Supplementaries 失败后回滚 `MineshaftPieces$MineShaftPiece` 报 `VerifyError: null`，`kind=ROLLBACK_PARTIAL`。回滚写回的是 late AT 之前的字节，但该类的后续加载/重定义可能已经改变了校验状态；需要专门复现，失败时至少保证“可重启的干净状态”并明确提示。
 
-53. **client setup 的 deferred task 早于热加资源包注入（2026-11-18）**：World Map 的 `loadLater` 在 `FMLClientSetupEvent` 的 deferred queue 里读自己的 `vanillaStatesResource`（`Minecraft.getResourceManager()`），此时热加包还没注入 → `Optional.get()` 抛 `NoSuchElementException`。启动期该顺序成立是因为包在 setup 前已注册；运行期需要“包先可用”或把这类 deferred task 放到 资源重载之后重跑。
+53. **client setup 的 deferred task 早于热加资源包注入（2026-11-18；2026-11-19 调研）**：World Map 的 `loadLater`
+    在 `FMLClientSetupEvent` 的 deferred queue 里读自己的 `vanillaStatesResource`，此时热加包还没注入 →
+    `Optional.get()` 抛 `NoSuchElementException`。**启动期实锤**：client setup 在初始资源重载内部执行（包已可用），
+    payload 注册在其后；运行期我们的顺序是 client setup（payload 前）→ 包注入/重载，两边不可兼得。
+    试过「任务整体延后到重载后」（minimap 因 XaeroLib 未冻结而 `NETWORK_PAYLOAD` 失败）与
+    「按 `TaskInfo` 逐任务重试」（取到的不是用户 runnable），均回滚。
+    **下一步需重排阶段**（pack/reload 先于 payload，任务在 reload 内执行）或做可恢复的分段管线。
 
 61. **Sodium 热加后旧渲染对象崩溃（2026-11-19）**：`sodium-lateat` 中 Sodium ok=true（含 4 个 fabric 库、约 64 类 redefine）。
     已修：`ShaderInstance` 的 `uniformCache` NPE —— add 流程在资源重载前调用 `PlatformHooks.rebuildShaderInstances`

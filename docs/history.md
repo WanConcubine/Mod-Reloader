@@ -1887,3 +1887,24 @@ jstack：
 （`WorldMap.serverPlayerTickHandler` null）与 53（`loadLater` NoSuchElement）。
 
 构建：`./gradlew build` 绿。
+
+## 2026-11-19（问题 53 调研：顺序约束与两次被证伪的修法）
+
+启动期实锤（源码）：
+- `CommonModLoader.finish` 先 dispatch `FMLClientSetupEvent`（deferred tasks 在事件里立即跑），
+  随后才 `NetworkRegistry.setup()`（`RegisterPayloadHandlersEvent`）。
+- 但 mod 的 client setup / finish 本身是在**初始资源重载内部**执行的
+  （`ClientModLoader.onResourceReload`），所以任务运行时 mod 包已可用。
+
+运行期矛盾：
+- client setup tasks 必须在 payload 适配之前（XaeroLib 在任务里冻结 `PacketHandlerRegistry`；
+  未冻结时 `iterator()` 直接 `IllegalStateException`）；
+- 但热加包要等资源重载后才对 `Minecraft.getResourceManager()` 可见（World Map `loadLater` → `NoSuchElementException`）。
+
+尝试与结果：
+- A：把 deferred tasks 整体延后到重载完成 → `minimap` 回归 **FAIL**（`NETWORK_PAYLOAD`，XaeroLib 未冻结）。
+- B：按 `TaskInfo` 逐任务执行、失败留待重载重试 → 取到的 `task` 不是用户 runnable
+  （计数 1、`ok=true`，但用户代码未执行）。两次均已回滚，仓库保持原行为。
+
+结论：需要**重排阶段**（pack/reload 先于 payload，client setup 任务在 reload 内执行）或把热加做成
+可恢复的分段管线；单纯“延后”或“任务级重试”都不可行。
