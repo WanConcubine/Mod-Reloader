@@ -11,7 +11,7 @@
 | `hotadd` 包 | **7 559 行**；`HotAddEngine.add` 已拆成 10 个阶段方法（2026-11-19），单方法最长约 150 行 |
 | 反射 / Unsafe 站点 | **228 处 / 32 个文件**（约占 main 文件 25%）：mixin、注入器、ModList、module、注册表、网络、资源包、启动器锁 |
 | 一次性事件重放 | **17 处**，覆盖 12+ 种事件，全部手写（命令、payload、菜单/渲染器/颜色/层/粒子…） |
-| Java 单测 | **98**（新增 `AddStagePlan` 5 个）；引擎主流程仍以真机 L1 harness 为主要证据 |
+| Java 单测 | **103**（新增 `AddStagePlan` 5、`ReplayCatalogTest` 3、审计 2）；引擎主流程仍以真机 L1 harness 为主要证据 |
 | 语言文件 | `en_us` / `zh_cn` 各 197 key（未变） |
 | 包依赖 | `hotadd` 不依赖两侧；`client → command` 单向；剩 `client → server`（集成服命令重放）与 `diagnose → ui` |
 
@@ -61,7 +61,7 @@ payload 之前）。剩下的顺序风险从“700 行隐式流程”收敛为�
 
 ### P2-15 测试与文档
 
-93→98 个单测几乎不碰引擎主流程；L2 缺失、harness 约 600 行重复、本机 noFocus 失效。
+93→103 个单测几乎不碰引擎主流程；L2 缺失、harness 约 600 行重复、本机 noFocus 失效。
 本文档的统计也已从 11-16 的版本刷新（见上表）。
 
 ## P0：会让我们「悄悄说错话」的
@@ -166,7 +166,7 @@ payload 之前）。剩下的顺序风险从“700 行隐式流程”收敛为�
 
 ## 建议的动手顺序
 
-1. ✅ 阶段表与顺序测试（2026-11-19：`AddStagePlan` + `AddStagePlanTest`，98 测试绿）
+1. ✅ 阶段表与顺序测试（2026-11-19：`AddStagePlan` + `AddStagePlanTest`，103 测试绿）
 2. 逐段抽方法：VALIDATE/MODULE 先抽（纯校验，最安全），再 MIXIN/COREMOD
 3. 借问题 53 重排 PACK 与 payload 阶段（用阶段表约束，不再散落修改）
 4. `OneShotReplay` 统一出口（P1-5），同时覆盖 client 重放清单
