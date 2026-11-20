@@ -400,8 +400,8 @@
 
 > **当前交接（2026-11-20，已推送 `a8d787c`）**：技术债收口；问题 2/35/50/63 结案；61 定 J2（B 实验 opt-in，
 > 进世界仍停 `BlockColors`）；增强 JBR 下 lateAt 自动开启；MixinRuntime 明确为可选扩展。
-> **发布口径**：[releases/0.1.0.md](releases/0.1.0.md) 草案已提交——只承诺 `verified` 行（当前 4 行：
-> dogfood、GuideME、AE2 + stock T1 1 行），candidate/fixing 一律标“待复测”。
+> **发布口径**：[releases/0.1.0.md](releases/0.1.0.md) 草案已提交——只承诺 `verified` 行（当前 3 行：
+> stock T1 的 dogfood，JBR J1 的 GuideME、AE2），candidate/fixing 一律标“待复测”。
 > **下一项（所有者驱动）**：① whitelist 真实复测（agent 不代跑批次）；② J2“成功后再崩”的预检/标注口径
 > 需产品决策（现行：成功消息标 `J2`，不阻断）；③ 生产启动器/干净实例冒烟；④ Windows/PCL2 全链路。
 > 证据在 [history.md](history.md)；JBR 在 `run/jbr-21.0.11`（gitignored），语料 `/tmp/modreloader-corpus`。

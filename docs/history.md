@@ -2176,5 +2176,5 @@ clientfixture（GUI 层/物品装饰）PASS、`minimap` PASS、`moonlight-lateat
 - 新增 [releases/0.1.0.md](releases/0.1.0.md)：只承诺 `state=verified` 的行，candidate/fixing 明确“待复测”；
   按“是什么/安装/能力分层/支持矩阵/已知限制/回滚/报障材料”组织，存档不可逆与多人踢人写在限制里。
 - 数据口径以 `tools/whitelist.py check` 为唯一校验入口：61 行，stock T1=7/BLACK=23；jbr J1=25/J2=2/BLACK=4；
-  verified 4 行（dogfood、GuideME、AE2、stock T1 的 dogfood 同一条）。
+  verified 3 行（stock T1 的 dogfood，JBR J1 的 GuideME、AE2）。所有者决定 J2 维持成功消息标注、不硬阻断。
 - 状态源 `status.md` 的交接与最近变更同步到 2026-11-20；草案定稿仍等所有者真实复测。
