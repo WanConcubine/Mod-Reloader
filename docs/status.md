@@ -182,11 +182,14 @@
 
 2. **皇后级判定偏保守（2026-11-19 部分解决）**：AE2 在 JBR+lateAt 下 L1 热加成功（blocks 1060→1162、items 1334→1698），GUI 未验；不再按“必须重启”处理。
 
-61. **Sodium 热加后旧渲染对象崩溃（2026-11-19）**：`sodium-lateat` 中 Sodium ok=true（含 4 个 fabric 库、约 64 类 redefine）。
-    已修：`ShaderInstance` 的 `uniformCache` NPE —— add 流程在资源重载前调用 `PlatformHooks.rebuildShaderInstances`
-    （trusted lookup 调 `GameRenderer.reloadShaders`），用 mixin 后的构造器重建全部 shader 实例，overlay 不再崩。
-    剩余：`Minecraft.fences`（`MinecraftMixin.preRender`）等**单例**上的 mixin 新增字段仍为 null——构造器注入不会重跑，
-    运行期无法通用重建该单例 → `runTick` NPE。结论 J2；需重启才完全正确，属问题 45/56 的结构边界。
+61. **Sodium 热加后旧渲染对象崩溃（2026-11-19；2026-11-20 分析）**：`sodium-lateat` 中 Sodium ok=true（含 4 个
+    fabric 库、约 64 类 redefine）。已修 `ShaderInstance.uniformCache` NPE（add 前重建 shader 实例）。
+    **A（已实现）**：`MixinSupport` 检测“给有活单例的类新增实例字段”，成功消息标 `J2` 并列出目标
+    （本次为 `Minecraft`/`BlockEntityType`）。
+    **B（opt-in 实验，`-Dmodreloader.sodiumBootstrap=true`）**：初始化 `Minecraft.fences` + 重放 Sodium 的配置引导
+    （`onInitialization`/`registerConfigsEarly|Late`/core-shader 检查），可越过前两个崩溃点；随后仍崩在
+    `SpriteContents$Ticker.parent`（旧精灵 ticker 的新字段为 null）。属问题 45/56 的结构边界：已有实例/对象
+    无法通用重建。**按所有者决定保持 J2**（事实可热加，但重启前存在致命级 bug），B 未默认启用。
 
 ### 验证缺口（已实现/已修，缺证据）
 

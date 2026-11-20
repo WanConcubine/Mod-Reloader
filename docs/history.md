@@ -2117,3 +2117,15 @@ clientfixture（GUI 层/物品装饰）PASS、`minimap` PASS、`moonlight-lateat
   P2-15（TestWorld+TestConnection）/包分层，均标 ✅；剩余项改写为“结构性/产品”清单：
   真实 reload 上下文重写、约 226 处逐特性反射、并发自动测试、L2/noFocus。
 - 事实表刷新：27,083 行 / 150 文件；单测 111。
+
+## 2026-11-20（问题 61：A 预检标注 J2 + B Sodium 适配实验）
+
+- A：`MixinSupport` 在“给已加载类新增实例字段”时检测目标类是否有**活的单例**（静态自指字段且非空）。
+  `Minecraft`（static instance）与 `BlockEntityType`（static FURNACE）命中 → 成功消息标 `J2` 并列出目标；
+  Jade 的 `Font` 不是单例，仍只 warn（不误标）。证据：`sodium-lateat` 的消息含两条 J2，`tooltip-lateat` 无。
+- B（opt-in，`-Dmodreloader.sodiumBootstrap=true`）：初始化 `Minecraft.fences`，并重放 Sodium 的内存初始化缺口
+  （`SodiumClientMod.onInitialization`、`ConfigLoaderForge.collectConfigEntryPoints`、
+  `ConfigManager.registerConfigsEarly/Late`、`ResourcePackScanner.checkIfCoreShaderLoaded`）。
+  实测越过 `fences` NPE 与 “Config not yet available”，随后仍崩在 `SpriteContents$Ticker.parent`（旧精灵 ticker
+  的新字段为 null）。说明这是“已有对象批量回填”问题，不是单字段可补；B 保持 opt-in，未默认启用。
+- 分类：按所有者决定 **Sodium 保持 J2**（事实可热加，重启前存在致命级 bug）；白名单 TSV 备注与证据已更新。

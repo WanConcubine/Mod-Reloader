@@ -890,6 +890,7 @@ public final class HotAddEngine {
         } catch (Throwable t) {
             ModReloader.LOGGER.warn("[ModReloader] staged client replay failed", t);
         }
+        SodiumBootstrap.afterClientStartup(run.ids);
         run.keysAfter = hooks.keyMappingCount();
 
         // 4a. payloads: NeoForge closes its network registry after start-up, so

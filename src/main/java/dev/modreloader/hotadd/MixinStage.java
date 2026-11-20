@@ -32,6 +32,10 @@ public final class MixinStage {
                 + ", skipped=" + report.skipped() + ", targets=" + report.targets());
         logLines.add("[ModReloader] mixin setup: redefined=" + report.redefined()
                 + ", eager=" + report.eager() + ", deferred=" + report.deferred());
+        if (!report.warnings().isEmpty()) {
+            logLines.add("[ModReloader] mixin warnings: " + report.warnings());
+            summaryOut.add(" (J2: " + String.join("; ", report.warnings()) + ")");
+        }
         if (!report.ok()) {
             return String.join(", ", report.errors());
         }

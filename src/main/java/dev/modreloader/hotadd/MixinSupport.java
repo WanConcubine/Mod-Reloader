@@ -69,10 +69,10 @@ import dev.modreloader.reflect.LaunchPluginMonitor;
 public final class MixinSupport {
     public record Report(List<String> configs, List<String> registered, List<String> skipped,
                          List<String> targets, List<String> redefined, List<String> eager,
-                         List<String> deferred, List<String> errors) {
+                         List<String> deferred, List<String> errors, List<String> warnings) {
         public static Report empty() {
             return new Report(List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
-                    List.of(), List.of());
+                    List.of(), List.of(), List.of());
         }
 
         public boolean ok() {
@@ -100,6 +100,7 @@ public final class MixinSupport {
         List<String> registered = new ArrayList<>();
         List<String> skipped = new ArrayList<>();
         List<String> errors = new ArrayList<>();
+        List<String> warnings = new ArrayList<>();
         List<String> addedConfigs = new ArrayList<>();
         Set<String> targets = new LinkedHashSet<>();
 
@@ -107,7 +108,7 @@ public final class MixinSupport {
         if (!apiProblems.isEmpty()) {
             errors.add("MixinRuntime (mr) is unusable: " + apiProblems);
             return new Report(configNames, registered, skipped, List.of(), List.of(), List.of(),
-                    List.of(), errors);
+                    List.of(), errors, warnings);
         }
 
         List<LoadedConfig> loadedConfigs = new ArrayList<>();
@@ -177,7 +178,7 @@ public final class MixinSupport {
                     MixinRuntimeApi.setConfigs(processor, filterByNames(allActive, newNames));
                     MixinRuntimeApi.setPendingConfigs(processor, filterByNames(allPending, newNames));
                     applied = applyTargets(targets, loadedNow, originals, rollback, errors,
-                            processor, allActive, allPending, newNames);
+                            warnings, processor, allActive, allPending, newNames);
                 } finally {
                     MixinRuntimeApi.setConfigs(processor, allActive);
                     MixinRuntimeApi.setPendingConfigs(processor, allPending);
@@ -196,7 +197,7 @@ public final class MixinSupport {
 
         return new Report(List.copyOf(configNames), List.copyOf(registered), List.copyOf(skipped),
                 List.copyOf(targets), applied.redefined(), applied.eager(), applied.deferred(),
-                List.copyOf(errors));
+                List.copyOf(errors), List.copyOf(warnings));
     }
 
     public static boolean isConfigRegistered(String configName) {
@@ -342,7 +343,7 @@ public final class MixinSupport {
 
     private static Applied applyTargets(Set<String> targets, Map<String, Class<?>> loaded,
                                         Map<String, byte[]> originals, Rollback rollback,
-                                        List<String> errors, Object processor,
+                                        List<String> errors, List<String> warnings, Object processor,
                                         List<Object> allActive, List<Object> allPending,
                                         Set<String> newNames) {
         List<String> redefined = new ArrayList<>();
@@ -427,12 +428,25 @@ public final class MixinSupport {
                     // defaults (0/null/false) instead of the field initializers.
                     // Measured with Jade's FontMixin: glint read as 0f instead of NaN
                     // and the "no glint" check passed, dimming all text to ~65%.
-                    ModReloader.LOGGER.warn(
-                            "[ModReloader] {} gains instance field(s) while already loaded; "
-                                    + "existing instances keep JVM defaults instead of the "
-                                    + "constructor values, so features reading them can be wrong "
-                                    + "until the game restarts",
-                            dotted);
+                    String singleton = liveSingleton(type);
+                    if (singleton != null) {
+                        // Sodium's MinecraftMixin adds `fences` and reads it every
+                        // tick: a live singleton at JVM defaults is not "wrong
+                        // values" but an immediate NPE. The add still succeeds (the
+                        // class layout is accepted), so this is recorded as J2.
+                        String warning = dotted + " gains instance field(s) while a live "
+                                + "instance exists (static " + singleton + "); reads can crash "
+                                + "until restart (J2)";
+                        warnings.add(warning);
+                        ModReloader.LOGGER.warn("[ModReloader] {}", warning);
+                    } else {
+                        ModReloader.LOGGER.warn(
+                                "[ModReloader] {} gains instance field(s) while already loaded; "
+                                        + "existing instances keep JVM defaults instead of the "
+                                        + "constructor values, so features reading them can be wrong "
+                                        + "until the game restarts",
+                                dotted);
+                    }
                 }
             }
             mixedBytes.put(dotted, mixed);
@@ -600,6 +614,27 @@ public final class MixinSupport {
      * @return {@code null} when the mixed class keeps its superclass, interfaces and
      *         fields, otherwise a human-readable description of what changed
      */
+    /** Name of a static field pointing at a live instance of the same class, if any. */
+    private static String liveSingleton(Class<?> type) {
+        for (java.lang.reflect.Field field : type.getDeclaredFields()) {
+            if (!java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
+                continue;
+            }
+            if (!type.isAssignableFrom(field.getType())) {
+                continue;
+            }
+            try {
+                Object value = UnsafeAccess.getStatic(type, field.getName());
+                if (type.isInstance(value)) {
+                    return field.getName();
+                }
+            } catch (Throwable ignored) {
+                // not readable; keep looking
+            }
+        }
+        return null;
+    }
+
     private static String layoutChange(byte[] original, byte[] mixed) {
         if (original == null) {
             // No bytes captured before activation; cannot compare, so do not block.
@@ -693,6 +728,7 @@ public final class MixinSupport {
             }
             ClassBytesCache.put(dotted, mixed);
             redefined.add(dotted);
+            SingletonFieldRepair.afterRedefine(dotted, type);
             ModReloader.LOGGER.info("[ModReloader] redefined {} with mixins ({} bytes)",
                     dotted, mixed.length);
         } catch (Throwable t) {
