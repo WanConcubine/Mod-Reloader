@@ -3,6 +3,7 @@ package dev.modreloader.ui;
 import dev.modreloader.ModReloader;
 import dev.modreloader.hotadd.RunState;
 import dev.modreloader.inspect.JbrSupport;
+import dev.modreloader.inspect.MixinRuntimeSupport;
 import dev.modreloader.inspect.ModInspection;
 import dev.modreloader.watch.ModWatcherConfig;
 import dev.modreloader.watch.ModsFolderWatcher;
@@ -295,6 +296,18 @@ public final class ModReloaderScreen extends Screen {
         guiGraphics.drawString(font, Component.translatable(key), 6, 6, color, true);
     }
 
+    /**
+     * MixinRuntime is an explicit prerequisite, not something the runtime installs:
+     * say so before the player clicks Load on a mixin/fei-tier jar.
+     */
+    private void renderMixinRuntimeBadge(GuiGraphics guiGraphics) {
+        if (MixinRuntimeSupport.available()) {
+            return;
+        }
+        Component text = Component.translatable("modreloader.gui.mixinruntime.missing");
+        guiGraphics.drawString(font, text, width - font.width(text) - 6, 6, 0xFF5555, true);
+    }
+
     /** A dirty runtime looks healthy until the next add; say so while the menu is open. */
     private void renderDirtyBadge(GuiGraphics guiGraphics) {
         if (!RunState.isDirty()) {
@@ -313,6 +326,7 @@ public final class ModReloaderScreen extends Screen {
         guiGraphics.drawCenteredString(font, title, width / 2, 20, 0xFFFFFF);
         renderJbrBadge(guiGraphics);
         renderDirtyBadge(guiGraphics);
+        renderMixinRuntimeBadge(guiGraphics);
         String vendor = System.getProperty("java.vendor", "?");
         guiGraphics.drawCenteredString(font, Component.translatable("modreloader.gui.env",
                         vendor,

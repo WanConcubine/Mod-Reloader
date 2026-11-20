@@ -2157,3 +2157,10 @@ clientfixture（GUI 层/物品装饰）PASS、`minimap` PASS、`moonlight-lateat
 - 验证：JBR 默认（不带 `-PlateAt`）Jade 57 条 AT 自动应用、`ok=true`；Temurin stock `late AT: off`、干净
   `ACCESS_TRANSFORMER` 拒绝；单测 114（新增 `LateAtDecisionTest`）。
 - 文档：AGENTS / status / late-at.md 的“默认关闭/opt-in”表述同步更新。
+
+## 2026-11-20（MixinRuntime 作为明确前置的 UI 化）
+
+- 所有者明确：MixinRuntime 由用户/整合包提供，发布件不打包、不代下载。
+- UI：热加载菜单右上角常驻红字“未安装 MixinRuntime (mr)：Mixin/妃级热加不可用”；准备环境页
+  也注明“准备环境不包含它”。预检原本就拦 FEI/GUIFEI+mixins，现在准备阶段即可见。
+- 文档：AGENTS 规则 12、status JBR 行、guides/jbr.md 增加前置说明。

@@ -141,6 +141,11 @@ public final class JbrSetupScreen extends Screen {
         } else {
             guiGraphics.drawCenteredString(font, Component.literal(status), width / 2, y, 0xAAAAAA);
         }
+        if (!dev.modreloader.inspect.MixinRuntimeSupport.available()) {
+            guiGraphics.drawCenteredString(font,
+                    Component.translatable("modreloader.jbr_setup.mixinruntime_missing"),
+                    width / 2, height - 96, 0xFF8888);
+        }
     }
 
     @Override
