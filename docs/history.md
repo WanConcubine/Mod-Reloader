@@ -2109,3 +2109,11 @@ clientfixture（GUI 层/物品装饰）PASS、`minimap` PASS、`moonlight-lateat
 - 实测：payload PASS、clientfixture PASS、AtSpike DONE、capabilities PASS、creative-at-title(+warm) PASS；
   `LanScreenCheck` 因本机缺 `lanserverproperties` 未跑（代码路径与其余一致）。
 - 剩余：`TestConnection` 未抽（RemotePayloadCheck / MpRegistry*）。
+
+## 2026-11-19（技术债账本收口）
+
+- `TestConnection` 抽取：RemotePayloadCheck（E3 跨进程实测 PASS）、MpRegistry/MpFei/MpNotice 迁入。
+- 技术债复审：P0-5/P0-6/P1-12/P1-13（高风险路径语义化）/P1-14（线程锁序规则）/P2-10（CI 实测 success）/
+  P2-15（TestWorld+TestConnection）/包分层，均标 ✅；剩余项改写为“结构性/产品”清单：
+  真实 reload 上下文重写、约 226 处逐特性反射、并发自动测试、L2/noFocus。
+- 事实表刷新：27,083 行 / 150 文件；单测 111。

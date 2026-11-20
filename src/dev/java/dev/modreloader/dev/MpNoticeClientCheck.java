@@ -98,14 +98,10 @@ public final class MpNoticeClientCheck {
             return;
         }
         String address = System.getProperty("modreloader.mpNoticeAddress", "127.0.0.1:25565");
-        try {
-            ConnectScreen.startConnecting(mc.screen, mc, ServerAddress.parseString(address),
-                    new ServerData("mp-notice", address, ServerData.Type.OTHER), false, null);
-        } catch (Throwable t) {
-            fail("connect failed: " + t);
+        if (!TestConnection.connect(mc, "MpNotice", address, "mp-notice")) {
+            fail("connect failed");
             return;
         }
-        ModReloader.LOGGER.info("[MpNotice] connecting to {}", address);
         stage = Stage.WAIT_JOIN;
         ticks = 0;
     }

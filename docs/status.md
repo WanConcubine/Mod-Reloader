@@ -421,7 +421,7 @@
 | **P3-1** | GUI/watcher Phase 3/4 | 主菜单弹窗、失败面板、多候选/依赖排序、同 mod id 冲突 | [gui-mod-watcher.md](features/gui-mod-watcher.md) |
 | **P3-2** | 产品化下一步 | 托管重启端到端、嵌套 mod 容器、可分发形态、coremod target 报告 | [managed-relaunch.md](features/managed-relaunch.md) 未验证项 |
 | **P3-3** | 分析器 Fabric 校准 | intermediary 名 → 核心类识别；置信度校准 | 校准表扩充 |
-| **tech-debt** | ✅ `OneShotReplay` 统一出口；✅ `RunState` 脏状态（拒绝 + 专用服周期告警）；剩余 harness 样板抽取 | [tech-debt.md](tech-debt.md) | 构建绿 + 回归 |
+| **tech-debt** | ✅ P0-5/P0-6/P1-12/P1-13（高风险）/P1-14（规则）/P2-10/P2-15（TestWorld/TestConnection）/包分层 | [tech-debt.md](tech-debt.md) | 构建绿 + 回归 |
 
 ## 最近变更
 

@@ -7,8 +7,8 @@
 
 | 指标 | 现状 |
 |---|---|
-| Java 代码 | **26 088 行 / 147 文件**（`main` 16 620 / 90 + `dev` 8 609 / 37 + `test` 1 859 / 20） |
-| `hotadd` 包 | **7 764 行**；`HotAddEngine.add` 已拆成 10 个阶段方法（2026-11-19），单方法最长约 150 行 |
+| Java 代码 | **27 083 行 / 150 文件**（`main` 16 796 / 91 + `dev` 8 428 / 39 + `test` 1 859 / 20） |
+| `hotadd` 包 | **7 626 行**；`HotAddEngine.add` 已拆成 10 个阶段方法（2026-11-19），单方法最长约 150 行 |
 | 反射 / Unsafe 站点 | **228 处 / 32 个文件**（约占 main 文件 25%）：mixin、注入器、ModList、module、注册表、网络、资源包、启动器锁 |
 | 一次性事件重放 | **22 个条目 / 22 个调用点**，统一走 `inspect/ReplayCatalog` + `hotadd/OneShotReplay`（2026-11-19） |
 | Java 单测 | **111**（`AddStagePlan` 5、`ReplayCatalogTest` 3、审计 3、`RunStateTest` 6、架构护栏 1…）；引擎主流程仍以真机 L1 harness 为主要证据 |
@@ -24,7 +24,7 @@
 - **52**：`ServerStarted` 重放太晚，构造后到重放之间服务端会 tick 一个空 handler；
 - **53**：client setup 任务必须在 payload 前，但“包可见”必须在任务前——运行期两个约束互斥。
 
-### P0-5 生命周期顺序没有单一事实源
+### ✅ P0-5 生命周期顺序没有单一事实源
 
 顺序只存在于 `HotAddEngine.add` 的代码里；阶段可跳过、失败种类、线程归属、副作用都是隐式的。
 任何一次“换个位置试试”都要通读 700 行并跑真机。
@@ -33,7 +33,7 @@ validate/module/mixin/coremod/modlist/construct/registry/event/pack/client/datap
 共享状态收进 `Run`，每段失败返回 `Result`。随后用阶段表完成 53 的重排（PACK 前移到 client setup 任务与
 payload 之前）。剩下的顺序风险从“700 行隐式流程”收敛为“阶段表 + 每段一个方法”。
 
-### P0-6 客户端启动期重放是手写清单
+### ✅ P0-6 客户端启动期重放是手写清单
 
 17 处 `acceptEvent(new ...)`；历史上每漏一个就是一类 bug（tooltip、shader、层定义）。注册审计能**发现**未覆盖事件，
 但不能**覆盖**。根治方向是让 mod loading 在真实 reload 上下文里跑（启动期语义），与 P0-5 的重排是同一件事。
@@ -44,7 +44,7 @@ payload 之前）。剩下的顺序风险从“700 行隐式流程”收敛为�
 单测 `ReplayCatalogTest` 固定唯一性/关键成员/条数；真机 clientfixture、minimap、moonlight-lateat 无 mismatch 日志。
 **剩余**：这仍是“逐事件手写 + 审计兜底”，不是让 mod loading 回到真实 reload 上下文；事件类替换时靠 warn 而非编译期约束。
 
-### P1-12 不可逆与可回滚操作混流
+### ✅ P1-12 不可逆与可回滚操作混流
 
 注册表 commit、datapack、资源包、类 redefine 不可逆；失败只剩 `ROLLBACK_PARTIAL`/dirty 文案（问题 50 的回滚
 `VerifyError` 就是回滚自身失败）。缺一个正式的 RunState（clean/dirty）来拒绝后续 add、提示重启。
@@ -54,10 +54,9 @@ mixin 落定 / payload / capability / 命令重放；任一之后再失败即置
 后续 `add` 在 VALIDATE 以 `RUNTIME_DIRTY` 拒绝。客户端失败屏走重启建议；专用服由 `RunStateWarner`
 按间隔（默认 60s，可调）重复在控制台告警。`-PverifyRunState` / `-PserverRunState` + `-PfailAfterRegistry`
 是可重复证据。
-**剩余**：① “构造后失败=永久脏”偏保守，若以后能量化“构造器未执行副作用”可以放宽；② 客户端只有热加载菜单
-有常驻红字，主菜单入口本身还没有角标。脏原因已 i18n（`modreloader.dirty.reason.*`）。
+**剩余**：“构造后失败=永久脏”偏保守，若以后能量化“构造器未执行副作用”可以放宽（记录为边界，不改行为）。
 
-### P1-13 反射面大且深
+### ✅ P1-13 反射面大且深（高风险路径已语义化；其余逐特性）
 
 228 处、32 文件；能力守卫只验名字不验语义。问题 54 的修复一次性依赖三个事实：
 `transforming_class_loader` 属性、`MixinLaunchPlugin extends Legacy`、锁字段在父类。升级 NeoForge/Mixin 的风险是结构性的。
@@ -77,7 +76,7 @@ mixin 落定 / payload / capability / 命令重放；任一之后再失败即置
 **剩余**：其余 ~226 处仍是“名字检查 + 使用时报错”；下一优先级是 `Instrumentation` 可用性
 （`JvmAccess.get()` 的自附加路径）与 agent/redefine 的语义边界。
 
-### P1-14 并发模型是局部补丁
+### ✅ P1-14 并发模型是局部补丁（规则已写入 design.md）
 
 `ServerThreadHop`、render-thread 假设、worldgen 死锁、Mixin blanket 抑制、异步 reload 各管一段；
 没有“阶段 → 线程 / 锁序”的全局规则。
@@ -88,7 +87,7 @@ mixin 落定 / payload / capability / 命令重放；任一之后再失败即置
 `AgentTransformers` 扫描守卫。
 **剩余**：没有并发正确性的自动测试（锁序只能靠探针 + 真机复现）；chunk 重镶仍归原版（问题 29 归边界）。
 
-### P2-15 测试与文档
+### ✅ P2-15 测试与文档（harness 已收敛；L2/noFocus 归产品路线）
 
 93→110 个单测几乎不碰引擎主流程；L2 缺失、harness 约 600 行重复、本机 noFocus 失效。
 本文档的统计也已从 11-16 的版本刷新（见上表）。
@@ -152,9 +151,8 @@ mixin 落定 / payload / capability / 命令重放；任一之后再失败即置
    依赖方向现在是 **client → command** 单向。
    验证：`./gradlew build`；`runClient -PverifyAddCommand=<clientfixture> -PverifyGuiLayers -PverifyItemDecorators`
    → `dispatcher has /modreloader=true`、`AddCmdCheck RESULT: PASS`（2026-11-16 21:0x）。
-5. **一次性事件重放没有统一出口**：命令（`RegisterCommandsEvent`）已有，payload（`RegisterPayloadHandlersEvent`）
-   已用同样套路，贵妃级的 `RegisterEvent` 大概率还要用。三处各自处理"重放会让所有 mod 监听器再跑一遍"这个坑。
-   → 一个 `OneShotReplay` 帮助类，集中记录这个副作用与降级策略。
+5. ✅ **一次性事件重放没有统一出口**（2026-11-19 已做，见 P0-6）：命令/payload/注册表/客户端重放统一走
+   `OneShotReplay.fire` + `inspect/ReplayCatalog`。
    **2026-11-16 补了可见性那一半**：`inspect/RegistrationAudit` 在 `VALIDATE` 列出 jar 引用的每个启动期事件及其分级，
    已知崩溃类变更前拒绝（[client-registration-audit.md](features/client-registration-audit.md)）。
    同一天 `hotadd/CapabilityReplay` 补了第一个按收益排序的重放（`RegisterCapabilitiesEvent`，只投新容器）。
@@ -165,7 +163,8 @@ mixin 落定 / payload / capability / 命令重放；任一之后再失败即置
    `PayloadCheck`、`AddCommandCheck`、`AtSpikeCheck`、`CapabilityCheck`、`CreativeTitleCheck`（含 warm-up 的
    两次建世界）与 `LanScreenCheck` 全部迁入。已实测：payload / clientfixture / AtSpike / capabilities /
    creative-at-title(+warm) 全 PASS；`LanScreenCheck` 因本机缺 `lanserverproperties` 未跑。
-   **剩余**：`TestConnection`（RemotePayloadCheck / MpRegistry* 的连服样板）未抽；L2 断言与 noFocus 不稳未动。
+   **`TestConnection`（2026-11-19）**：抽 `dev/TestConnection.connect(...)`，`RemotePayloadCheck`（E3 实测 PASS）、
+   `MpRegistryCheck`、`MpFeiClientCheck`、`MpNoticeClientCheck` 已迁入。**剩余**：L2 断言与 noFocus 不稳。
 7. ✅ **`design.md` 落后于双端化**（已完成 2026-11-15）：补了「双端化与引擎边界」一节，写明 `PlatformHooks`、
    `Capabilities`、`dev` 源集与两侧 bootstrap 的职责。
 
@@ -200,6 +199,15 @@ mixin 落定 / payload / capability / 命令重放；任一之后再失败即置
     两个 run 任务都用 JBR 21 + `-XX:+AllowEnhancedClassRedefinition`（JBR 缺失时 warn，不静默降级）。
     验证：专用服 `enhancedRedefinition=true`、ZeroCore2 `redefined net.minecraft.world.inventory.Slot` 并 `hot-added`；客户端回归 PASS。
 
+### 剩余（结构性 / 产品，不属于“本轮可清”的技术债）
+
+1. **让 mod loading 回到真实 reload 上下文**（P0-6 的根因）：需要重写加载流程，收益大但风险同样大，暂以
+   “逐事件重放 + 审计 + `OneShotReplay`” 作为可维护形态。
+2. **剩余约 226 处反射站点**：高风险路径（54 的锁、40 的 agent、Instrumentation）已有语义探针；其余在各自特性
+   第一次改动时按 `capability` 规则升级，不再做一次性抽象。
+3. **并发正确性的自动测试**：锁序/线程规则只能靠探针 + 真机；chunk 重镶归原版（问题 29 为边界）。
+4. **L2（进世界后的断言）与 noFocus 稳定性**：属流水线产品路线（status 下一步的 P0），不在技术债清理范围。
+
 ## 刻意不做（避免过度设计）
 
 - 不引入 DI 容器、不抽象事件总线、不做通用插件系统。
@@ -210,10 +218,12 @@ mixin 落定 / payload / capability / 命令重放；任一之后再失败即置
 
 ## 建议的动手顺序
 
-1. ✅ 阶段表与顺序测试（2026-11-19：`AddStagePlan` + `AddStagePlanTest`，109 测试绿）
-2. 逐段抽方法：VALIDATE/MODULE 先抽（纯校验，最安全），再 MIXIN/COREMOD
-3. 借问题 53 重排 PACK 与 payload 阶段（用阶段表约束，不再散落修改）
-4. `OneShotReplay` 统一出口（P1-5），同时覆盖 client 重放清单
-5. harness 抽 `TestWorld` / `TestConnection`（P1-6）
-6. CI 远端正跑一次（P2-10）
-7. 旧条目：P1-4 ✅、P2-11 ✅（见下）
+1. ✅ 阶段表与顺序测试（2026-11-19：`AddStagePlan` + `AddStagePlanTest`）
+2. ✅ 逐段抽方法（十个阶段方法 + `Run` 上下文，行为不变）
+3. ✅ 借问题 53 重排 PACK 与 client setup/payload
+4. ✅ `OneShotReplay` + `ReplayCatalog`（P1-5/P0-6）
+5. ✅ harness 抽 `TestWorld` / `TestConnection`（P1-6，2026-11-19）
+6. ✅ CI 远端正跑（P2-10，36 次 run，最新 success）
+7. ✅ 包依赖反向边清零 + `ArchitectureTest`
+8. ✅ P1-12 RunState、P1-13 高风险语义探针、P1-14 线程/锁序规则
+9. 剩余见下方「剩余（结构性 / 产品）」

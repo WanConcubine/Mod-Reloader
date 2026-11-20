@@ -111,13 +111,8 @@ public final class MpFeiClientCheck {
             return;
         }
         String address = System.getProperty("modreloader.mpFeiAddress", "127.0.0.1:25565");
-        try {
-            ServerData data = new ServerData("mp-fei", address, ServerData.Type.OTHER);
-            ModReloader.LOGGER.info("[MpFei] connecting to {}", address);
-            ConnectScreen.startConnecting(mc.screen, mc, ServerAddress.parseString(address), data,
-                    false, null);
-        } catch (Throwable t) {
-            fail("connect failed: " + t);
+        if (!TestConnection.connect(mc, "MpFei", address, "mp-fei")) {
+            fail("connect failed");
             return;
         }
         stage = Stage.WAIT_JOIN;

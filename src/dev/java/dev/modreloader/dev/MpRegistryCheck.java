@@ -119,13 +119,8 @@ public final class MpRegistryCheck {
             return;
         }
         String address = System.getProperty("modreloader.mpRegistryAddress", "127.0.0.1:25565");
-        try {
-            ServerAddress serverAddress = ServerAddress.parseString(address);
-            ServerData data = new ServerData("mp", address, ServerData.Type.OTHER);
-            ModReloader.LOGGER.info("[MpRegistry] connecting to {}", address);
-            ConnectScreen.startConnecting(mc.screen, mc, serverAddress, data, false, null);
-        } catch (Throwable t) {
-            fail("connect failed: " + t);
+        if (!TestConnection.connect(mc, "MpRegistry", address, "mp")) {
+            fail("connect failed");
             return;
         }
         stage = Stage.WAIT_JOIN;

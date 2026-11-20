@@ -116,7 +116,6 @@ public final class RemotePayloadCheck {
     }
 
     private static void connect(Minecraft mc) {
-        // Wait for the hot-add's resource reload, otherwise the overlay blocks it.
         if (mc.getOverlay() != null) {
             if (ticks > 20 * 60) {
                 fail("resource reload overlay did not clear");
@@ -124,13 +123,8 @@ public final class RemotePayloadCheck {
             return;
         }
         String address = System.getProperty("modreloader.verifyPayloadRemoteAddress", "127.0.0.1:25565");
-        try {
-            ServerAddress serverAddress = ServerAddress.parseString(address);
-            ServerData data = new ServerData("e3", address, ServerData.Type.OTHER);
-            ModReloader.LOGGER.info("[RemotePayloadCheck] connecting to {}", address);
-            ConnectScreen.startConnecting(mc.screen, mc, serverAddress, data, false, null);
-        } catch (Throwable t) {
-            fail("connect failed: " + t);
+        if (!TestConnection.connect(mc, "RemotePayloadCheck", address, "e3")) {
+            fail("connect failed");
             return;
         }
         stage = Stage.WAIT_JOIN;
