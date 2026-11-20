@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import dev.modreloader.reflect.JvmAccess;
 
 /**
  * A1.0 read-only probe.

@@ -16,6 +16,7 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodType;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import dev.modreloader.reflect.UnsafeAccess;
 
 /**
  * Replays {@code RegisterCapabilitiesEvent} for a hot-added mod.

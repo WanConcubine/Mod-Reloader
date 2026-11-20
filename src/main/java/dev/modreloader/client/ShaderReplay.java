@@ -4,7 +4,7 @@ import com.mojang.datafixers.util.Pair;
 import dev.modreloader.ModReloader;
 import dev.modreloader.inspect.ReplayCatalog;
 import dev.modreloader.hotadd.OneShotReplay;
-import dev.modreloader.hotadd.UnsafeAccess;
+import dev.modreloader.reflect.UnsafeAccess;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.ShaderInstance;

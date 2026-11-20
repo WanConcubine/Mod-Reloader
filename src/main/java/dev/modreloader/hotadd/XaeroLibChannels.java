@@ -5,6 +5,7 @@ import dev.modreloader.ModReloader;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import dev.modreloader.reflect.UnsafeAccess;
 
 /**
  * Re-opens XaeroLib's one-shot registries for one hot-add.

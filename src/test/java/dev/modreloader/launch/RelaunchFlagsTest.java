@@ -1,4 +1,4 @@
-package dev.modreloader.client;
+package dev.modreloader.launch;
 
 import org.junit.jupiter.api.Test;
 
@@ -6,6 +6,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import dev.modreloader.launch.RelaunchFlags;
 
 /**
  * The relaunch flags decide whether the replacement JVM can open the experimental

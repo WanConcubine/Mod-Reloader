@@ -2,8 +2,8 @@ package dev.modreloader.dev;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import dev.modreloader.ModReloader;
-import dev.modreloader.hotadd.JvmAccess;
-import dev.modreloader.hotadd.UnsafeAccess;
+import dev.modreloader.reflect.JvmAccess;
+import dev.modreloader.reflect.UnsafeAccess;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
 import net.minecraft.client.gui.components.AbstractButton;

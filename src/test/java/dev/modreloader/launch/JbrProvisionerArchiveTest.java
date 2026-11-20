@@ -1,4 +1,4 @@
-package dev.modreloader.client;
+package dev.modreloader.launch;
 
 import org.junit.jupiter.api.Test;
 
@@ -15,6 +15,7 @@ import java.util.zip.ZipOutputStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import dev.modreloader.launch.JbrProvisioner;
 
 class JbrProvisionerArchiveTest {
     @Test

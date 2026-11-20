@@ -1,7 +1,8 @@
-package dev.modreloader.client;
+package dev.modreloader.launch;
 
 import java.util.ArrayList;
 import java.util.List;
+import dev.modreloader.launch.Relauncher;
 
 /**
  * The extra JVM flags a managed relaunch adds on top of the launcher's arguments.

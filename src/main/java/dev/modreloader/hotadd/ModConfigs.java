@@ -11,6 +11,7 @@ import java.lang.invoke.MethodType;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import dev.modreloader.reflect.UnsafeAccess;
 
 /**
  * Loads the configs a hot-added mod registered from its constructor.

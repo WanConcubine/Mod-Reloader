@@ -11,6 +11,7 @@ import net.neoforged.neoforge.event.server.ServerStartedEvent;
 
 import java.nio.file.Path;
 import java.util.List;
+import dev.modreloader.command.ServerCommands;
 
 /**
  * Server-side wiring: console commands and the triggers the client obtains from

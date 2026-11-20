@@ -22,6 +22,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import dev.modreloader.reflect.UnsafeAccess;
+import dev.modreloader.reflect.JvmAccess;
 
 /**
  * Inserts a mod's automatic module into FML's game {@link ModuleLayer}.

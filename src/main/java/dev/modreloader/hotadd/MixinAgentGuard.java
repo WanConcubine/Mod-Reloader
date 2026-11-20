@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import dev.modreloader.reflect.UnsafeAccess;
+import dev.modreloader.inspect.MixinRuntimeApi;
 
 /**
  * Stops Mixin's agent from re-transforming the bytes we already mixed.

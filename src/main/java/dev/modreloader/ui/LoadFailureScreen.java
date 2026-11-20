@@ -1,8 +1,8 @@
 package dev.modreloader.ui;
 
 import dev.modreloader.ModReloader;
-import dev.modreloader.client.PendingAdd;
-import dev.modreloader.client.Relauncher;
+import dev.modreloader.launch.PendingAdd;
+import dev.modreloader.launch.Relauncher;
 import dev.modreloader.diagnose.FailureAnalyzer;
 import dev.modreloader.inspect.JbrSupport;
 import dev.modreloader.watch.ModsFolderWatcher;

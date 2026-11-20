@@ -1,6 +1,6 @@
 package dev.modreloader.dev;
 
-import dev.modreloader.hotadd.UnsafeAccess;
+import dev.modreloader.reflect.UnsafeAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;

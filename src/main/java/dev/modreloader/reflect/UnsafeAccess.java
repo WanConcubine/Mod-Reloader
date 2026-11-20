@@ -1,4 +1,4 @@
-package dev.modreloader.hotadd;
+package dev.modreloader.reflect;
 
 import sun.misc.Unsafe;
 

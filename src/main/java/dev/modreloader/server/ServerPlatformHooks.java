@@ -18,6 +18,7 @@ import net.neoforged.neoforgespi.language.IModFileInfo;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import dev.modreloader.command.ServerCommands;
 
 /**
  * Dedicated-server implementation of {@link PlatformHooks}: no client setup, no

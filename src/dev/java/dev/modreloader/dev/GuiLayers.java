@@ -1,6 +1,6 @@
 package dev.modreloader.dev;
 
-import dev.modreloader.hotadd.UnsafeAccess;
+import dev.modreloader.reflect.UnsafeAccess;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.resources.ResourceLocation;

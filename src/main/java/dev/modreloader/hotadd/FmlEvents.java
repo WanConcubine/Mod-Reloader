@@ -12,6 +12,7 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodType;
 import java.util.ArrayList;
 import java.util.List;
+import dev.modreloader.reflect.UnsafeAccess;
 
 /**
  * Constructs a hot-added mod and replays the client lifecycle events it missed.

@@ -29,6 +29,9 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import dev.modreloader.reflect.UnsafeAccess;
+import dev.modreloader.inspect.MixinRuntimeApi;
+import dev.modreloader.reflect.JvmAccess;
 
 /**
  * Runtime Mixin plumbing for hot-added mods.

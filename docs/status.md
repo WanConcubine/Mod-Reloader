@@ -62,12 +62,16 @@
 | **capability 重放** | 五项全 present；`-PskipCapabilityReplay=true` 时五项 MISSING（反证） | `-PverifyCapabilities=<jar>`；[dogfood-gameplay.md](features/dogfood-gameplay.md) §1.1 |
 | **late AT（实验性）** | Jade 57/39、JEI 34/16、Controlling 1/1；Jade 回滚 39/39 ok；**类级 `public-f` 拒绝**（`stage=VALIDATE kind=ACCESS_TRANSFORMER`）；**嵌套 mod AT 已接入**（2026-11-19：Create/Iris 越过嵌套 AT） | `-PlateAt=true`；[late-at.md](features/late-at.md) |
 | **失败回滚** | post-ModList / post-pack 恢复 ModList/module/config/类/资源包；post-construct 监听器按实例摘除 | `-PverifyRollback` / `-PfailAfterModList` / `-PfailAfterPack` / `-PfailAfterConstruct` |
-| **工程底座** | `capabilities` 10 组全 ok；无 `libs/` 可 `clean build`；**110 个无游戏 Java 单测**；i18n 两语言**各 197 key** | `./gradlew build`/`test`；[tech-debt.md](tech-debt.md) |
+| **工程底座** | `capabilities` 10 组全 ok；无 `libs/` 可 `clean build`；**111 个无游戏 Java 单测**；i18n 两语言**各 197 key** | `./gradlew build`/`test`；[tech-debt.md](tech-debt.md) |
 
 ## 验证状态
 
 ### 已验证
 
+- **包依赖分层（2026-11-19）**：`reflect → inspect → capability/i18n/launch/watch/command → hotadd →
+  client/server → ui/diagnose` 的反向边全部消除（`UnsafeAccess`/`JvmAccess`、`MixinRuntimeApi`、
+  `ModReloaderI18n`、`ServerCommands`、`launch/*` 下沉）；`ArchitectureTest` 扫描源码钉住规则。
+  回归：`-PverifyRelaunchPlan` PASS、`hud` MATCH、build 绿。
 - **注册表残留检测（问题 35，2026-11-19）**：构造后失败（提交前）不留内容；构造器直接注册会被
   `RegistryStage.abort` 计数并置 `residue`，RunState 记为 REGISTRY、后续 add 被拒。
   证据：`-PverifyCompat=<t4fixture> -PfailAfterConstruct -PdirectRegister=true` 报告
@@ -410,6 +414,8 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近三条。
 
+- **2026-11-19（包依赖分层）**：五条反向依赖（client→server、diagnose→ui、command→ui、ui→client、
+  capability→hotadd）全部清零，共用的 JVM 工具/命令重放/重启服务下沉；新增 `ArchitectureTest` 防回归。
 - **2026-11-19（脏状态 RunState）**：不可逆操作之后的失败把运行期置脏，后续 add 以 `RUNTIME_DIRTY` 拒绝；
   专用服每 60s 在控制台重复告警（间隔可调）。客户端与专用服 harness 均 PASS；成功与干净拒绝不置脏。
 - **2026-11-19（问题 53 阶段重排）**：`PACK` 提到 `client setup` 之前，先注册 reload listener 再注入包/启动

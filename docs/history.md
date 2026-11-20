@@ -2055,3 +2055,18 @@ clientfixture（GUI 层/物品装饰）PASS、`minimap` PASS、`moonlight-lateat
   `RegistryStage.residue`；`RunState` 的原因从 CONSTRUCT/CUSTOM_REGISTRY 收紧为 REGISTRY，后续 add 被拒。
 - 正常路径回归：t4fixture `ok=true`；Balm→Waystones `ok=true`（+44/+55 只发生在成功提交后）。
 - 边界仍存在：注册表没有删除路径（删条目会移动 id），恢复手段是重启；但现在不会被静默忽略。
+
+## 2026-11-19（包依赖分层：五条反向边清零 + 架构护栏）
+
+清理前的反向边（源码扫描）：`client → server`、`diagnose → ui`、`command → ui`、`ui → client`、
+`capability → hotadd`。全部靠“共用服务下沉”消除，而不是加白名单：
+
+- `hotadd/{UnsafeAccess,JvmAccess}` → `reflect/`；`hotadd/MixinRuntimeApi` → `inspect/`；
+- `ui/ModReloaderI18n` → `i18n/`；`server/ServerCommands` → `command/`；
+- `client/{PendingAdd,Relauncher,RelaunchScripts,RelaunchFlags,JbrProvisioner}` → `launch/`
+  （对应 5 个单测一起搬到 `src/test/.../launch`，因为它们用到包私有的内部函数）。
+
+新增 `ArchitectureTest`：扫描 `src/main/java` 的 `package`/`import`，按
+`reflect → inspect → capability/i18n/launch/watch/command → hotadd → client/server → ui/diagnose`
+检查禁止方向，越层即失败。`./gradlew test` **111**；`-PverifyRelaunchPlan=true` PASS（重启脚本/spawn 路径）、
+`hud` MATCH、`./gradlew build` 绿。

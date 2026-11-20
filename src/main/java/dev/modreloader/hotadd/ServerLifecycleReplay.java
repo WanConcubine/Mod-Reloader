@@ -15,6 +15,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import dev.modreloader.reflect.UnsafeAccess;
 
 /**
  * Replays the server-level one-shot events a hot-added mod missed <em>only for

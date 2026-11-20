@@ -1,4 +1,4 @@
-package dev.modreloader.hotadd;
+package dev.modreloader.inspect;
 
 import org.spongepowered.asm.mixin.extensibility.IMixinConfig;
 import org.spongepowered.asm.mixin.transformer.IMixinTransformer;
@@ -7,6 +7,8 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodType;
 import java.util.ArrayList;
 import java.util.List;
+import dev.modreloader.reflect.UnsafeAccess;
+import dev.modreloader.reflect.JvmAccess;
 
 /**
  * The five MixinRuntime (modId {@code mr}) capabilities this runtime uses, behind

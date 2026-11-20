@@ -1,4 +1,4 @@
-package dev.modreloader.client;
+package dev.modreloader.launch;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;

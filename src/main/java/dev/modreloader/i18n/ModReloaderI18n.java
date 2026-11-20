@@ -1,4 +1,4 @@
-package dev.modreloader.ui;
+package dev.modreloader.i18n;
 
 import dev.modreloader.inspect.JbrSupport;
 import dev.modreloader.inspect.MixinRuntimeSupport;

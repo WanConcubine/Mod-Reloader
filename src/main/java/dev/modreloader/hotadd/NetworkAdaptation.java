@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import dev.modreloader.reflect.UnsafeAccess;
 
 /**
  * Registers a hot-added mod's custom payloads by temporarily reopening

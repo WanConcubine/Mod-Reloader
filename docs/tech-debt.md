@@ -7,13 +7,13 @@
 
 | 指标 | 现状 |
 |---|---|
-| Java 代码 | **25 720 行 / 136 文件**（`main` 15 802 / 85 + `dev` 8 314 / 35 + `test` 1 604 / 16） |
-| `hotadd` 包 | **7 559 行**；`HotAddEngine.add` 已拆成 10 个阶段方法（2026-11-19），单方法最长约 150 行 |
+| Java 代码 | **26 088 行 / 147 文件**（`main` 16 620 / 90 + `dev` 8 609 / 37 + `test` 1 859 / 20） |
+| `hotadd` 包 | **7 764 行**；`HotAddEngine.add` 已拆成 10 个阶段方法（2026-11-19），单方法最长约 150 行 |
 | 反射 / Unsafe 站点 | **228 处 / 32 个文件**（约占 main 文件 25%）：mixin、注入器、ModList、module、注册表、网络、资源包、启动器锁 |
-| 一次性事件重放 | **17 处**，覆盖 12+ 种事件，全部手写（命令、payload、菜单/渲染器/颜色/层/粒子…） |
-| Java 单测 | **110**（`AddStagePlan` 5、`ReplayCatalogTest` 3、审计 2、`RunStateTest` 6、脏原因 i18n 2）；引擎主流程仍以真机 L1 harness 为主要证据 |
+| 一次性事件重放 | **22 个条目 / 22 个调用点**，统一走 `inspect/ReplayCatalog` + `hotadd/OneShotReplay`（2026-11-19） |
+| Java 单测 | **111**（`AddStagePlan` 5、`ReplayCatalogTest` 3、审计 3、`RunStateTest` 6、架构护栏 1…）；引擎主流程仍以真机 L1 harness 为主要证据 |
 | 语言文件 | `en_us` / `zh_cn` 各 197 key（未变） |
-| 包依赖 | `hotadd` 不依赖两侧；`client → command` 单向；剩 `client → server`（集成服命令重放）与 `diagnose → ui` |
+| 包依赖 | 反向边已清零并由 `ArchitectureTest` 钉住：`reflect → inspect → capability/i18n/launch/watch/command → hotadd → client/server → ui/diagnose`；`hotadd` 不依赖两侧，`ui` 不依赖 `client` |
 
 ## 2026-11-19 复审（链路视角）
 
@@ -143,6 +143,16 @@ mixin 落定 / payload / capability / 命令重放；任一之后再失败即置
    → 抽 `dev/TestWorld`（建世界 + 等 ready）与 `dev/TestConnection`（连服 + 等 join）。
 7. ✅ **`design.md` 落后于双端化**（已完成 2026-11-15）：补了「双端化与引擎边界」一节，写明 `PlatformHooks`、
    `Capabilities`、`dev` 源集与两侧 bootstrap 的职责。
+
+9. ✅ **包依赖反向边（2026-11-19）**：`client → server`、`diagnose → ui`、`command → ui`、`ui → client`、
+   `capability → hotadd` 全部消除：
+   - `hotadd/UnsafeAccess`、`hotadd/JvmAccess` → `reflect/`（纯 JVM 工具）；
+   - `hotadd/MixinRuntimeApi` → `inspect/`；
+   - `ui/ModReloaderI18n` → `i18n/`（UI 与 diagnose 共用）；
+   - `server/ServerCommands` → `command/`（两侧共用同一份命令重放）；
+   - `client/{PendingAdd,Relauncher,RelaunchScripts,RelaunchFlags,JbrProvisioner}` → `launch/`（UI 与 bootstrap 共用）。
+   `ArchitectureTest` 直接扫 `src/main/java`，任何新增的越层 import 都失败（111 测试）。
+   回归：`-PverifyRelaunchPlan=true` PASS、`hud` MATCH、`./gradlew build` 绿。
 
 ## P2：便宜且能防止回归
 

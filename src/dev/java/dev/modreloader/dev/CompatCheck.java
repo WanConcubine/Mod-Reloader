@@ -13,6 +13,7 @@ import org.lwjgl.glfw.GLFW;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import dev.modreloader.reflect.UnsafeAccess;
 
 /**
  * Dev-only compatibility-matrix harness: hot-add a list of real jars at the title
@@ -191,7 +192,7 @@ public final class CompatCheck {
     private static int shaderCount() {
         try {
             var renderer = net.minecraft.client.Minecraft.getInstance().gameRenderer;
-            Object shaders = dev.modreloader.hotadd.UnsafeAccess.get(
+            Object shaders = dev.modreloader.reflect.UnsafeAccess.get(
                     renderer, net.minecraft.client.renderer.GameRenderer.class, "shaders");
             return shaders instanceof java.util.Map<?, ?> map ? map.size() : -1;
         } catch (Throwable t) {

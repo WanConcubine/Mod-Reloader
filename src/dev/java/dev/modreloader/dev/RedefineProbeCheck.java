@@ -1,7 +1,7 @@
 package dev.modreloader.dev;
 
 import dev.modreloader.ModReloader;
-import dev.modreloader.hotadd.JvmAccess;
+import dev.modreloader.reflect.JvmAccess;
 import net.minecraft.client.Minecraft;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;

@@ -5,7 +5,7 @@ import dev.modreloader.hotadd.RunState;
 import dev.modreloader.inspect.JbrSupport;
 import dev.modreloader.inspect.MixinRuntimeSupport;
 import dev.modreloader.inspect.ModInspection;
-import dev.modreloader.ui.ModReloaderI18n;
+import dev.modreloader.i18n.ModReloaderI18n;
 
 import net.minecraft.client.resources.language.I18n;
 import net.minecraft.network.chat.Component;

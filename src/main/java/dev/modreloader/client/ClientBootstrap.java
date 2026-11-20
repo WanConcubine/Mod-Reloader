@@ -7,7 +7,7 @@ import dev.modreloader.hotadd.LateAccessTransformers;
 import dev.modreloader.hotadd.MixinProbe;
 import dev.modreloader.hotadd.PlatformHooks;
 import dev.modreloader.inspect.MixinRuntimeSupport;
-import dev.modreloader.server.ServerCommands;
+import dev.modreloader.command.ServerCommands;
 import dev.modreloader.ui.ModReloaderScreen;
 import dev.modreloader.ui.ModReloaderToasts;
 import dev.modreloader.watch.ModsFolderWatcher;
@@ -20,6 +20,8 @@ import net.neoforged.neoforge.common.NeoForge;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import dev.modreloader.launch.PendingAdd;
+import dev.modreloader.launch.Relauncher;
 
 /**
  * Client-only wiring: the tick loop that starts the watcher, desktop toasts, the

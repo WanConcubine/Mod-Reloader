@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import dev.modreloader.reflect.UnsafeAccess;
 
 /**
  * Rebuilds FML's {@link ModList} with the existing mods plus the newly loaded one.

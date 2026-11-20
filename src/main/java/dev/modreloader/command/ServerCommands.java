@@ -1,4 +1,4 @@
-package dev.modreloader.server;
+package dev.modreloader.command;
 
 import com.mojang.brigadier.CommandDispatcher;
 import dev.modreloader.ModReloader;

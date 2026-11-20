@@ -35,6 +35,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
+import dev.modreloader.reflect.UnsafeAccess;
 
 /**
  * Guifei-tier stage: applies a hot-added mod's {@code data/} (recipes, loot

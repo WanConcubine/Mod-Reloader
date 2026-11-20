@@ -1,7 +1,7 @@
 package dev.modreloader.dev;
 
 import dev.modreloader.ModReloader;
-import dev.modreloader.client.Relauncher;
+import dev.modreloader.launch.Relauncher;
 import net.minecraft.client.Minecraft;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;

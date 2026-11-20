@@ -1,4 +1,4 @@
-package dev.modreloader.client;
+package dev.modreloader.launch;
 
 import dev.modreloader.ModReloader;
 

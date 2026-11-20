@@ -7,7 +7,7 @@ import com.mojang.brigadier.suggestion.SuggestionProvider;
 import dev.modreloader.ModReloader;
 import dev.modreloader.hotadd.HotAddEngine;
 import dev.modreloader.hotadd.MixinProbe;
-import dev.modreloader.ui.ModReloaderI18n;
+import dev.modreloader.i18n.ModReloaderI18n;
 import dev.modreloader.watch.ModsFolderWatcher;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;

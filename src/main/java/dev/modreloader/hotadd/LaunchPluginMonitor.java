@@ -3,6 +3,7 @@ package dev.modreloader.hotadd;
 import dev.modreloader.ModReloader;
 
 import java.util.Map;
+import dev.modreloader.reflect.UnsafeAccess;
 
 /**
  * The monitor Mixin's ModLauncher plugin uses around {@code handlesClass} /

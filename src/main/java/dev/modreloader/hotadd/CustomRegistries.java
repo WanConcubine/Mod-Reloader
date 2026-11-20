@@ -17,6 +17,7 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import dev.modreloader.reflect.UnsafeAccess;
 
 /**
  * Replays {@code NewRegistryEvent} for a hot-added mod so it can create its own

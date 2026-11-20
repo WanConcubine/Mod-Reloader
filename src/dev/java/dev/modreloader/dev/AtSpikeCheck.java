@@ -1,7 +1,7 @@
 package dev.modreloader.dev;
 
 import dev.modreloader.ModReloader;
-import dev.modreloader.hotadd.JvmAccess;
+import dev.modreloader.reflect.JvmAccess;
 import dev.modreloader.inspect.AccessTransformerRules;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractButton;

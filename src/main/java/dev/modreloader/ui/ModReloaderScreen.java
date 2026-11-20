@@ -16,6 +16,7 @@ import net.minecraft.network.chat.MutableComponent;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import dev.modreloader.i18n.ModReloaderI18n;
 
 /**
  * Pending mods: newly detected jars plus the ignored ones, which can be restored.

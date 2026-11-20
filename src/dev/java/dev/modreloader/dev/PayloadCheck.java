@@ -2,7 +2,7 @@ package dev.modreloader.dev;
 
 import dev.modreloader.ModReloader;
 import dev.modreloader.hotadd.HotAddEngine;
-import dev.modreloader.hotadd.UnsafeAccess;
+import dev.modreloader.reflect.UnsafeAccess;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.Connection;
 import net.minecraft.network.ConnectionProtocol;

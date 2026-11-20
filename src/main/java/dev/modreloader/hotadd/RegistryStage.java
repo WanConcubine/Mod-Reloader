@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import dev.modreloader.reflect.UnsafeAccess;
 
 /**
  * Guifei-tier stage: lets a hot-added mod register content (blocks / items / …) into the

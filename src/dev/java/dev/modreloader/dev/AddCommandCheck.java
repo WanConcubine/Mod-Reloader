@@ -4,7 +4,7 @@ import com.mojang.brigadier.CommandDispatcher;
 import dev.modreloader.ModReloader;
 import dev.modreloader.command.ReloaderCommands;
 import dev.modreloader.hotadd.HotAddEngine;
-import dev.modreloader.hotadd.UnsafeAccess;
+import dev.modreloader.reflect.UnsafeAccess;
 import dev.modreloader.ui.ModReloaderScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractButton;

@@ -1,4 +1,4 @@
-package dev.modreloader.hotadd;
+package dev.modreloader.reflect;
 
 import java.io.InputStream;
 import java.lang.instrument.Instrumentation;
@@ -10,6 +10,7 @@ import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
+import dev.modreloader.reflect.UnsafeAccess;
 
 /**
  * Obtains {@link Instrumentation} without launching the game with {@code -javaagent}.

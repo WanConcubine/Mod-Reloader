@@ -1,7 +1,7 @@
 package dev.modreloader.dev;
 
 import dev.modreloader.ModReloader;
-import dev.modreloader.hotadd.UnsafeAccess;
+import dev.modreloader.reflect.UnsafeAccess;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;

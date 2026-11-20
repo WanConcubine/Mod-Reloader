@@ -30,6 +30,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
+import dev.modreloader.reflect.JvmAccess;
 
 /**
  * Applies a hot-added mod's {@code ICoreMod} transformers <em>after</em> start-up.

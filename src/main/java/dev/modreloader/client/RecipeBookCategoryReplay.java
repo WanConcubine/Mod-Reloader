@@ -4,7 +4,7 @@ import com.google.common.collect.ImmutableList;
 import dev.modreloader.ModReloader;
 import dev.modreloader.inspect.ReplayCatalog;
 import dev.modreloader.hotadd.OneShotReplay;
-import dev.modreloader.hotadd.UnsafeAccess;
+import dev.modreloader.reflect.UnsafeAccess;
 import net.minecraft.client.RecipeBookCategories;
 import net.minecraft.world.inventory.RecipeBookType;
 import net.minecraft.world.item.crafting.RecipeHolder;

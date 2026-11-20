@@ -3,7 +3,7 @@ package dev.modreloader.dev;
 import dev.modreloader.ModReloader;
 import dev.modreloader.hotadd.HotAddEngine;
 import dev.modreloader.hotadd.ClassBytes;
-import dev.modreloader.hotadd.JvmAccess;
+import dev.modreloader.reflect.JvmAccess;
 import dev.modreloader.hotadd.MixinSupport;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.tree.ClassNode;

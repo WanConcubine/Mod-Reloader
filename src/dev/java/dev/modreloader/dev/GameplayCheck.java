@@ -1,7 +1,7 @@
 package dev.modreloader.dev;
 
 import dev.modreloader.ModReloader;
-import dev.modreloader.hotadd.UnsafeAccess;
+import dev.modreloader.reflect.UnsafeAccess;
 import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.world.item.CreativeModeTabs;
@@ -439,7 +439,7 @@ public final class GameplayCheck {
     private static boolean checkClientRegistrations() {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
 
-        Object renderersObject = dev.modreloader.hotadd.UnsafeAccess.get(
+        Object renderersObject = dev.modreloader.reflect.UnsafeAccess.get(
                 mc.getBlockEntityRenderDispatcher(),
                 net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher.class,
                 "renderers");
@@ -460,13 +460,13 @@ public final class GameplayCheck {
             }
         }
 
-        Object itemColorsObject = dev.modreloader.hotadd.UnsafeAccess.get(
+        Object itemColorsObject = dev.modreloader.reflect.UnsafeAccess.get(
                 mc.getItemColors(), net.minecraft.client.color.item.ItemColors.class, "itemColors");
         boolean hasBucketTint = itemColorsObject instanceof java.util.Map<?, ?> map
                 && map.containsKey(item(modId + ":porcelain_bucket"));
         int tint = mc.getItemColors().getColor(new ItemStack(item(modId + ":porcelain_bucket")), 1);
 
-        Object extensionsObject = dev.modreloader.hotadd.UnsafeAccess.getStatic(
+        Object extensionsObject = dev.modreloader.reflect.UnsafeAccess.getStatic(
                 net.neoforged.neoforge.client.extensions.common.ClientExtensionsManager.class,
                 "FLUID_TYPE_EXTENSIONS");
         int fluids = 0;
@@ -480,7 +480,7 @@ public final class GameplayCheck {
             }
         }
 
-        Object configsByMod = dev.modreloader.hotadd.UnsafeAccess.get(
+        Object configsByMod = dev.modreloader.reflect.UnsafeAccess.get(
                 net.neoforged.fml.config.ConfigTracker.INSTANCE,
                 net.neoforged.fml.config.ConfigTracker.class, "configsByMod");
         int configs = 0;
@@ -497,7 +497,7 @@ public final class GameplayCheck {
         Object realManager = mc.getResourceManager();
         int clientReloadListeners = 0;
         if (realManager instanceof net.minecraft.server.packs.resources.ReloadableResourceManager rrm) {
-            Object listeners = dev.modreloader.hotadd.UnsafeAccess.get(rrm,
+            Object listeners = dev.modreloader.reflect.UnsafeAccess.get(rrm,
                     net.minecraft.server.packs.resources.ReloadableResourceManager.class, "listeners");
             if (listeners instanceof java.util.List<?> list) {
                 for (Object listener : list) {

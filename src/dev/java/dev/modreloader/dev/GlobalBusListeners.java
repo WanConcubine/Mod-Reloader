@@ -1,6 +1,6 @@
 package dev.modreloader.dev;
 
-import dev.modreloader.hotadd.UnsafeAccess;
+import dev.modreloader.reflect.UnsafeAccess;
 import net.neoforged.neoforge.common.NeoForge;
 
 import java.util.List;

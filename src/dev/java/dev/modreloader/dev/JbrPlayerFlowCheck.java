@@ -2,9 +2,9 @@ package dev.modreloader.dev;
 
 import dev.modreloader.ModReloader;
 import dev.modreloader.Platform;
-import dev.modreloader.client.JbrProvisioner;
-import dev.modreloader.client.PendingAdd;
-import dev.modreloader.client.Relauncher;
+import dev.modreloader.launch.JbrProvisioner;
+import dev.modreloader.launch.PendingAdd;
+import dev.modreloader.launch.Relauncher;
 import dev.modreloader.hotadd.HotAddEngine;
 import dev.modreloader.inspect.JbrSupport;
 import dev.modreloader.inspect.ModInspection;

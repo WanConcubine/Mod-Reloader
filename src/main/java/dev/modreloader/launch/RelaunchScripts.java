@@ -1,4 +1,4 @@
-package dev.modreloader.client;
+package dev.modreloader.launch;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
