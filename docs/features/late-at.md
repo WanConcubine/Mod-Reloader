@@ -1,6 +1,6 @@
 # 晚到 access transformer（实验性，JBR）
 
-> 状态：**2026-11-17 实验性可用，默认关闭**。只在 **JBR 21 + `-XX:+AllowEnhancedClassRedefinition`** 下工作；
+> 状态：**2026-11-20 起：增强 JBR 会话内自动启用**（`-Dmodreloader.lateAt=false` 可显式关闭）。只在 **JBR 21 + `-XX:+AllowEnhancedClassRedefinition`** 下工作；
 > 只在 L1 验证过 Jade/JEI/Controlling，**没有 L2 功能验证、没有 Windows/Linux 验证、没有大规模浸泡**。
 > 它推翻了「AT 一律是硬边界」的旧结论，但**不是**通用 AT 支持。
 
@@ -112,17 +112,19 @@ JBR 恰好允许。
 ## 6. 用法
 
 ```bash
-# 直接跑 Gradle（JBR 默认 + 无焦点 agent）
-./gradlew runClient -PverifyCompat=/abs/Jade.jar -PlateAt=true -PnoFocus=true
+# 直接跑 Gradle（JBR 默认 + 增强重定义 → late AT 自动启用）
+./gradlew runClient -PverifyCompat=/abs/Jade.jar -PnoFocus=true
 
-# 游戏内/服务端：JVM 参数加 -Dmodreloader.lateAt=true
-# 然后 /modreloader add <jar>
+# 显式关闭（诊断/对比）
+./gradlew runClient -PverifyCompat=/abs/Jade.jar -PnoFocus=true -Dmodreloader.lateAt=false
 
 # pipeline：场景里写 "late_at": true
 python3 tools/pipeline/run.py run --scenario tooltip-lateat --mods-dir /tmp/modreloader-corpus
 ```
 
-默认关闭：不加 `-PlateAt=true` 时行为与以前完全一样（AT 变更前拒绝，提示重启）。
+**默认开启（增强 JBR）**：检测到 `-XX:+AllowEnhancedClassRedefinition` 即启用；玩家点一次「准备环境」并重启后
+不再需要任何开关。`-PlateAt=true` / `-Dmodreloader.lateAt` 只作为开发者覆盖；stock 或 JBR 未带增强时仍按以前
+拒绝（AT 变更前拒绝，提示准备环境）。
 如果 late AT 失败，拒绝文案会说明是 JBR 拒绝、目标不可改、还是规则重写失败。
 
 ## 7. 下一步（按优先级）

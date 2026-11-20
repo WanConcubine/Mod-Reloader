@@ -54,8 +54,23 @@ public final class LateAccessTransformers {
     private LateAccessTransformers() {
     }
 
+    /**
+     * Late AT is part of the prepared environment: once the process is JBR with
+     * enhanced redefinition, it is on by default. The old property remains as an
+     * explicit override (dev runs, and {@code -Dmodreloader.lateAt=false} to opt
+     * out); a blank/unset value must not make the "one prepare click" flow depend
+     * on a second switch.
+     */
     public static boolean enabled() {
-        return Boolean.getBoolean("modreloader.lateAt");
+        return lateAtEnabled(System.getProperty("modreloader.lateAt"),
+                JbrSupport.enhancedRedefinition());
+    }
+
+    static boolean lateAtEnabled(String property, boolean enhancedJbr) {
+        if (property != null && !property.isBlank()) {
+            return Boolean.parseBoolean(property);
+        }
+        return enhancedJbr;
     }
 
     public static Result apply(Path jar, Rollback rollback) {

@@ -60,9 +60,9 @@
 | **客户端注册重放** | menu screens / renderers（+dispatcher）/ 颜色 / 扩展 / reload listener / tooltip / item→model / HUD 层 25→31 / 物品装饰 diamond 0→1 / 配方书 `1 new` / **层定义 213→234（staged）**；逐个结论见 §7.1 | `-PverifyAddCommand=<clientfixture> -PverifyGuiLayers=true -PverifyItemDecorators=true`；[client-registration-audit.md](features/client-registration-audit.md) §7.1 |
 | **shader 重放** | 热加资源重载本身 fire `RegisterShadersEvent`（所有容器）；夹具 `clientfixture:marker` 实测 `shaders 56 -> 57`，只注册一次；`ShaderReplay` 仅无 reload 时兜底 | `-PverifyCompat=<clientfixture> -PverifyShaderCount=1 -PverifyCompatSettle=240`；[client-registration-audit.md](features/client-registration-audit.md) |
 | **capability 重放** | 五项全 present；`-PskipCapabilityReplay=true` 时五项 MISSING（反证） | `-PverifyCapabilities=<jar>`；[dogfood-gameplay.md](features/dogfood-gameplay.md) §1.1 |
-| **late AT（实验性）** | Jade 57/39、JEI 34/16、Controlling 1/1；Jade 回滚 39/39 ok；**类级 `public-f` 拒绝**（`stage=VALIDATE kind=ACCESS_TRANSFORMER`）；**嵌套 mod AT 已接入**（2026-11-19：Create/Iris 越过嵌套 AT） | `-PlateAt=true`；[late-at.md](features/late-at.md) |
+| **late AT（实验性）** | Jade 57/39、JEI 34/16、Controlling 1/1；Jade 回滚 39/39 ok；**类级 `public-f` 拒绝**（`stage=VALIDATE kind=ACCESS_TRANSFORMER`）；**嵌套 mod AT 已接入**（2026-11-19：Create/Iris 越过嵌套 AT）；**增强 JBR 下自动启用**（`-Dmodreloader.lateAt=false` 可关） | `-PlateAt=true` 仅 dev 覆盖；[late-at.md](features/late-at.md) |
 | **失败回滚** | post-ModList / post-pack 恢复 ModList/module/config/类/资源包；post-construct 监听器按实例摘除 | `-PverifyRollback` / `-PfailAfterModList` / `-PfailAfterPack` / `-PfailAfterConstruct` |
-| **工程底座** | `capabilities` 10 组全 ok；无 `libs/` 可 `clean build`；**111 个无游戏 Java 单测**；i18n 两语言**各 197 key** | `./gradlew build`/`test`；[tech-debt.md](tech-debt.md) |
+| **工程底座** | `capabilities` 10 组全 ok；无 `libs/` 可 `clean build`；**114 个无游戏 Java 单测**；i18n 两语言**各 197 key** | `./gradlew build`/`test`；[tech-debt.md](tech-debt.md) |
 
 ## 验证状态
 
@@ -165,7 +165,7 @@
 
 - **EasyLAN 真实 GUI 按钮**（`ScreenEvent.Opening` 未人工点过）；**生产 jar / 第三方启动器**；1.21.1 之外。
 - **无焦点 L2/输入/截图**：只到标题屏；Windows/Linux 的 GLFW 行为未测。
-- **late AT 的 L2/平台**：Jade tooltip / JEI 界面未验证；Mekanism/AE2 未跑；多 mod AT 冲突、嵌套 AT、Windows/Linux；`-PlateAt` 仍是 opt-in。
+- **late AT 的 L2/平台**：Jade tooltip / JEI 界面未验证；Mekanism/AE2 未跑；多 mod AT 冲突、嵌套 AT、Windows/Linux；增强 JBR 下已自动启用（发布前的平台/L2 证据仍缺）。
 - **`ShaderReplay` 的兜底路径**（无 reload 时）没有夹具。
 - **流水线 L2**：进世界后的 HUD/按键/截图断言还没有（L1 PASS 不说明画面正确）。
 - **Xaero's World Map 的 L1**：引擎 `ok=true` 后它自己的 `loadLater` 在标题屏抛异常，需 L2；`input-nojbr` / `minimap-addon` 未跑。
@@ -236,9 +236,9 @@
 
 21. **客户端启动期注册仍是手写清单**：已重放 FMLClientSetup/key/menu/renderers/颜色/扩展/reload listener/tooltip/配方书/**shader**/HUD/物品装饰/粒子+item→model；未做 `ColorResolvers`；`RegisterLayerDefinitions` 2026-11-18 起重放（含 `EntityModelSet` roots 重建与 staged 顺序）。漏一个就是一类 bug，所以有注册审计。
 
-23. **AT：stock 硬边界；JBR late AT 实验性可行**：成员级 access/final 可改；**类级 `-f` 见 44**。默认拒绝（`ACCESS_TRANSFORMER`），`-PlateAt=true` 才走实验路径；托管重启会自动带开关。ADR-0014 否决“改写调用方”。
+23. **AT：stock 硬边界；JBR late AT 实验性可行**：成员级 access/final 可改；**类级 `-f` 见 44**。stock 默认拒绝（`ACCESS_TRANSFORMER`）；增强 JBR 会话下自动走 late AT（`-Dmodreloader.lateAt=false` 可关）；托管重启自动准备环境。ADR-0014 否决“改写调用方”。
 
-24. **JiJ/coremod 剩余边界**：嵌套 GAMELIBRARY 无 container（独立分发的 MezzConfig 类）；**嵌套 mod 的 AT 自 2026-11-19 起在 `-PlateAt=true` 下走 late AT**（无 lateAt 仍拒绝），嵌套 **GAMELIBRARY** 的 AT 与 `data/` 仍不单独注入；审计只扫外层；coremod 只覆盖 class 级 `ITransformer`，redefine 路径未实测。Sodium 式「外壳 jar 与内嵌实现同 modId」已适配（2026-11-19：内嵌实现作主文件，外壳降级为库模块）。
+24. **JiJ/coremod 剩余边界**：嵌套 GAMELIBRARY 无 container（独立分发的 MezzConfig 类）；**嵌套 mod 的 AT 自 2026-11-19 起在 lateAt 下走 late AT**（增强 JBR 默认开；stock 仍拒绝），嵌套 **GAMELIBRARY** 的 AT 与 `data/` 仍不单独注入；审计只扫外层；coremod 只覆盖 class 级 `ITransformer`，redefine 路径未实测。Sodium 式「外壳 jar 与内嵌实现同 modId」已适配（2026-11-19：内嵌实现作主文件，外壳降级为库模块）。
 
 25. **JBR 只对「已加载类的布局变更」必需**：数据/方法级 mixin 在 JBR 下可 redefine；未加载目标免 JBR；缺 JBR 时干净 `JBR_REQUIRED` 并点名目标。
 
@@ -285,7 +285,7 @@
 
 39. **dev client 预装 Moonlight 启动崩（环境问题）**：`ExtraCodecs` 引用 `codecui.Schema` 时 CNFE；只在 dev 观察到，阻塞 Supplementaries 完整复跑。
 
-55. **「已选 JBR 仍要重启」是产品失败（2026-11-18 所有者）**：玩家已在启动器选了 JBR，却因缺 `-XX:+AllowEnhancedClassRedefinition` 被要求再重启——把实现细节转嫁给玩家，不可接受。**2026-11-18 收口为单一动作「为热加载增强环境做准备」**：菜单（未就绪时常驻）与失败屏都指向同一入口；已安装/正在运行的 JBR 直接复用；缺失时官方下载 → SHA-512 → 解压到 `gameDir/jbr-21.0.11`；随后自动重启并带齐 `-XX:+AllowEnhancedClassRedefinition` + `-Dmodreloader.lateAt=true`。**仍余缺口**：参数只能启动时给，启动器每次不带参数则每会话最多一次自动重启；跨会话永久生效需要启动器/整合包预设或 classloader 隔离/软重启。
+55. **「已选 JBR 仍要重启」是产品失败（2026-11-18 所有者）**：玩家已在启动器选了 JBR，却因缺 `-XX:+AllowEnhancedClassRedefinition` 被要求再重启——把实现细节转嫁给玩家，不可接受。**2026-11-18 收口为单一动作「为热加载增强环境做准备」**：菜单（未就绪时常驻）与失败屏都指向同一入口；已安装/正在运行的 JBR 直接复用；缺失时官方下载 → SHA-512 → 解压到 `gameDir/jbr-21.0.11`；随后自动重启并带齐 `-XX:+AllowEnhancedClassRedefinition` + `-Dmodreloader.lateAt=true`。**仍余缺口**：参数只能启动时给，启动器每次不带参数则每会话最多一次自动重启；跨会话永久生效需要启动器/整合包预设或 classloader 隔离/软重启。**2026-11-20 补**：lateAt 不再依赖第二个属性——检测到增强 JBR 即自动启用（显式 `-Dmodreloader.lateAt=false` 可关），玩家点一次准备环境后不再遇到 AT 开关类阻塞。
 
 ### 已修
 

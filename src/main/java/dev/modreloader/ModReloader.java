@@ -64,6 +64,9 @@ public final class ModReloader {
         LOGGER.info("[ModReloader] game directory = {} (JBR detection roots: game dir + 3 ancestors)",
                 FMLPaths.GAMEDIR.get());
         Capabilities.probe();
+        ModReloader.LOGGER.info("[ModReloader] late access transformers: {}",
+                dev.modreloader.hotadd.LateAccessTransformers.enabled()
+                        ? "enabled (prepared JBR)" : "off");
         logRuntime();
     }
 

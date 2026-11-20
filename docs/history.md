@@ -2147,3 +2147,13 @@ clientfixture（GUI 层/物品装饰）PASS、`minimap` PASS、`moonlight-lateat
   右键打开界面。
 - 结果：GuideME `GuideScreen` 与 AE2 `MEStorageScreen` 均打开，无崩溃；证明菜单屏、物品模型与资源在热加后可用。
 - 白名单：AE2/GuideME J1 由 candidate 转 verified；status 问题 2 移入已修，actionable 只剩 61。
+
+## 2026-11-20（晚 AT 改为“准备环境”默认能力）
+
+- 问题：玩家点一次「准备环境」并重启后，lateAt 仍依赖第二个属性 `-Dmodreloader.lateAt`；启动器只给
+  `-XX:+AllowEnhancedClassRedefinition` 时 AT 模组仍被拒——这是非技术性阻塞。
+- 改法：`LateAccessTransformers.enabled()` 在属性未显式设置时随增强 JBR 自动开启；
+  `-Dmodreloader.lateAt=false` 可关，`-PlateAt`/属性仅 dev 覆盖。`Relauncher.jbrFlags()` 无参重载也改为带 lateAt。
+- 验证：JBR 默认（不带 `-PlateAt`）Jade 57 条 AT 自动应用、`ok=true`；Temurin stock `late AT: off`、干净
+  `ACCESS_TRANSFORMER` 拒绝；单测 114（新增 `LateAtDecisionTest`）。
+- 文档：AGENTS / status / late-at.md 的“默认关闭/opt-in”表述同步更新。

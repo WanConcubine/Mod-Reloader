@@ -396,7 +396,8 @@ public final class Relauncher {
 
     /** Flags a JBR replacement needs on top of the launcher's arguments. */
     public static List<String> jbrFlags() {
-        return jbrFlags(false);
+        // The prepared environment is one action: enhanced + late AT together.
+        return jbrFlags(true);
     }
 
     /**

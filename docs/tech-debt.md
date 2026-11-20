@@ -11,7 +11,7 @@
 | `hotadd` 包 | **7 626 行**；`HotAddEngine.add` 已拆成 10 个阶段方法（2026-11-19），单方法最长约 150 行 |
 | 反射 / Unsafe 站点 | **228 处 / 32 个文件**（约占 main 文件 25%）：mixin、注入器、ModList、module、注册表、网络、资源包、启动器锁 |
 | 一次性事件重放 | **22 个条目 / 22 个调用点**，统一走 `inspect/ReplayCatalog` + `hotadd/OneShotReplay`（2026-11-19） |
-| Java 单测 | **111**（`AddStagePlan` 5、`ReplayCatalogTest` 3、审计 3、`RunStateTest` 6、架构护栏 1…）；引擎主流程仍以真机 L1 harness 为主要证据 |
+| Java 单测 | **114**（`AddStagePlan` 5、`ReplayCatalogTest` 3、审计 3、`RunStateTest` 6、架构护栏 1…）；引擎主流程仍以真机 L1 harness 为主要证据 |
 | 语言文件 | `en_us` / `zh_cn` 各 197 key（未变） |
 | 包依赖 | 反向边已清零并由 `ArchitectureTest` 钉住：`reflect → inspect → capability/i18n/launch/watch/command → hotadd → client/server → ui/diagnose`；`hotadd` 不依赖两侧，`ui` 不依赖 `client` |
 
