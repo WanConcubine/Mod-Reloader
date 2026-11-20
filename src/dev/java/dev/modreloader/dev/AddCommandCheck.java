@@ -55,20 +55,19 @@ import java.util.List;
  */
 public final class AddCommandCheck {
     private enum Stage {
-        OPEN_CREATE, WAIT_CREATE_SCREEN, WAIT_WORLD, RUN_COMMAND, VERIFY,
-        SECOND_ADD, SECOND_VERIFY,
+        WORLD, RUN_COMMAND, VERIFY, SECOND_ADD, SECOND_VERIFY,
         WATCH_COPY, WATCH_WAIT, WATCH_VERIFY, DONE
     }
 
     private static final int TIMEOUT_TICKS = 20 * 300;
     private static final int WORLD_SETTLE_TICKS = 10;
 
-    private static Stage stage = Stage.OPEN_CREATE;
+    private static Stage stage = Stage.WORLD;
     private static int ticks;
     private static int totalTicks;
-    private static int worldTicks;
+    private static final TestWorld WORLD = new TestWorld(10);
     private static boolean started;
-    private static boolean pressedCreate;
+
     private static boolean titleAdded;
     private static boolean failed;
 
@@ -182,9 +181,7 @@ public final class AddCommandCheck {
         }
         Minecraft mc = Minecraft.getInstance();
         switch (stage) {
-            case OPEN_CREATE -> openCreateScreen(mc, jar);
-            case WAIT_CREATE_SCREEN -> waitForCreateScreen(mc);
-            case WAIT_WORLD -> waitForWorld(mc);
+            case WORLD -> worldPhase(mc, jar);
             case RUN_COMMAND -> runCommand(mc, jar);
             case VERIFY -> verify(mc, jar);
             case SECOND_ADD -> secondAdd(mc);
@@ -196,14 +193,14 @@ public final class AddCommandCheck {
         }
     }
 
-    private static void openCreateScreen(Minecraft mc, Path jar) {
-        if (mc.getOverlay() != null) {
-            if (ticks > 20 * 30) {
-                fail("resource reload overlay did not clear");
-            }
-            return;
-        }
+    private static void worldPhase(Minecraft mc, Path jar) {
         if (TITLE_ADD && !titleAdded) {
+            if (mc.getOverlay() != null) {
+                if (ticks > 20 * 30) {
+                    fail("resource reload overlay did not clear");
+                }
+                return;
+            }
             titleAdded = true;
             // Same path as the main-menu prompt: no server exists yet, so the
             // data pack has to be deferred to the world start.
@@ -214,62 +211,14 @@ public final class AddCommandCheck {
             if (!result.ok()) {
                 fail("title-screen add failed: " + result.message());
             }
-            // Wait at least one tick so the resource reload overlay installed by
-            // the add is visible to the check below.
             return;
         }
-        if (TITLE_ADD && mc.getOverlay() != null) {
-            // The add starts a client resource reload; creating a world while its
-            // overlay is up deadlocks Minecraft.doWorldLoad's wait loop. A human
-            // cannot click through the overlay either, so waiting is faithful.
-            if (ticks > 20 * 120) {
-                fail("resource reload overlay did not clear after the title-screen add");
-            }
+        TestWorld.Result result = WORLD.tick(mc);
+        if (result.error() != null) {
+            fail(result.error());
             return;
         }
-        try {
-            CreateWorldScreen.openFresh(mc, mc.screen);
-            stage = Stage.WAIT_CREATE_SCREEN;
-            ticks = 0;
-        } catch (Throwable t) {
-            fail("CreateWorldScreen.openFresh failed: " + t);
-        }
-    }
-
-    private static void waitForCreateScreen(Minecraft mc) {
-        if (!(mc.screen instanceof CreateWorldScreen screen)) {
-            if (ticks > 20 * 30) {
-                fail("create-world screen did not appear; current screen="
-                        + (mc.screen == null ? "null" : mc.screen.getClass().getName()));
-            }
-            return;
-        }
-        if (pressedCreate) {
-            return;
-        }
-        AbstractButton button = findButton(screen, "selectWorld.create");
-        if (button == null) {
-            return;
-        }
-        pressedCreate = true;
-        ModReloader.LOGGER.info("[AddCmdCheck] pressing '{}'", button.getMessage().getString());
-        button.onPress();
-        stage = Stage.WAIT_WORLD;
-        ticks = 0;
-        worldTicks = 0;
-    }
-
-    private static void waitForWorld(Minecraft mc) {
-        if (mc.level == null || mc.player == null) {
-            worldTicks = 0;
-            if (ticks > 20 * 120) {
-                fail("world did not load; screen="
-                        + (mc.screen == null ? "null" : mc.screen.getClass().getName()));
-            }
-            return;
-        }
-        worldTicks++;
-        if (worldTicks < WORLD_SETTLE_TICKS) {
+        if (!result.ready()) {
             return;
         }
         ModReloader.LOGGER.info("[AddCmdCheck] in world: {}", mc.level.dimension().location());
@@ -916,13 +865,4 @@ public final class AddCommandCheck {
         ticks = 0;
     }
 
-    private static AbstractButton findButton(Screen screen, String translationKey) {
-        String label = I18n.get(translationKey);
-        for (var child : screen.children()) {
-            if (child instanceof AbstractButton button && label.equals(button.getMessage().getString())) {
-                return button;
-            }
-        }
-        return null;
-    }
 }

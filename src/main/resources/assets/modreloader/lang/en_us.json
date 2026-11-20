@@ -125,6 +125,7 @@
   "modreloader.sync.failed": "Applying the server registry mapping failed; the previous mapping was restored.",
   "modreloader.failure.rollback_partial.summary": "Load failed and rollback was not fully successful.",
   "modreloader.failure.rollback_partial.suggestion": "Restart; see rollback errors below.",
+  "modreloader.gui.entry_dirty": "Hot-load mods (runtime dirty: %s)",
   "modreloader.gui.dirty": "Runtime is dirty: %s",
   "modreloader.dirty.reason.rollback_partial": "the rollback of a previous load was incomplete",
   "modreloader.dirty.reason.registry": "registry content from a failed load is live in the registries",

@@ -30,7 +30,7 @@ import java.util.Map;
  * proves the channel was registered, negotiated and actually used.
  */
 public final class PayloadCheck {
-    private enum Stage { WAIT_TITLE, ADD, OPEN_CREATE, WAIT_CREATE_SCREEN, WAIT_WORLD, WAIT_PING, DONE }
+    private enum Stage { WAIT_TITLE, ADD, WORLD, WAIT_PING, DONE }
 
     private static final int TIMEOUT_TICKS = 20 * 180;
     private static final Path MARKER = Path.of("payload-received.txt");
@@ -41,11 +41,10 @@ public final class PayloadCheck {
     private static int ticks;
     private static boolean started;
     private static boolean failed;
-    private static boolean pressedCreate;
+    private static final TestWorld WORLD = new TestWorld(20);
     private static Path jar;
     private static final boolean AFTER_JOIN =
             Boolean.getBoolean("modreloader.verifyPayloadAfterJoin");
-    private static int worldTicks;
     private static int serverTicks;
     private static boolean dumpedWorldSides;
 
@@ -168,9 +167,7 @@ public final class PayloadCheck {
         switch (stage) {
             case WAIT_TITLE -> waitTitle(mc);
             case ADD -> add();
-            case OPEN_CREATE -> openCreate(mc);
-            case WAIT_CREATE_SCREEN -> waitCreateScreen(mc);
-            case WAIT_WORLD -> waitWorld(mc);
+            case WORLD -> openWorld(mc);
             case WAIT_PING -> waitPing();
             case DONE -> stopWhenDone(mc);
         }
@@ -182,7 +179,7 @@ public final class PayloadCheck {
                 || ModReloader.WATCHER == null) {
             return;
         }
-        stage = AFTER_JOIN ? Stage.OPEN_CREATE : Stage.ADD;
+        stage = AFTER_JOIN ? Stage.WORLD : Stage.ADD;
         ticks = 0;
     }
 
@@ -200,70 +197,24 @@ public final class PayloadCheck {
             ticks = 0;
             return;
         }
-        stage = Stage.OPEN_CREATE;
+        stage = Stage.WORLD;
         ticks = 0;
     }
 
-    private static void openCreate(Minecraft mc) {
-        // The hot-add triggers a resource-pack reload; opening the create-world
-        // screen under its overlay swallows the button press.
-        if (mc.getOverlay() != null) {
-            if (ticks > 20 * 60) {
-                fail("resource reload overlay did not clear");
-            }
+    private static void openWorld(Minecraft mc) {
+        TestWorld.Result result = WORLD.tick(mc);
+        if (result.error() != null) {
+            fail(result.error());
             return;
         }
-        try {
-            CreateWorldScreen.openFresh(mc, mc.screen);
-            stage = Stage.WAIT_CREATE_SCREEN;
-            ticks = 0;
-        } catch (Throwable t) {
-            fail("CreateWorldScreen.openFresh failed: " + t);
-        }
-    }
-
-    private static void waitCreateScreen(Minecraft mc) {
-        if (!(mc.screen instanceof CreateWorldScreen screen)) {
-            if (ticks > 20 * 30) {
-                fail("create-world screen did not appear");
+        if (!result.ready()) {
+            if (ticks % 100 == 0) {
+                ModReloader.LOGGER.info("[PayloadCheck] waiting: level={}, player={}, overlay={}, "
+                                + "singleplayerServer={}",
+                        mc.level != null, mc.player != null,
+                        mc.getOverlay() == null ? "null" : mc.getOverlay().getClass().getSimpleName(),
+                        mc.getSingleplayerServer() == null ? "null" : "present");
             }
-            return;
-        }
-        if (pressedCreate) {
-            return;
-        }
-        String label = I18n.get("selectWorld.create");
-        for (var child : screen.children()) {
-            if (child instanceof AbstractButton button
-                    && label.equals(button.getMessage().getString())) {
-                pressedCreate = true;
-                button.onPress();
-                stage = Stage.WAIT_WORLD;
-                ticks = 0;
-                worldTicks = 0;
-                return;
-            }
-        }
-    }
-
-    private static void waitWorld(Minecraft mc) {
-        if (ticks % 100 == 0) {
-            ModReloader.LOGGER.info("[PayloadCheck] waiting: level={}, player={}, overlay={}, "
-                            + "singleplayerServer={}, ready={}",
-                    mc.level != null, mc.player != null,
-                    mc.getOverlay() == null ? "null" : mc.getOverlay().getClass().getSimpleName(),
-                    mc.getSingleplayerServer() == null ? "null" : "present",
-                    mc.getSingleplayerServer() != null && mc.getSingleplayerServer().isReady());
-        }
-        if (mc.level == null || mc.player == null) {
-            worldTicks = 0;
-            if (ticks > 20 * 120) {
-                fail("world did not load");
-            }
-            return;
-        }
-        worldTicks++;
-        if (worldTicks < 20) {
             return;
         }
         if (AFTER_JOIN) {

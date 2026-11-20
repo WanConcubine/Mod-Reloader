@@ -133,6 +133,29 @@ post-ModList、post-pack 与 post-construct 都有 `-PfailAfter*` 强制失败�
   两端必须热加同一批 jar；客户端不装 jar 的模式不支持。见 [ADR-0010](decisions/0010-post-connect-registry-sync.md)。
 - **单向提交**：注册表无删除接口，datapack 只 add；失败后运行时标记 dirty、只能重启。详见 [features/t4-registry-hotadd.md](features/t4-registry-hotadd.md) / [features/t4-datapack-hotadd.md](features/t4-datapack-hotadd.md)、[ADR-0008](decisions/0008-t4-registry-adaptation-poc.md) / [ADR-0009](decisions/0009-datapack-hotadd.md)。
 
+### 线程、锁序与阶段契约（P1-14）
+
+顺序（`AddStagePlan`）之外的第二条契约：**每个阶段在哪个线程、拿哪把锁**。新增阶段或改调用点时必须同时更新这张表和代码。
+
+| 阶段 / 操作 | 线程 | 规则 |
+|---|---|---|
+| `VALIDATE`…`EVENT`、`CLIENT` 的 payload/命令 | 调用线程 | UI/watcher 在主线程，控制台命令在服务器线程；引擎不做线程切换 |
+| `REGISTRY` 的 `RegisterEvent` 重放 | 调用线程 | 只写注册表，不碰 BlockState id 表 |
+| `REGISTRY` 的「清 id + freeze」 | **服务器线程** | `ServerThreadHop`：已在服务器线程直跑，否则投递并等待；超时回退 + warn。见上方线程不变量 |
+| `PACK` 的资源重载 | **渲染线程** | `ClientResourcePacks` 串行链：`reloading`/`dirty`，链期间隐藏 Screen；后到的请求在前一次完成后补跑 |
+| `DATAPACK` | **服务器线程** | `PlatformHooks.reloadDataPacks` 各端取自己的服务器；不在服务器线程时投递过去 |
+| Mixin 直接 transform | 调用线程 | **先拿 A（`MixinLaunchPluginLegacy.processors`）再进 B（Mixin transformer/processor）**；`LaunchPluginMonitor.probe()` 解析不到 A 就让 `mixin_hotadd=missing`，引擎在 transform 前拒绝（问题 54） |
+| 任意 `redefineClasses` | 调用线程 | 用 `MixinAgentGuard.blanket()` 抑制所有 transformer；Mixin agent 的 transformer 必须已被 Guard 包上（`AgentTransformers` 扫描；问题 40） |
+| late AT | 调用线程 | 总是重定义已加载类 → Guard 不可用即拒绝；同时按 A→B 顺序（`blanket` + monitor 探针） |
+
+- **锁序是不可协商的**：正常类加载是 A→B；直接 transform 若先拿 B，Mixin 在解析注入点时加载类会再要 A，
+  与持有 A 的 worldgen/服务器线程形成 ABBA 死锁（问题 54）。任何新的“直接改字节”入口都必须先 `LaunchPluginMonitor.get()`。
+- **redefine 的对象必须是“最终字节”**：传进去的字节不能再被任何 transformer 处理一次，否则 MixinExtras 的注入检查失败
+  → `ClassFormatError`（问题 40/47）。`blanket()` 的窗口只覆盖一次 `redefineClasses` 调用。
+- **chunk 重镶归 vanilla**：引擎从不直接调度 chunk 工作；重载完成后的 `levelRenderer.allChanged()` 是原版自己的顺序。
+  我们的重载链已串行化，问题 29 的那次 NPE 自串行化后未再复现（保留为结构性边界，见 status）。
+- **新增入口的检查单**：属于哪个阶段？在哪个线程？是否拿锁/抑制 transformer？可否回滚？四条答不上就不要合并。
+
 ### Watcher / GUI（dev 初版）
 
 ```

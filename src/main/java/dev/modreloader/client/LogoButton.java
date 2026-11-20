@@ -1,6 +1,7 @@
 package dev.modreloader.client;
 
 import dev.modreloader.ModReloader;
+import dev.modreloader.hotadd.RunState;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractButton;
 import net.minecraft.client.gui.components.Tooltip;
@@ -24,6 +25,7 @@ public final class LogoButton extends AbstractButton {
     private static final int TEXTURE_SIZE = 20;
 
     private final Runnable action;
+    private boolean dirtyTooltipSet;
 
     public LogoButton(int x, int y, int size, Component tooltip, Runnable action) {
         super(x, y, size, size, tooltip);
@@ -51,5 +53,26 @@ public final class LogoButton extends AbstractButton {
         }
         guiGraphics.blit(isHoveredOrFocused() ? TEXTURE_HOVERED : TEXTURE,
                 getX(), getY(), 0f, 0f, width, height, TEXTURE_SIZE, TEXTURE_SIZE);
+        renderDirtyMarker(guiGraphics);
+    }
+
+    /**
+     * The title screen keeps this button visible while a hot-add may make the
+     * runtime dirty; a corner marker plus the tooltip says so without opening the
+     * list (the full reason is on the list screen).
+     */
+    private void renderDirtyMarker(GuiGraphics guiGraphics) {
+        if (!RunState.isDirty()) {
+            return;
+        }
+        if (!dirtyTooltipSet) {
+            dirtyTooltipSet = true;
+            setTooltip(Tooltip.create(Component.translatable("modreloader.gui.entry_dirty",
+                    Component.translatable(RunState.reason().key()))));
+        }
+        int right = getX() + width + 1;
+        int top = getY() - 2;
+        guiGraphics.fill(right - 7, top, right, top + 7, 0xFF000000);
+        guiGraphics.fill(right - 6, top + 1, right - 1, top + 6, 0xFFFF5555);
     }
 }

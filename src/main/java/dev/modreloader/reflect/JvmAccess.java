@@ -30,27 +30,34 @@ public final class JvmAccess {
         if (instrumentation != null) {
             return instrumentation;
         }
+        Instrumentation resolved;
 
-        Instrumentation existing = findRunning();
-        if (existing != null) {
-            instrumentation = existing;
-            return existing;
-        }
-
-        try {
-            Path agentJar = createAgentJar();
-            loadAgent(agentJar);
-            Instrumentation loaded = findRunning();
-            if (loaded == null) {
-                throw new IllegalStateException("loadAgent returned but " + AGENT_CLASS + " was not called");
+        resolved = findRunning();
+        if (resolved == null) {
+            try {
+                Path agentJar = createAgentJar();
+                loadAgent(agentJar);
+                resolved = findRunning();
+                if (resolved == null) {
+                    throw new IllegalStateException(
+                            "loadAgent returned but " + AGENT_CLASS + " was not called");
+                }
+            } catch (RuntimeException e) {
+                throw e;
+            } catch (Throwable e) {
+                throw new IllegalStateException("cannot obtain Instrumentation", e);
             }
-            instrumentation = loaded;
-            return loaded;
-        } catch (RuntimeException e) {
-            throw e;
-        } catch (Throwable e) {
-            throw new IllegalStateException("cannot obtain Instrumentation", e);
         }
+        // Semantic check at the single acquisition point: every caller redefines
+        // classes. A JVM that says no here cannot hot-add at all, and the failure
+        // should name that instead of surfacing later as a redefine error.
+        if (!resolved.isRedefineClassesSupported()) {
+            throw new IllegalStateException(
+                    "this JVM's Instrumentation does not support class redefinition; "
+                            + "hot-add needs it");
+        }
+        instrumentation = resolved;
+        return resolved;
     }
 
     private static Instrumentation findRunning() {

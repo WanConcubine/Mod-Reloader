@@ -68,6 +68,10 @@
 
 ### 已验证
 
+- **harness 共用建世界（P2-15，2026-11-19）**：抽 `dev/TestWorld`，`PayloadCheck`/`AddCommandCheck` 已迁入；
+  两种 harness 均 PASS（payload 端到端、clientfixture 的 GUI 层/物品装饰）。主菜单/暂停屏的 Logo 按钮在 dirty 时
+  显示红色角标并更新 tooltip。
+- **CI（2026-11-19 复核）**：GitHub Actions 36 次 run，最新 `4557e7b` success。
 - **Mixin agent 语义探针（P1-13，2026-11-19）**：`reflect/AgentTransformers` 只读扫描 Mixin agent 自己的
   Instrumentation/transformer；`MixinAgentGuard` 据此安装，并在 late AT 与“重定义已加载目标”前检查：
   agent 存在但包不上时拒绝，避免 `ClassFormatError`（问题 40）。实测 minimap、Jade late AT 均
@@ -171,15 +175,12 @@
 
 ## 已知问题 / 坑
 
-> 追加式账本，**编号稳定**（引用不变）。共 63 条：待解决 3 / 验证缺口 5 / 结构性边界 16 / 历史与注记 15 / 已修 24。
-> **当前 actionable（3）**：61 Sodium 单例 mixin 字段（结构边界，需产品决策）·
-> 2 AE2 的 L2 与皇后判定 · 29 reload/chunk 并发。
+> 追加式账本，**编号稳定**（引用不变）。共 63 条：待解决 2 / 验证缺口 5 / 结构性边界 17 / 历史与注记 15 / 已修 24。
+> **当前 actionable（2）**：61 Sodium 单例 mixin 字段（结构边界，需产品决策）· 2 AE2 的 L2 与皇后判定。
 
 ### 待解决（需改代码）
 
 2. **皇后级判定偏保守（2026-11-19 部分解决）**：AE2 在 JBR+lateAt 下 L1 热加成功（blocks 1060→1162、items 1334→1698），GUI 未验；不再按“必须重启”处理。
-
-29. **资源重载与 chunk 重镶并发（一次性）**：无 assets 时跳过整次重载；reload 已串行化 + 链期间隐藏 Screen（Jade 修复），但 chunk 重镶未串行化。
 
 61. **Sodium 热加后旧渲染对象崩溃（2026-11-19）**：`sodium-lateat` 中 Sodium ok=true（含 4 个 fabric 库、约 64 类 redefine）。
     已修：`ShaderInstance` 的 `uniformCache` NPE —— add 流程在资源重载前调用 `PlatformHooks.rebuildShaderInstances`
@@ -205,6 +206,10 @@
     **修复后的 jar 尚未在真机重跑 Mekanism**（用户时间到）；下次直接热加 Mekanism 复验。
 
 ### 结构性边界（长期限制，不是待修 bug）
+29. **资源重载与 chunk 重镶并发（保留为边界，2026-11-19）**：无 assets 时跳过整次重载；重载链已串行化 +
+    链期间隐藏 Screen。chunk 重镶由原版在重载完成后的 `allChanged()` 调度，引擎从不直接碰 chunk；串行化后那次
+    `FluidSpriteCache` NPE 未再复现。线程/锁序规则见 [design.md](design.md)「线程、锁序与阶段契约」。
+
 
 6. **LAN 模组是妃级布局变更**：需要 JBR；`online-mode` 可能要重启集成服务器。
 
@@ -392,7 +397,7 @@
 
 | 优先 | 任务 | 关键点 / 落点 | 验收 |
 |---|---|---|---|
-| **P1-3** | Git 收尾 | 本轮及 JBR/Windows 联调已推送（`47a06cd`）；观察 Actions、需要时打 tag | Actions 绿 |
+| **P1-3** | ✅ Git 收尾 | GitHub Actions 共 36 run，最新对应 `4557e7b` 为 success；需要时打 tag | Actions 绿 |
 | **P0-新** | 流水线 L2 | 标题屏热加 → 建世界 → N tick → HUD/按键/截图；先 minimap/mouse-gestures | 断言 + 截图证据 |
 | **P0-新** | 语料扩到 20–30 个常用模组 | 小地图/JEI/HUD/输入/前置库；`check` 进 PR | 报告 + 矩阵 |
 | **P0-新** | 模组白名单实测（所有者驱动） | 61 行：stock T1×7 / BLACK×23；JBR J1×25 / J2×2 / BLACK×4；candidate 由所有者复测转 verified | TSV + 视图同步 |

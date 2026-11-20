@@ -82,6 +82,12 @@ mixin 落定 / payload / capability / 命令重放；任一之后再失败即置
 `ServerThreadHop`、render-thread 假设、worldgen 死锁、Mixin blanket 抑制、异步 reload 各管一段；
 没有“阶段 → 线程 / 锁序”的全局规则。
 
+**2026-11-19 增量**：[design.md](design.md)「线程、锁序与阶段契约」给出阶段→线程/锁序表（注册表 freeze 服务器线程、
+资源重载渲染线程串行链、datapack 服务器线程、Mixin 直接 transform 的 A→B 锁序、redefine 必须 blanket），并写成
+新增入口的检查单。问题 54 的锁对象由 `LaunchPluginMonitor.probe()` 语义守卫，问题 40 的 agent 由
+`AgentTransformers` 扫描守卫。
+**剩余**：没有并发正确性的自动测试（锁序只能靠探针 + 真机复现）；chunk 重镶仍归原版（问题 29 归边界）。
+
 ### P2-15 测试与文档
 
 93→110 个单测几乎不碰引擎主流程；L2 缺失、harness 约 600 行重复、本机 noFocus 失效。
@@ -155,7 +161,9 @@ mixin 落定 / payload / capability / 命令重放；任一之后再失败即置
    这仍不能替代统一出口——它只告诉我们「还差哪个」，每个重放仍是手写的。
 6. **harness 样板重复**：4 个检查各自复制"建世界 / 连服 / 等遮罩"逻辑（`AddCommandCheck`、`PayloadCheck`、
    `RemotePayloadCheck`、`MenuEntryCheck`），约 600 行里有大半是重复。现在它们都在 `src/dev`，抽取更安全。
-   → 抽 `dev/TestWorld`（建世界 + 等 ready）与 `dev/TestConnection`（连服 + 等 join）。
+   **2026-11-19 增量**：抽出 `dev/TestWorld`（真实建世界屏 → 按 Create → 等玩家 + settle），
+   `PayloadCheck` 与 `AddCommandCheck` 已迁入（两者 harness 均 PASS）。**剩余**：`LanScreenCheck` /
+   `CapabilityCheck` / `CreativeTitleCheck` / `AtSpikeCheck` 仍各自建世界；`TestConnection` 未抽；L2 断言与 noFocus 不稳未动。
 7. ✅ **`design.md` 落后于双端化**（已完成 2026-11-15）：补了「双端化与引擎边界」一节，写明 `PlatformHooks`、
    `Capabilities`、`dev` 源集与两侧 bootstrap 的职责。
 
@@ -178,9 +186,10 @@ mixin 落定 / payload / capability / 命令重放；任一之后再失败即置
    6 个命令短名测试（`JarPathResolverTest`），11 个注册审计分级测试（`RegistrationAuditTest`；纯规则，不需要 ASM/游戏），6 个 AT 规则测试（`AccessTransformerRulesTest`），现在 **93 passed**。
 9. ✅ **`libs/` 编译依赖**（已完成 2026-11-16，已知问题 12）：新增 `hotadd/MixinRuntimeApi`（trusted lookup 调时解析 mr 的 10 个方法 + `probe()` 给能力守卫）与 `hotadd/ClassBytes`（自己做「读已加载类字节」，不再借 mr 的 `InstUtils`），删掉 `compileOnly files('libs/...')`。
    证据：移走 `libs/` 后 `./gradlew clean build` 通过（6 tests）；有 mr 的妃级热加/回滚/重试 PASS，无 mr 时妃级仍被拦。`libs/` 目录已无引用，可删。
-10. ⚠️ **CI 已写、还没在远端跑过**（2026-11-16）：`.github/workflows/ci.yml` 两个 job —— 分析器（`python3 -m unittest`）
+10. ✅ **CI 已在远端跑通**（2026-11-19 复核）：GitHub Actions 共 36 次 run，最新一次对应 `4557e7b`
+    （P1-13 agent 探针）为 `success`；下文是当初首次接入时的记录。`.github/workflows/ci.yml` 两个 job —— 分析器（`python3 -m unittest`）
     与运行时（Temurin 21 + `./gradlew build`，即 §6 的「完成」定义：单测 + dev harness 编译）。
-    **未验证**：本机没有 push 权限/没触发过 Actions，所以「CI 绿」这件事仍未被证明；而且 `./gradlew build` 在干净机器上
+    （历史注记）当时本机未触发过 Actions；而且 `./gradlew build` 在干净机器上
     要下载 NeoForge 反编译产物（首次 10–30 分钟），workflow 里给了 60 分钟超时。
     另外本机 `maven.neoforged.net` 的 DNS 会解析到无关 IP，`build.gradle` 已用 `exclusiveContent` 把 JUnit
     固定到 Maven Central，避免依赖解析卡在 `SYN_SENT`。

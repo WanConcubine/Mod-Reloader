@@ -2092,3 +2092,12 @@ clientfixture（GUI 层/物品装饰）PASS、`minimap` PASS、`moonlight-lateat
   `LateAccessTransformers`（总是重定义已加载类）与 `MixinSupport`（目标已加载时），错误信息带扫描原因。
 - 证据：`minimap` PASS（`mixin agent guard installed (1 transformer(s) wrapped)`）；`tooltip-lateat`
   Jade `ok=true`；build 绿、单测 111。
+
+## 2026-11-19（P2-15 harness 抽共用；P1-12 菜单角标；CI 复核）
+
+- `dev/TestWorld`：真实 create-world 屏 → 按 “Create New World” → 等 level/player → settle；
+  `PayloadCheck` 与 `AddCommandCheck` 迁入（payload 端到端 PASS；clientfixture 的 GUI 层/物品装饰 PASS）。
+- 主菜单/暂停屏 Logo 按钮：dirty 时右上角红点 + tooltip 带原因（`modreloader.gui.entry_dirty`）。
+- CI：`api.github.com` 查到 36 次 GitHub Actions run，最新 `4557e7b` 为 `success`；P2-10 的“未远端验证”结案。
+- 问题 29 归入结构性边界（chunk 重镶归原版；串行化后未复现）；P1-14 的线程/锁序表写进 design.md。
+- 单测 111；build 绿。
