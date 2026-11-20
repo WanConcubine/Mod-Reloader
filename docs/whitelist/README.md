@@ -15,7 +15,7 @@
 
 - `state`：`candidate` = 只过了 harness（待所有者实例确认）；`verified` = 已确认；
   `fixing` / `fixed` / `wontfix` = 修 bug 的状态。
-- 同一个 mod 在 stock 与 JBR 下**各占一行**；两行结论可以不同（例：stock BLACK / JBR J1）。
+- **桶位是（JVM 环境, 模组）的组合，不是模组的全局属性**：BLACK 只表示“在**该环境**下结构性不可热加”，换一个环境可能变成 T1/J1/J2（例：Balm 为 stock BLACK / JBR J1）。同一环境内不会重复入桶。
 - J1/J2 里的 **AT 模组**需要 **JBR + `-XX:+AllowEnhancedClassRedefinition`**；
   增强 JBR 下 late AT 自 2026-11-20 起自动启用（`-Dmodreloader.lateAt=false` 可关）。
 - tier 是运行期**实际用到**的 tier（pin/fei/guifei/huanghou），不是预测。
@@ -29,7 +29,7 @@
 
 ## stock JVM（不靠 JBR）
 
-### T1 · 可热加，未发现 bug（7）
+### STOCK · T1 · 可热加，未发现 bug（7）
 
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|
@@ -41,7 +41,7 @@
 | 众星捧月（Ex Nihilo: Satellitium） | exnihilosatellitium-1.21.1-1.5.0.jar | GUIFEI | verified | - | owner 2026-11-17：实际可用，加入一等；stock harness 2026-11-17 ok=true isLoaded=true（注册表 add-only + datapack；存档会绑定该 mod、不可回滚） |
 | 苹果皮（AppleSkin） | appleskin-neoforge-mc1.21-3.0.9.jar | PIN | candidate | - | stock harness 2026-11-17 CompatCheck ok=true isLoaded=true |
 
-### BLACK · 结构性不可热加（23）
+### STOCK · BLACK · 结构性不可热加（23）
 
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|
@@ -71,7 +71,7 @@
 
 ## JBR（enhanced redefinition）
 
-### J1 · JBR 下可热加，未发现 bug（25）
+### JBR · J1 · JBR 下可热加，未发现 bug（25）
 
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|
@@ -101,14 +101,14 @@
 | 饰品栏（Curios） | curios-neoforge-9.5.1+1.21.1.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（late AT 16 rule） |
 | 鼠标手势（Mouse Tweaks） | MouseTweaks-neoforge-mc1.21-2.26.1.jar | FEI | candidate | - | JBR harness 2026-11-17 ok=true isLoaded=true（redefined AbstractContainerScreen） |
 
-### J2 · JBR 下可热加，但有 bug（2）
+### JBR · J2 · JBR 下可热加，但有 bug（2）
 
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|
 | Xaero 世界地图（Xaero's World Map） | xaeroworldmap-neoforge-1.21.1-1.47.0.jar | HUANGHOU | candidate | 热加成功；进世界后服务端初始化缺失（ServerStartedEvent 未重放，serverPlayerTickHandler null）；标题屏 loadLater 崩（需已有世界） | JBR harness 2026-11-18：ConfigChannelRegistry frozen 窗口生效，CompatCheck ok=true isLoaded=true；标题屏 tick 抛 NoSuchElementException（模组自身 loadLater）；世界内 add 返回 1 后 integrated server 玩家 tick NPE（WorldMap.serverPlayerTickHandler null）。需重放 ServerStartedEvent / 用已有存档复测；2026-11-18 晚：`ServerStarting/Started` 定向重放已实现但未验证（进入世界复跑卡在 xaerolib mixin 阶段，需 jstack） |
 | 钠（Sodium） | sodium-neoforge-0.8.13+mc1.21.1.jar | FEI | fixing | 热加 ok=true；已有实例的 mixin 新增字段不初始化（结构边界）：Minecraft.fences NPE → 配置未初始化 → SpriteContents$Ticker.parent NPE；A 预检标注 J2，B 适配为 opt-in 实验 | 2026-11-20：标题屏热加 B 修好 fences/config/ticker.parent/BET 谓词/LevelRenderer.renderer 后不崩；进世界仍停在 BlockColors 状态（sodium$getProviders NPE） |
 
-### BLACK · 结构性不可热加（4）
+### JBR · BLACK · 结构性不可热加（4）
 
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|
