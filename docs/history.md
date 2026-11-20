@@ -2164,3 +2164,9 @@ clientfixture（GUI 层/物品装饰）PASS、`minimap` PASS、`moonlight-lateat
 - UI：热加载菜单右上角常驻红字“未安装 MixinRuntime (mr)：Mixin/妃级热加不可用”；准备环境页
   也注明“准备环境不包含它”。预检原本就拦 FEI/GUIFEI+mixins，现在准备阶段即可见。
 - 文档：AGENTS 规则 12、status JBR 行、guides/jbr.md 增加前置说明。
+
+## 2026-11-20（更正：MixinRuntime 是可选扩展，不是前置）
+
+所有者澄清：`MixinRuntime` 不是启动前置，而是**可选扩展**——缺它时运行时照常启动（嫔级/普通热加不受影响），
+只是妃级/Mixin 能力不可用。menu/预检/准备页的文案与 AGENTS/status/jbr 指南已从“前置”改回“可选扩展”；
+`mods.toml` 的 `optional` 声明不变。

@@ -126,7 +126,7 @@
   "modreloader.failure.rollback_partial.summary": "加载失败，且回滚未完全成功。",
   "modreloader.failure.rollback_partial.suggestion": "建议重启游戏；残留项见下方回滚错误。",
   "modreloader.gui.mixinruntime.missing": "未安装 MixinRuntime (mr)：Mixin/妃级热加不可用",
-  "modreloader.jbr_setup.mixinruntime_missing": "还需要在 mods/ 安装 MixinRuntime (mr >= 1.0.2)；准备环境不包含它。",
+  "modreloader.jbr_setup.mixinruntime_missing": "可选扩展：在 mods/ 安装 MixinRuntime (mr >= 1.0.2) 后可热加 Mixin/妃级模组；准备环境不包含它。",
   "modreloader.gui.entry_dirty": "模组热加载（运行时不干净：%s）",
   "modreloader.gui.dirty": "运行时不干净：%s",
   "modreloader.dirty.reason.rollback_partial": "上一次加载的回滚未完全成功",
