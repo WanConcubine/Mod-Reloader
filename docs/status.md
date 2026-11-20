@@ -1,7 +1,7 @@
 # 项目状态
 
 > **唯一状态源。** 每次会话先读这里；改状态只改这里，不要在各处复制。过程记录见 [history.md](history.md)。
-> 最后更新：2026-11-19
+> 最后更新：2026-11-20
 
 ## 一句话
 
@@ -398,10 +398,12 @@
 
 ## 下一步
 
-> **当前交接（2026-11-19，已推送 `4425e4c`）**：`HotAddEngine.add` 已按阶段拆成方法（行为不变）；问题 53 与
-> 同会话第二个 Xaero 模组的 frozen 单例已修（World Map + Minimap 同会话 `ok=true`）。
-> JBR 计数 **J1×25 / J2×2 / BLACK×4**。下一项：① payload 标题屏路径（问题 63，既有失败）；② Mekanism 复验（问题 58）；
-> ③ 问题 52/50（服务端事件重放未验证、回滚 VerifyError）；④ CraftTweaker 复跑；⑤ 类级 `-f` 启动期替代与流水线 L2。
+> **当前交接（2026-11-20，已推送 `a8d787c`）**：技术债收口；问题 2/35/50/63 结案；61 定 J2（B 实验 opt-in，
+> 进世界仍停 `BlockColors`）；增强 JBR 下 lateAt 自动开启；MixinRuntime 明确为可选扩展。
+> **发布口径**：[releases/0.1.0.md](releases/0.1.0.md) 草案已提交——只承诺 `verified` 行（当前 4 行：
+> dogfood、GuideME、AE2 + stock T1 1 行），candidate/fixing 一律标“待复测”。
+> **下一项（所有者驱动）**：① whitelist 真实复测（agent 不代跑批次）；② J2“成功后再崩”的预检/标注口径
+> 需产品决策（现行：成功消息标 `J2`，不阻断）；③ 生产启动器/干净实例冒烟；④ Windows/PCL2 全链路。
 > 证据在 [history.md](history.md)；JBR 在 `run/jbr-21.0.11`（gitignored），语料 `/tmp/modreloader-corpus`。
 > 风险：`MixinAgentGuard` 依赖内部字段（找不到 no-op）；`ClassBytesCache` 不覆盖 eager loaded 目标。
 > ⚠️ 本机 dev client 显示层不稳：优先不需要 GL 的活，一次只起一个客户端场景；harness 命令见 [AGENTS §2](../AGENTS.md)，
@@ -439,13 +441,13 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近三条。
 
-- **2026-11-19（包依赖分层）**：五条反向依赖（client→server、diagnose→ui、command→ui、ui→client、
-  capability→hotadd）全部清零，共用的 JVM 工具/命令重放/重启服务下沉；新增 `ArchitectureTest` 防回归。
-- **2026-11-19（脏状态 RunState）**：不可逆操作之后的失败把运行期置脏，后续 add 以 `RUNTIME_DIRTY` 拒绝；
-  专用服每 60s 在控制台重复告警（间隔可调）。客户端与专用服 harness 均 PASS；成功与干净拒绝不置脏。
-- **2026-11-19（问题 53 阶段重排）**：`PACK` 提到 `client setup` 之前，先注册 reload listener 再注入包/启动
-  重载，任务与 payload 随后；World Map + Minimap 同会话 `ok=true`。`XaeroLibChannels` 覆盖四个 frozen 单例。
-  发现 payload 标题屏 harness 既有失败（问题 63）。
-- **2026-11-19（Windows 联调收尾）**：Windows/PCL2/JBR 真机跑通构建（93/93）与 late AT（architectury 311 规则，
-  不再 `TextureStateShard.blur` 崩溃）；Jade 暴露问题 56（新增字段不初始化旧实例，字体变暗）；Mekanism 暴露问题 58
-  （渲染器重放早于注册表提交，已修待复验）；问题 57（轮询把已加载 mod 的替换 jar 当候选，已修）。
+- **2026-11-20（0.1.0 release notes 草案）**：`docs/releases/0.1.0.md` 按“只承诺 verified + 可选扩展 +
+  已知限制 + 存档警告”组织；支持矩阵与 `tools/whitelist.py check` 一致（61 行：stock T1=7/BLACK=23；
+  jbr J1=25/J2=2/BLACK=4）。candidate/fixing 不作为发布承诺。
+- **2026-11-20（lateAt 随增强 JBR 自动开启）**：`LateAccessTransformers.enabled()` 在属性未显式设置时
+  随增强 JBR 自动启用（`-Dmodreloader.lateAt=false` 可关）；玩家点一次「准备环境」后不再遇到 AT 开关类阻塞。
+  验证：JBR 默认 Jade 57 条 AT 自动应用、`ok=true`；Temurin stock 干净 `ACCESS_TRANSFORMER` 拒绝；单测 114。
+- **2026-11-20（MixinRuntime 更正为可选扩展）**：缺它时运行时照常启动、嫔级照常，妃级/Mixin 不可用；
+  菜单右上角红字 + 准备页注明 + 预检拦下（`mixin_hotadd=missing`），不打包、不代下载。
+- **2026-11-20（问题 2 结案：AE2 L2）**：`-PverifyAe2L2` 标题屏热加 GuideME→AE2、建世界后
+  `GuideScreen`/`MEStorageScreen` 均正常打开；AE2/GuideME 白名单转 verified。

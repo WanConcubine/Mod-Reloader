@@ -2170,3 +2170,11 @@ clientfixture（GUI 层/物品装饰）PASS、`minimap` PASS、`moonlight-lateat
 所有者澄清：`MixinRuntime` 不是启动前置，而是**可选扩展**——缺它时运行时照常启动（嫔级/普通热加不受影响），
 只是妃级/Mixin 能力不可用。menu/预检/准备页的文案与 AGENTS/status/jbr 指南已从“前置”改回“可选扩展”；
 `mods.toml` 的 `optional` 声明不变。
+
+## 2026-11-20（0.1.0 release notes 草案）
+
+- 新增 [releases/0.1.0.md](releases/0.1.0.md)：只承诺 `state=verified` 的行，candidate/fixing 明确“待复测”；
+  按“是什么/安装/能力分层/支持矩阵/已知限制/回滚/报障材料”组织，存档不可逆与多人踢人写在限制里。
+- 数据口径以 `tools/whitelist.py check` 为唯一校验入口：61 行，stock T1=7/BLACK=23；jbr J1=25/J2=2/BLACK=4；
+  verified 4 行（dogfood、GuideME、AE2、stock T1 的 dogfood 同一条）。
+- 状态源 `status.md` 的交接与最近变更同步到 2026-11-20；草案定稿仍等所有者真实复测。
