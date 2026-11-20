@@ -187,8 +187,8 @@ mixin 落定 / payload / capability / 命令重放；任一之后再失败即置
    6 个命令短名测试（`JarPathResolverTest`），11 个注册审计分级测试（`RegistrationAuditTest`；纯规则，不需要 ASM/游戏），6 个 AT 规则测试（`AccessTransformerRulesTest`），现在 **93 passed**。
 9. ✅ **`libs/` 编译依赖**（已完成 2026-11-16，已知问题 12）：新增 `hotadd/MixinRuntimeApi`（trusted lookup 调时解析 mr 的 10 个方法 + `probe()` 给能力守卫）与 `hotadd/ClassBytes`（自己做「读已加载类字节」，不再借 mr 的 `InstUtils`），删掉 `compileOnly files('libs/...')`。
    证据：移走 `libs/` 后 `./gradlew clean build` 通过（6 tests）；有 mr 的妃级热加/回滚/重试 PASS，无 mr 时妃级仍被拦。`libs/` 目录已无引用，可删。
-10. ✅ **CI 已在远端跑通**（2026-11-19 复核）：GitHub Actions 共 36 次 run，最新一次对应 `4557e7b`
-    （P1-13 agent 探针）为 `success`；下文是当初首次接入时的记录。`.github/workflows/ci.yml` 两个 job —— 分析器（`python3 -m unittest`）
+10. ✅ **CI 已在远端跑通**（2026-11-19 复核）：GitHub Actions 最新一次对应 `e0a0646`（技术债收口）
+    为 `success`（此前的 `4557e7b`/`ac423eb` 也都成功）；下文是当初首次接入时的记录。`.github/workflows/ci.yml` 两个 job —— 分析器（`python3 -m unittest`）
     与运行时（Temurin 21 + `./gradlew build`，即 §6 的「完成」定义：单测 + dev harness 编译）。
     （历史注记）当时本机未触发过 Actions；而且 `./gradlew build` 在干净机器上
     要下载 NeoForge 反编译产物（首次 10–30 分钟），workflow 里给了 60 分钟超时。
