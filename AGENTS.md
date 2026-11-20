@@ -302,6 +302,7 @@ AGENTS.md                  # 本文件：入口与契约
 docs/
   guides/                  # 面向玩家/管理员的步骤指引（jbr.md）
   retro/                   # 复盘（2026-11-18-jbr-saga.md：协作与 JBR 长跑）
+  releases/                # 发布说明（0.1.0.md：支持矩阵与已知限制，草案）
   status.md                # 唯一状态源（先读这个）
   design.md                # 架构、分层、不变量
   glossary.md              # 术语（嫔/妃/贵妃/皇后、软重启、sidecar、registry…）
