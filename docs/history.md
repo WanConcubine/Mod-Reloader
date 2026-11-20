@@ -2129,3 +2129,13 @@ clientfixture（GUI 层/物品装饰）PASS、`minimap` PASS、`moonlight-lateat
   实测越过 `fences` NPE 与 “Config not yet available”，随后仍崩在 `SpriteContents$Ticker.parent`（旧精灵 ticker
   的新字段为 null）。说明这是“已有对象批量回填”问题，不是单字段可补；B 保持 opt-in，未默认启用。
 - 分类：按所有者决定 **Sodium 保持 J2**（事实可热加，重启前存在致命级 bug）；白名单 TSV 备注与证据已更新。
+
+## 2026-11-20（问题 61 B 实验进展：标题屏不崩，进世界卡在 BlockColors）
+
+- B 新增 `SodiumBackfill`：回填旧 `SpriteContents$Ticker/InterpolationData.parent`（56）、
+  `BlockEntityType.sodium$renderPredicates`（44）、活 `LevelRenderer.renderer`（`new SodiumWorldRenderer(mc)`，
+  并在 managed GL 上下文里 `setLevel`）。
+- 结果：标题屏热加 + 15s settle 无 NPE；**进世界热加**仍崩在 `BlockColors.sodium$getProviders`
+  （`blocksToColor`/`overridenBlocks` 为 null，属构造态语义）。
+- 结论不变：Sodium J2（可热加，重启前致命 bug）；B 保持 opt-in，不再继续堆 per-object 适配，除非决定做
+  “Sodium 专用兼容层”（需要重建其颜色/渲染状态，风险高于收益）。

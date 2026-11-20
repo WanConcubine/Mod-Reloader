@@ -59,6 +59,7 @@ final class SodiumBootstrap {
                 "net.caffeinemc.mods.sodium.client.config.ConfigManager", "registerConfigsEarly"));
         step("ConfigManager.registerConfigsLate", () -> invokeStatic(loader,
                 "net.caffeinemc.mods.sodium.client.config.ConfigManager", "registerConfigsLate"));
+        step("old sprite tickers and block entity types", () -> SodiumBackfill.backfill(loader));
         step("ResourcePackScanner.checkIfCoreShaderLoaded", () -> {
             Class<?> minecraft = Class.forName("net.minecraft.client.Minecraft", false, loader);
             Object mc = minecraft.getMethod("getInstance").invoke(null);

@@ -271,6 +271,10 @@ neoForge {
             if (providers.gradleProperty('directRegister').orNull) {
                 systemProperty 't4fixture.directRegister', 'true'
             }
+            if (providers.gradleProperty('sodiumBootstrap').orNull) {
+                systemProperty 'modreloader.sodiumBootstrap',
+                        providers.gradleProperty('sodiumBootstrap').get()
+            }
             if (verifyCompat) {
                 // Compatibility matrix: hot-add real jars at the title screen, one
                 // at a time, and log a verdict per jar (comma-separated, deps first).

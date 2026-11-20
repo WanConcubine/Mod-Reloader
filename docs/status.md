@@ -186,10 +186,13 @@
     fabric 库、约 64 类 redefine）。已修 `ShaderInstance.uniformCache` NPE（add 前重建 shader 实例）。
     **A（已实现）**：`MixinSupport` 检测“给有活单例的类新增实例字段”，成功消息标 `J2` 并列出目标
     （本次为 `Minecraft`/`BlockEntityType`）。
-    **B（opt-in 实验，`-Dmodreloader.sodiumBootstrap=true`）**：初始化 `Minecraft.fences` + 重放 Sodium 的配置引导
-    （`onInitialization`/`registerConfigsEarly|Late`/core-shader 检查），可越过前两个崩溃点；随后仍崩在
-    `SpriteContents$Ticker.parent`（旧精灵 ticker 的新字段为 null）。属问题 45/56 的结构边界：已有实例/对象
-    无法通用重建。**按所有者决定保持 J2**（事实可热加，但重启前存在致命级 bug），B 未默认启用。
+    **B（opt-in 实验，`-PsodiumBootstrap=true`）**：依次修复/回填
+    ① `Minecraft.fences`；② Sodium 配置引导（`onInitialization`/`registerConfigsEarly|Late`/core-shader 检查）；
+    ③ 旧 `SpriteContents$Ticker/InterpolationData.parent`（56 个）；④ `BlockEntityType.sodium$renderPredicates`
+    （44 个）；⑤ 活 `LevelRenderer.renderer`（含 managed GL 上下文与 `setLevel`）。
+    标题屏热加已不再崩；**进世界热加**仍停在 Sodium 的 `BlockColors` 状态（`blocksToColor`/`overridenBlocks`
+    未初始化 → `sodium$getProviders` NPE）。这是重建 Sodium 构造态语义，不是单字段回填；适配需要逐对象/逐状态。
+    **按所有者决定保持 J2**（事实可热加，但重启前存在致命级 bug），B 未默认启用。
 
 ### 验证缺口（已实现/已修，缺证据）
 
