@@ -60,13 +60,19 @@
 | **客户端注册重放** | menu screens / renderers（+dispatcher）/ 颜色 / 扩展 / reload listener / tooltip / item→model / HUD 层 25→31 / 物品装饰 diamond 0→1 / 配方书 `1 new` / **层定义 213→234（staged）**；逐个结论见 §7.1 | `-PverifyAddCommand=<clientfixture> -PverifyGuiLayers=true -PverifyItemDecorators=true`；[client-registration-audit.md](features/client-registration-audit.md) §7.1 |
 | **shader 重放** | 热加资源重载本身 fire `RegisterShadersEvent`（所有容器）；夹具 `clientfixture:marker` 实测 `shaders 56 -> 57`，只注册一次；`ShaderReplay` 仅无 reload 时兜底 | `-PverifyCompat=<clientfixture> -PverifyShaderCount=1 -PverifyCompatSettle=240`；[client-registration-audit.md](features/client-registration-audit.md) |
 | **capability 重放** | 五项全 present；`-PskipCapabilityReplay=true` 时五项 MISSING（反证） | `-PverifyCapabilities=<jar>`；[dogfood-gameplay.md](features/dogfood-gameplay.md) §1.1 |
-| **late AT（实验性）** | Jade 57/39、JEI 34/16、Controlling 1/1；Jade 回滚 39/39 ok；**类级 `public-f` 拒绝**（`stage=VALIDATE kind=ACCESS_TRANSFORMER`）；**嵌套 mod AT 已接入**（2026-11-19：Create/Iris 越过嵌套 AT）；**增强 JBR 下自动启用**（`-Dmodreloader.lateAt=false` 可关） | `-PlateAt=true` 仅 dev 覆盖；[late-at.md](features/late-at.md) |
+| **late AT（实验性）** | Jade 57/39、JEI 34/16、Controlling 1/1；Jade 回滚 39/39 ok；**类级 `public-f` 拒绝**（`stage=VALIDATE kind=ACCESS_TRANSFORMER`）；**方法级 `-f` 重定义后调用点崩（问题 64）**；**嵌套 mod AT 已接入**（2026-11-19：Create/Iris 越过嵌套 AT）；**增强 JBR 下自动启用**（`-Dmodreloader.lateAt=false` 可关） | `-PlateAt=true` 仅 dev 覆盖；[late-at.md](features/late-at.md) |
 | **失败回滚** | post-ModList / post-pack 恢复 ModList/module/config/类/资源包；post-construct 监听器按实例摘除 | `-PverifyRollback` / `-PfailAfterModList` / `-PfailAfterPack` / `-PfailAfterConstruct` |
 | **工程底座** | `capabilities` 10 组全 ok；无 `libs/` 可 `clean build`；**114 个无游戏 Java 单测**；i18n 两语言**各 197 key** | `./gradlew build`/`test`；[tech-debt.md](tech-debt.md) |
 
 ## 验证状态
 
 ### 已验证
+
+- **Mekanism 热加复验（问题 58，2026-11-21，Windows/PCL2 + 增强 JBR）**：标题屏热加 Mekanism 10.7.19 成功
+  （late AT 43 类、注册表 93 个、blocks→1260 / items→1714、层→224、GUI 层→29、物品装饰→14、payloads 58、
+  `isLoaded=true container=true`），`robit` NPE 消失。随后在 `Screen.renderWithTooltip` 调用点出现
+  **方法级 `-f` 引发的 JVM 元数据崩溃**（问题 64；`-Xint` 仍复现，xlog 该帧 BCI 为负值）。
+  证据：`crash-reports/crash-2026-11-21_00.13.03-client.txt`、游戏目录 `xlog-exceptions.txt`。
 
 - **harness 共用建世界（P2-15，2026-11-19）**：抽 `dev/TestWorld`，`PayloadCheck`/`AddCommandCheck` 已迁入；
   两种 harness 均 PASS（payload 端到端、clientfixture 的 GUI 层/物品装饰）。主菜单/暂停屏的 Logo 按钮在 dirty 时
@@ -165,7 +171,8 @@
 
 - **EasyLAN 真实 GUI 按钮**（`ScreenEvent.Opening` 未人工点过）；**生产 jar / 第三方启动器**；1.21.1 之外。
 - **无焦点 L2/输入/截图**：只到标题屏；Windows/Linux 的 GLFW 行为未测。
-- **late AT 的 L2/平台**：Jade tooltip / JEI 界面未验证；Mekanism/AE2 未跑；多 mod AT 冲突、嵌套 AT、Windows/Linux；增强 JBR 下已自动启用（发布前的平台/L2 证据仍缺）。
+- **late AT 的 L2/平台**：Jade tooltip / JEI 界面未验证；Mekanism 已复验 hot-add PASS（见 58），进世界未验，且
+  方法级 `-f` 崩溃（64）未解决；AE2 已在 macOS L2 PASS；多 mod AT 冲突、其余平台仍缺。
 - **`ShaderReplay` 的兜底路径**（无 reload 时）没有夹具。
 - **流水线 L2**：进世界后的 HUD/按键/截图断言还没有（L1 PASS 不说明画面正确）。
 - **Xaero's World Map 的 L1**：引擎 `ok=true` 后它自己的 `loadLater` 在标题屏抛异常，需 L2；`input-nojbr` / `minimap-addon` 未跑。
@@ -178,8 +185,8 @@
 
 ## 已知问题 / 坑
 
-> 追加式账本，**编号稳定**（引用不变）。共 63 条：待解决 1 / 验证缺口 5 / 结构性边界 17 / 历史与注记 15 / 已修 25。
-> **当前 actionable（1）**：61 Sodium 单例 mixin 字段（结构边界，需产品决策）。
+> 追加式账本，**编号稳定**（引用不变）。共 64 条：待解决 1 / 验证缺口 4 / 结构性边界 18 / 历史与注记 15 / 已修 26。
+> **当前 actionable（2）**：61 Sodium 单例 mixin 字段、64 方法级 `-f`（均为结构边界，需产品决策）。
 
 ### 待解决（需改代码）
 
@@ -204,13 +211,6 @@
 38. **自动下载只覆盖 5 个平台资产**：Intel macOS 无 JBR 21 资产，需手动/预置；下载 95–200 MB。
 
 52. **服务端一次性事件定向重放：已实现，未验证（2026-11-18）**：新增 `hotadd/ServerLifecycleReplay`，用 `EventBusSnapshot.addedSince` 取出本次 add 新增的 game-bus 监听器，只对这些监听器调用 `ServerStartingEvent`/`ServerStartedEvent`（`ListenerList` 不保证与 owner map 同一实例，故有“逐个试调用、类型不符即跳过”的兜底）；服务端实例先取 `ServerLifecycleHooks.getCurrentServer()`，为空再反射 `Minecraft#getSingleplayerServer`。**未验证**：进入世界复跑时，客户端两次卡在 xaerolib mixin 阶段（见 54），没走到重放日志。
-
-58. **层/渲染器重放在注册表提交之前（2026-11-18 真机发现，已修待复验）**：Mekanism 10.7.19（预检贵妃档）热加时，
-    `EntityRenderersEvent$RegisterRenderers` 在 `RegistryStage.commit` 之前重放，mod 的 `DeferredHolder` 尚未绑定：
-    `NPE: unbound value ResourceKey[minecraft:entity_type / mekanism:robit]`，随后标题屏渲染崩溃。
-    启动期顺序是“注册表冻结 → common setup → client setup → renderers”；现已把 staged 的层/渲染器重放移到
-    `FmlEvents.finishAll` + `RegistryStage.commit` 之后（仍在资源包注入之前），层先于渲染器、全容器先层不变。
-    **修复后的 jar 尚未在真机重跑 Mekanism**（用户时间到）；下次直接热加 Mekanism 复验。
 
 ### 结构性边界（长期限制，不是待修 bug）
 29. **资源重载与 chunk 重镶并发（保留为边界，2026-11-19）**：无 assets 时跳过整次重载；重载链已串行化 +
@@ -255,6 +255,17 @@
     JBR 下照常尝试并额外打印“旧实例保持 JVM 默认值，需重启才完全正确”的警告。Jade 的变暗不是崩溃，
     实测重启并让 Jade 正常加载即可恢复；是否把 Jade 记为“需重启才正确渲染”由所有者按白名单规则决定。
 
+64. **方法级 `-f`（去已加载方法的 final）在 JBR 下不可用（2026-11-21 真机复现）**：Mekanism 的 AT 含
+    `public-f Screen renderWithTooltip(Lnet/minecraft/client/gui/GuiGraphics;IIF)V` 与
+    `public-f AbstractWidget render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V`（它的 `GuiMekanism`/`GuiElement`
+    重写了这两个方法，规则是加载前提）。late AT 通过 JBR redefine 去掉 final 后**热加本身成功**，
+    但约 2 秒后标题屏渲染在 `ClientHooks.drawScreenInternal` 的 `Screen.renderWithTooltip` 调用点抛 NPE；
+    `-Xint` 纯解释执行仍复现，`-Xlog:exceptions` 显示该帧 **BCI 为负值**且无消息（方法元数据/CP 解析已失效），
+    不是业务空指针；崩溃前另有 `DirectMethodHandle$Holder` 的 `NoSuchMethodError`。对照组 architectury 13.0.12
+    （311 条 AT、**无**方法级 `-f`）同机 PASS，指向「已解析过的 final 方法被 redefine」。**需产品决策**：
+    按问题 44 的同类边界在 `VALIDATE` 拒绝/标 J2 并提示重启，或继续找 workaround（重定义调用方消 CP 缓存、
+    换 JBR 版本）。证据：`crash-reports/crash-2026-11-21_00.13.03-client.txt`、游戏目录 `xlog-exceptions.txt`。
+
 ### 历史与注记（分析器/环境/过期）
 
 1. **静态分析仍会漏/误判**：反射/跨模组代理注册抓不到；注册轴已按「注册调用 / `*DeferredRegister` 引用」对齐（`RegistrySignalTest`）。
@@ -288,6 +299,11 @@
 55. **「已选 JBR 仍要重启」是产品失败（2026-11-18 所有者）**：玩家已在启动器选了 JBR，却因缺 `-XX:+AllowEnhancedClassRedefinition` 被要求再重启——把实现细节转嫁给玩家，不可接受。**2026-11-18 收口为单一动作「为热加载增强环境做准备」**：菜单（未就绪时常驻）与失败屏都指向同一入口；已安装/正在运行的 JBR 直接复用；缺失时官方下载 → SHA-512 → 解压到 `gameDir/jbr-21.0.11`；随后自动重启并带齐 `-XX:+AllowEnhancedClassRedefinition` + `-Dmodreloader.lateAt=true`。**仍余缺口**：参数只能启动时给，启动器每次不带参数则每会话最多一次自动重启；跨会话永久生效需要启动器/整合包预设或 classloader 隔离/软重启。**2026-11-20 补**：lateAt 不再依赖第二个属性——检测到增强 JBR 即自动启用（显式 `-Dmodreloader.lateAt=false` 可关），玩家点一次准备环境后不再遇到 AT 开关类阻塞。
 
 ### 已修
+
+58. ✅ **层/渲染器重放顺序（2026-11-21 真机复验 PASS）**：Mekanism 10.7.19 在 Windows/PCL2 + 增强 JBR 下标题屏热加
+    成功：late AT 94 规则/43 类、注册表 93 个重放、blocks 1060→1260、items 1333→1714、自定义注册表 4 个、
+    层定义 213→224、GUI 层 25→29、物品装饰 0→14、payloads 58 个，`isLoaded=true container=true`，
+    **不再出现 `mekanism:robit` 未绑定 NPE**。紧接暴露的新崩溃见 64（同一 jar 的方法级 `-f`）。
 
 2. ✅ **皇后级判定偏保守（2026-11-20 结案）**：JBR+lateAt 下 GuideME→AE2 热加 `ok=true`
     （blocks 1060→1162、items 1334→1698）；L2 已验：进世界后 `guideme.internal.screen.GuideScreen`
@@ -400,6 +416,8 @@
 
 > **当前交接（2026-11-20，已推送 `a8d787c`）**：技术债收口；问题 2/35/50/63 结案；61 定 J2（B 实验 opt-in，
 > 进世界仍停 `BlockColors`）；增强 JBR 下 lateAt 自动开启；MixinRuntime 明确为可选扩展。
+> **2026-11-21 真机补**：问题 58 复验 PASS（Mekanism 标题屏热加成功）；新开 **64**——方法级 `-f` 在 JBR 下
+> 可 redefine 但随后调用点崩（`-Xint` 复现、xlog BCI 为负），需产品决策（拒绝/标 J2 或 workaround）。
 > **发布口径**：[releases/0.1.0.md](releases/0.1.0.md) 草案已提交——只承诺 `verified` 行（当前 3 行：
 > stock T1 的 dogfood，JBR J1 的 GuideME、AE2），candidate/fixing 一律标“待复测”。
 > **下一项（所有者驱动）**：① whitelist 真实复测（agent 不代跑批次）；② J2“成功后再崩”的预检/标注口径
@@ -429,7 +447,8 @@
 | **P1-新** | Sodium 旧渲染对象（问题 61） | `ShaderInstance.uniformCache` 旧实例为 null → overlay NPE；add 后重建受影响对象或明确需重启 | Sodium J1 |
 | **P1-新** | ✅ Create 的自定义注册表冻结（问题 59） | `CustomRegistries.open` 在构造期解冻根注册表、`fill/close/回滚` 再冻结；复跑 `create-lateat` ok=true（blocks→1703、items→2032） | Create J1 |
 | **P1-新** | Moonlight 之后 Supplementaries 的 Mixin 失败（问题 60） | `MapRenderer$MapInstance` 先被 late AT 重定义，再被 mixin 处理；问题 47 同族，待复现 | 复跑 |
-| **P0-新** | late AT 硬化 | L2 功能（Jade tooltip/JEI 界面）、Mekanism/AE2、多 mod 冲突、嵌套 AT、Windows/Linux、默认 UX | [late-at.md](features/late-at.md) |
+| **P0-新** | late AT 硬化 | L2 功能（Jade tooltip/JEI 界面）、Mekanism 进世界、多 mod 冲突、嵌套 AT、Windows/Linux、默认 UX | [late-at.md](features/late-at.md) |
+| **P0-新** | 问题 64：方法级 `-f` | 决策：`VALIDATE` 拒绝/标 J2（按 44 同类边界）或找 workaround；architectury 对照复跑 | 真机复跑 |
 | **P0-新** | 消除“JBR 后仍需重启”的缺口 | JBR BLACK 逐个修；**不得**把重启当正常路径（ADR-0015）。结构性的（JourneyMap 类级 AT）写明原因 | 缺口清零或写明结构性不可行 |
 | **P1-新** | JBR 端到端 + 探针 | 剩余 Windows/PCL2 真机、GUI 按钮、真实 redefine 探针 | [jbr-support.md](features/jbr-support.md) §6 |
 | **P3-1** | GUI/watcher Phase 3/4 | 主菜单弹窗、失败面板、多候选/依赖排序、同 mod id 冲突 | [gui-mod-watcher.md](features/gui-mod-watcher.md) |
@@ -441,13 +460,12 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近三条。
 
+- **2026-11-21（Mekanism 真机复验）**：问题 58 修复生效——标题屏热加成功（注册表 93、blocks→1260、
+  items→1714、层→224、`isLoaded=true`），`robit` NPE 消失；随后暴露**方法级 `-f`** 在 JBR 下不可用（问题 64：
+  `Screen.renderWithTooltip`/`AbstractWidget.render` 去 final 后约 2 秒崩溃，`-Xint` 复现，xlog BCI 为负）。
 - **2026-11-20（0.1.0 release notes 草案）**：`docs/releases/0.1.0.md` 按“只承诺 verified + 可选扩展 +
   已知限制 + 存档警告”组织；支持矩阵与 `tools/whitelist.py check` 一致（61 行：stock T1=7/BLACK=23；
   jbr J1=25/J2=2/BLACK=4）。candidate/fixing 不作为发布承诺。
 - **2026-11-20（lateAt 随增强 JBR 自动开启）**：`LateAccessTransformers.enabled()` 在属性未显式设置时
   随增强 JBR 自动启用（`-Dmodreloader.lateAt=false` 可关）；玩家点一次「准备环境」后不再遇到 AT 开关类阻塞。
   验证：JBR 默认 Jade 57 条 AT 自动应用、`ok=true`；Temurin stock 干净 `ACCESS_TRANSFORMER` 拒绝；单测 114。
-- **2026-11-20（MixinRuntime 更正为可选扩展）**：缺它时运行时照常启动、嫔级照常，妃级/Mixin 不可用；
-  菜单右上角红字 + 准备页注明 + 预检拦下（`mixin_hotadd=missing`），不打包、不代下载。
-- **2026-11-20（问题 2 结案：AE2 L2）**：`-PverifyAe2L2` 标题屏热加 GuideME→AE2、建世界后
-  `GuideScreen`/`MEStorageScreen` 均正常打开；AE2/GuideME 白名单转 verified。

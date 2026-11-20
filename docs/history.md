@@ -2178,3 +2178,30 @@ clientfixture（GUI 层/物品装饰）PASS、`minimap` PASS、`moonlight-lateat
 - 数据口径以 `tools/whitelist.py check` 为唯一校验入口：61 行，stock T1=7/BLACK=23；jbr J1=25/J2=2/BLACK=4；
   verified 3 行（stock T1 的 dogfood，JBR J1 的 GuideME、AE2）。所有者决定 J2 维持成功消息标注、不硬阻断。
 - 状态源 `status.md` 的交接与最近变更同步到 2026-11-20；草案定稿仍等所有者真实复测。
+
+## 2026-11-21（Mekanism 真机复验：问题 58 修复生效，暴露方法级 `-f` 崩溃）
+
+环境：Windows 11 / PCL2 / NeoForge 21.1.266 / JBR 21.0.11（增强重定义）；`mods/` 只有 MixinRuntime + modreloader，
+Mekanism 10.7.19.85 在标题屏经 `/modreloader add` 加入。共跑 4 次（默认 JIT、`-ShowHiddenFrames`、`-Xint`、
+`-Xint + -Xlog:exceptions`），崩溃可稳定复现。
+
+结果：
+- **问题 58 修复 PASS**：late AT 94 规则/43 类；注册表 93 个重放，blocks 1060→1260、items 1333→1714、
+  states 26684→29164、stoneId 稳定；自定义注册表 `chemical/module/robit_skin_serializer/chemical_ingredient_type`；
+  层定义 213→224、GUI 层 25→29、物品装饰 0→14、payloads 58 个；`isLoaded=true container=true`；
+  **不再出现 `mekanism:robit` 未绑定 NPE**。
+- **新问题 64**：热加成功后约 2.1–2.3 秒，标题屏渲染在 `ClientHooks.drawScreenInternal` 的
+  `Screen.renderWithTooltip` 调用点抛 NPE。该帧无行号、无消息；`-Xint` 仍复现；`-Xlog:exceptions=info` 显示
+  `drawScreenInternal` 的 **BCI 为负值**（277.948s `-2951640`、278.449s `-2952208`），随后同异常经
+  `drawScreen`(bci 27) → `GameRenderer.render`(bci 744) 传播。崩溃前 2 秒另有
+  `NoSuchMethodError: java.lang.invoke.DirectMethodHandle$Holder.invokeSpecial` 等 MethodHandle 链接错误。
+  说明不是业务空指针，而是 **JBR redefine 后已解析调用点/方法元数据失效**。
+- **定位**：Mekanism 的 AT 有两条**方法级** `-f`：`public-f Screen renderWithTooltip(...)`、
+  `public-f AbstractWidget render(...)`；它的 `GuiMekanism`（declares `public final renderWithTooltip`）与
+  `GuiElement` 等重写了这两个方法，规则是类能否加载的前提。对照组 architectury 13.0.12（311 条 AT、
+   **无**方法级 `-f`）在 11-18 同机 PASS，指向该差异。类级 `-f` 早已按问题 44 拒绝；这里是**方法级**的新边界。
+- 工具：用 ASM 写了临时反汇编/扫描器（挂在 /tmp）确认重写者；`-Xlog:exceptions` 是这次定位的关键手段
+  （直接给出抛出方法 + BCI，且不依赖 JIT）。
+- jar 已复位：Mekanism 回到 `modreloader/staging/`，`mods/` 恢复为 MixinRuntime + modreloader；后续需要把
+  PCL 的诊断参数（`-Xint`、`-ShowHiddenFrames`、`-Xlog`）去掉再跑正常场景。
+- 状态源：58 转已修（hot-add 级 PASS），64 记为结构性边界，待产品决策（`VALIDATE` 拒绝/标 J2 或 workaround）。
