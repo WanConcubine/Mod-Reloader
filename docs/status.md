@@ -68,6 +68,10 @@
 
 ### 已验证
 
+- **Mixin 锁序语义探针（P1-13，2026-11-19）**：`LaunchPluginMonitor.probe()` 在启动时真正解析出 issue 54
+  依赖的锁对象并写日志；解析失败会让 `mixin_hotadd` 变为 missing，引擎在 transform 前拒绝（避免死锁）。
+  客户端与专用服实测 `Mixin lock-order monitor: resolved`、`mixin_hotadd=ok`；同时去掉了 hotadd 里唯一的
+  客户端类字面量。
 - **包依赖分层（2026-11-19）**：`reflect → inspect → capability/i18n/launch/watch/command → hotadd →
   client/server → ui/diagnose` 的反向边全部消除（`UnsafeAccess`/`JvmAccess`、`MixinRuntimeApi`、
   `ModReloaderI18n`、`ServerCommands`、`launch/*` 下沉）；`ArchitectureTest` 扫描源码钉住规则。

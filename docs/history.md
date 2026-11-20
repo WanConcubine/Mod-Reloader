@@ -2070,3 +2070,15 @@ clientfixture（GUI 层/物品装饰）PASS、`minimap` PASS、`moonlight-lateat
 `reflect → inspect → capability/i18n/launch/watch/command → hotadd → client/server → ui/diagnose`
 检查禁止方向，越层即失败。`./gradlew test` **111**；`-PverifyRelaunchPlan=true` PASS（重启脚本/spawn 路径）、
 `hud` MATCH、`./gradlew build` 绿。
+
+## 2026-11-19（P1-13 第一步：Mixin 锁序语义探针）
+
+- `LaunchPluginMonitor` 从 `hotadd` 下沉到 `reflect`（纯反射/加载器内省），新增 `probe()`：
+  解析 launcher 插件列表中的 `MixinLaunchPluginLegacy.processors` 监视器，失败时回退到
+  `transforming_class_loader`，并给出失败原因。
+- `Capabilities.checkMixinHotAdd` 增加语义判定：解析不到锁对象 → `mixin_hotadd=missing`，
+  `applyMixins` 在 transform 前以 `CAPABILITY` 拒绝。这是把“54 修好的前提”从注释变成启动期可验证的事实。
+- 回退路径不再引用 `net.minecraft.client.Minecraft.class`（专用服上会链接失败），改为从自身 classloader
+  向上找 `TransformingClassLoader`。
+- 证据：client `minimap` PASS（日志 `Mixin lock-order monitor: resolved`、`mixin_hotadd=ok`）；
+  专用服 RunState harness PASS（同样 resolved/ok）；单测 111、build 绿。

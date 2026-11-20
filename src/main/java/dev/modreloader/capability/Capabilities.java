@@ -4,6 +4,7 @@ import cpw.mods.cl.ModuleClassLoader;
 import dev.modreloader.ModReloader;
 import dev.modreloader.Platform;
 import dev.modreloader.inspect.MixinRuntimeApi;
+import dev.modreloader.reflect.LaunchPluginMonitor;
 import dev.modreloader.reflect.UnsafeAccess;
 import dev.modreloader.inspect.MixinRuntimeSupport;
 import net.minecraft.core.MappedRegistry;
@@ -215,6 +216,15 @@ public final class Capabilities {
             // The exact MixinRuntime surface is resolved by the facade that calls
             // it, so there is one list to keep in sync instead of two.
             missing.addAll(MixinRuntimeApi.probe());
+
+            // Semantic check, not a name check: issue 54's fix needs the actual
+            // monitor object. Without it a direct transform can deadlock with a
+            // concurrent class load, so refuse mixin hot-add up front.
+            LaunchPluginMonitor.Probe lock = LaunchPluginMonitor.probe();
+            ModReloader.LOGGER.info("[ModReloader] Mixin lock-order monitor: {}", lock.detail());
+            if (!lock.ok()) {
+                missing.add("Mixin lock-order monitor (" + lock.detail() + ")");
+            }
         } catch (Throwable t) {
             missing.add("mixin classes: " + t.getClass().getSimpleName());
         }

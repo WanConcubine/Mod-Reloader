@@ -62,6 +62,16 @@ mixin 落定 / payload / capability / 命令重放；任一之后再失败即置
 228 处、32 文件；能力守卫只验名字不验语义。问题 54 的修复一次性依赖三个事实：
 `transforming_class_loader` 属性、`MixinLaunchPlugin extends Legacy`、锁字段在父类。升级 NeoForge/Mixin 的风险是结构性的。
 
+**2026-11-19 增量（语义探针，不加抽象）**：
+- `LaunchPluginMonitor` 下沉到 `reflect/`，新增 `probe()`：**真的解析出锁对象**（launcher 插件列表或
+  TransformingClassLoader 回退），失败时给出具体原因。
+- `Capabilities.checkMixinHotAdd` 用它做语义判定：解析不到锁对象 → `mixin_hotadd=missing`，
+  `applyMixins` 在 transform 之前以 `CAPABILITY` 拒绝，而不是冒 issue 54 的死锁风险。
+- 顺带移除 `hotadd` 里唯一的客户端类字面量（`Minecraft.class` 回退），改用自身 classloader 向上找
+  `TransformingClassLoader`；专用服启动实测 `Mixin lock-order monitor: resolved`、`mixin_hotadd=ok`。
+**剩余**：其余 227 处仍是“名字检查 + 使用时报错”；下一优先级是 `MixinAgentGuard` 的 agent 发现
+（问题 40/47）与 `Instrumentation` 可用性。
+
 ### P1-14 并发模型是局部补丁
 
 `ServerThreadHop`、render-thread 假设、worldgen 死锁、Mixin blanket 抑制、异步 reload 各管一段；

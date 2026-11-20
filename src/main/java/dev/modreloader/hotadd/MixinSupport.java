@@ -32,6 +32,7 @@ import java.util.Set;
 import dev.modreloader.reflect.UnsafeAccess;
 import dev.modreloader.inspect.MixinRuntimeApi;
 import dev.modreloader.reflect.JvmAccess;
+import dev.modreloader.reflect.LaunchPluginMonitor;
 
 /**
  * Runtime Mixin plumbing for hot-added mods.
