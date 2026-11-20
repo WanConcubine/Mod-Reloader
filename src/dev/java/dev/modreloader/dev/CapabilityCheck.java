@@ -44,7 +44,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public final class CapabilityCheck {
     private enum Stage {
-        WAIT_TITLE, ADD, WAIT_ADDED, OPEN_CREATE, WAIT_CREATE_SCREEN, WAIT_WORLD, QUERY, DONE
+        WAIT_TITLE, ADD, WAIT_ADDED, WORLD, QUERY, DONE
     }
 
     private static final int TITLE_SETTLE_TICKS = 100;
@@ -53,12 +53,12 @@ public final class CapabilityCheck {
     private static final String MOD_ID = System.getProperty(
             "modreloader.verifyCapabilitiesModId", "exnihilosatellitium").trim();
 
+    private static final TestWorld WORLD = new TestWorld(1);
     private static Path jar;
     private static Stage stage = Stage.WAIT_TITLE;
     private static int ticks;
     private static int totalTicks;
     private static boolean started;
-    private static boolean pressedCreate;
     private static boolean failed;
     private static CompletableFuture<Query> queryFuture;
 
@@ -109,46 +109,16 @@ public final class CapabilityCheck {
                 if (ticks < 40) {
                     return;
                 }
-                stage = Stage.OPEN_CREATE;
+                stage = Stage.WORLD;
                 ticks = 0;
             }
-            case OPEN_CREATE -> {
-                if (mc.getOverlay() != null) {
+            case WORLD -> {
+                TestWorld.Result result = WORLD.tick(mc);
+                if (result.error() != null) {
+                    fail(result.error());
                     return;
                 }
-                try {
-                    CreateWorldScreen.openFresh(mc, mc.screen);
-                } catch (Throwable t) {
-                    fail("cannot open the create-world screen: " + t);
-                    return;
-                }
-                stage = Stage.WAIT_CREATE_SCREEN;
-                ticks = 0;
-            }
-            case WAIT_CREATE_SCREEN -> {
-                if (!(mc.screen instanceof CreateWorldScreen screen)) {
-                    if (ticks > 20 * 30) {
-                        fail("the create-world screen never appeared");
-                    }
-                    return;
-                }
-                if (pressedCreate) {
-                    return;
-                }
-                AbstractButton button = findButton(screen, "selectWorld.create");
-                if (button == null) {
-                    return;
-                }
-                pressedCreate = true;
-                button.onPress();
-                stage = Stage.WAIT_WORLD;
-                ticks = 0;
-            }
-            case WAIT_WORLD -> {
-                if (mc.level == null || mc.player == null) {
-                    if (ticks > 20 * 180) {
-                        fail("the world never loaded");
-                    }
+                if (!result.ready()) {
                     return;
                 }
                 stage = Stage.QUERY;
@@ -268,15 +238,6 @@ public final class CapabilityCheck {
         return pos;
     }
 
-    private static AbstractButton findButton(Screen screen, String key) {
-        String label = net.minecraft.client.resources.language.I18n.get(key);
-        for (var child : screen.children()) {
-            if (child instanceof AbstractButton button && label.equals(button.getMessage().getString())) {
-                return button;
-            }
-        }
-        return null;
-    }
 
     private static void fail(String message) {
         if (failed) {

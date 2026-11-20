@@ -2101,3 +2101,11 @@ clientfixture（GUI 层/物品装饰）PASS、`minimap` PASS、`moonlight-lateat
 - CI：`api.github.com` 查到 36 次 GitHub Actions run，最新 `4557e7b` 为 `success`；P2-10 的“未远端验证”结案。
 - 问题 29 归入结构性边界（chunk 重镶归原版；串行化后未复现）；P1-14 的线程/锁序表写进 design.md。
 - 单测 111；build 绿。
+
+## 2026-11-19（P2-15 收口：全部建世界 harness 迁到 TestWorld）
+
+- `TestWorld` 已覆盖 `PayloadCheck`、`AddCommandCheck`、`AtSpikeCheck`、`CapabilityCheck`、
+  `CreativeTitleCheck`（warm-up 用第二个实例做第二次建世界）与 `LanScreenCheck`。
+- 实测：payload PASS、clientfixture PASS、AtSpike DONE、capabilities PASS、creative-at-title(+warm) PASS；
+  `LanScreenCheck` 因本机缺 `lanserverproperties` 未跑（代码路径与其余一致）。
+- 剩余：`TestConnection` 未抽（RemotePayloadCheck / MpRegistry*）。

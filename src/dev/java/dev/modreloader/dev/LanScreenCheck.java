@@ -33,18 +33,17 @@ import java.util.List;
  */
 public final class LanScreenCheck {
     private enum Stage {
-        OPEN_CREATE, WAIT_CREATE_SCREEN, WAIT_WORLD, OPEN_LAN, INSPECT, SCREENSHOT, DONE
+        WORLD, OPEN_LAN, INSPECT, SCREENSHOT, DONE
     }
 
     private static final int TIMEOUT_TICKS = 20 * 300;
     private static final int WORLD_SETTLE_TICKS = 10;
 
-    private static Stage stage = Stage.OPEN_CREATE;
+    private static final TestWorld WORLD = new TestWorld(WORLD_SETTLE_TICKS);
+    private static Stage stage = Stage.WORLD;
     private static int ticks;
     private static int totalTicks;
-    private static int worldTicks;
     private static boolean started;
-    private static boolean pressedCreate;
     private static boolean failed;
 
     private LanScreenCheck() {
@@ -71,9 +70,7 @@ public final class LanScreenCheck {
         }
         Minecraft mc = Minecraft.getInstance();
         switch (stage) {
-            case OPEN_CREATE -> openCreateScreen(mc);
-            case WAIT_CREATE_SCREEN -> waitForCreateScreen(mc);
-            case WAIT_WORLD -> waitForWorld(mc);
+            case WORLD -> openWorld(mc);
             case OPEN_LAN -> openLanScreen(mc);
             case INSPECT -> inspectLanScreen(mc);
             case SCREENSHOT -> screenshotAndFinish(mc);
@@ -81,59 +78,13 @@ public final class LanScreenCheck {
         }
     }
 
-    private static void openCreateScreen(Minecraft mc) {
-        if (mc.getOverlay() != null) {
-            if (ticks > 20 * 30) {
-                fail("resource reload overlay did not clear");
-            }
+    private static void openWorld(Minecraft mc) {
+        TestWorld.Result result = WORLD.tick(mc);
+        if (result.error() != null) {
+            fail(result.error());
             return;
         }
-        try {
-            CreateWorldScreen.openFresh(mc, mc.screen);
-            stage = Stage.WAIT_CREATE_SCREEN;
-            ticks = 0;
-        } catch (Throwable t) {
-            fail("CreateWorldScreen.openFresh failed: " + t);
-        }
-    }
-
-    private static void waitForCreateScreen(Minecraft mc) {
-        if (!(mc.screen instanceof CreateWorldScreen screen)) {
-            if (ticks > 20 * 30) {
-                fail("create-world screen did not appear; current screen="
-                        + (mc.screen == null ? "null" : mc.screen.getClass().getName()));
-            }
-            return;
-        }
-        if (pressedCreate) {
-            return;
-        }
-        var button = findButton(screen, "selectWorld.create");
-        if (button == null) {
-            if (ticks > 20 * 20) {
-                ModReloader.LOGGER.warn("[LanCheck] no 'selectWorld.create' button yet (screen children: {})",
-                        describe(screen));
-            }
-            return;
-        }
-        pressedCreate = true;
-        ModReloader.LOGGER.info("[LanCheck] pressing '{}'", button.getMessage().getString());
-        button.onPress();
-        stage = Stage.WAIT_WORLD;
-        ticks = 0;
-        worldTicks = 0;
-    }
-
-    private static void waitForWorld(Minecraft mc) {
-        if (mc.level == null || mc.player == null) {
-            worldTicks = 0;
-            if (ticks > 20 * 120) {
-                fail("world did not load; screen=" + (mc.screen == null ? "null" : mc.screen.getClass().getName()));
-            }
-            return;
-        }
-        worldTicks++;
-        if (worldTicks < WORLD_SETTLE_TICKS) {
+        if (!result.ready()) {
             return;
         }
         ModReloader.LOGGER.info("[LanCheck] world loaded: {} ({})", mc.level.dimension().location(),
@@ -315,15 +266,6 @@ public final class LanScreenCheck {
         ticks = 0;
     }
 
-    private static AbstractButton findButton(Screen screen, String translationKey) {
-        String label = I18n.get(translationKey);
-        for (var child : screen.children()) {
-            if (child instanceof AbstractButton button && label.equals(button.getMessage().getString())) {
-                return button;
-            }
-        }
-        return null;
-    }
 
     private static boolean hasDeclaredField(Class<?> type, String name) {
         try {

@@ -48,9 +48,8 @@ import java.util.List;
  */
 public final class CreativeTitleCheck {
     private enum Stage {
-        WAIT_TITLE, WARM_OPEN_CREATE, WARM_WAIT_CREATE_SCREEN, WARM_WAIT_WORLD,
-        WARM_PREPARE_CREATIVE, WARM_OPEN_SCREEN, WARM_RENDER, WARM_QUIT, WARM_WAIT_TITLE,
-        ADD, WAIT_ADDED, OPEN_CREATE, WAIT_CREATE_SCREEN, WAIT_WORLD,
+        WAIT_TITLE, WARM_CREATE_WORLD, WARM_PREPARE_CREATIVE, WARM_OPEN_SCREEN, WARM_RENDER,
+        WARM_QUIT, WARM_WAIT_TITLE, ADD, WAIT_ADDED, WORLD,
         PREPARE_CREATIVE, OPEN_SCREEN, VERIFY, SELECTED, DONE
     }
 
@@ -77,14 +76,14 @@ public final class CreativeTitleCheck {
             Boolean.getBoolean("modreloader.verifyCreativeAtTitleInstalled");
 
     private static Path jar;
+    private static final TestWorld WARM_RUNNER = new TestWorld(1);
+    private static final TestWorld WORLD_RUNNER = new TestWorld(1);
     private static Stage stage = Stage.WAIT_TITLE;
     private static int ticks;
     private static int totalTicks;
     private static boolean started;
-    private static boolean pressedCreate;
     private static boolean creativeSet;
     private static boolean warmed;
-    private static boolean warmPressedCreate;
     private static boolean warmCreativeSet;
     private static boolean pauseOpened;
     private static CreativeModeTab ownTab;
@@ -119,51 +118,21 @@ public final class CreativeTitleCheck {
                     return;
                 }
                 if (WARM) {
-                    stage = Stage.WARM_OPEN_CREATE;
+                    stage = Stage.WARM_CREATE_WORLD;
                 } else if (INSTALLED) {
-                    stage = Stage.OPEN_CREATE;
+                    stage = Stage.WORLD;
                 } else {
                     stage = Stage.ADD;
                 }
                 ticks = 0;
             }
-            case WARM_OPEN_CREATE -> {
-                if (mc.getOverlay() != null) {
+            case WARM_CREATE_WORLD -> {
+                TestWorld.Result result = WARM_RUNNER.tick(mc);
+                if (result.error() != null) {
+                    fail("warm-up: " + result.error());
                     return;
                 }
-                try {
-                    CreateWorldScreen.openFresh(mc, mc.screen);
-                } catch (Throwable t) {
-                    fail("warm-up: cannot open the create-world screen: " + t);
-                    return;
-                }
-                stage = Stage.WARM_WAIT_CREATE_SCREEN;
-                ticks = 0;
-            }
-            case WARM_WAIT_CREATE_SCREEN -> {
-                if (!(mc.screen instanceof CreateWorldScreen screen)) {
-                    if (ticks > 20 * 30) {
-                        fail("warm-up: the create-world screen never appeared");
-                    }
-                    return;
-                }
-                if (warmPressedCreate) {
-                    return;
-                }
-                AbstractButton button = findButton(screen, "selectWorld.create");
-                if (button == null) {
-                    return;
-                }
-                warmPressedCreate = true;
-                button.onPress();
-                stage = Stage.WARM_WAIT_WORLD;
-                ticks = 0;
-            }
-            case WARM_WAIT_WORLD -> {
-                if (mc.level == null || mc.player == null) {
-                    if (ticks > 20 * 180) {
-                        fail("warm-up: the first world never loaded");
-                    }
+                if (!result.ready()) {
                     return;
                 }
                 stage = Stage.WARM_PREPARE_CREATIVE;
@@ -272,47 +241,16 @@ public final class CreativeTitleCheck {
                 if (ticks < 40) {
                     return;
                 }
-                stage = Stage.OPEN_CREATE;
+                stage = Stage.WORLD;
                 ticks = 0;
             }
-            case OPEN_CREATE -> {
-                if (mc.getOverlay() != null) {
+            case WORLD -> {
+                TestWorld.Result result = WORLD_RUNNER.tick(mc);
+                if (result.error() != null) {
+                    fail(result.error());
                     return;
                 }
-                try {
-                    CreateWorldScreen.openFresh(mc, mc.screen);
-                } catch (Throwable t) {
-                    fail("cannot open the create-world screen: " + t);
-                    return;
-                }
-                stage = Stage.WAIT_CREATE_SCREEN;
-                ticks = 0;
-            }
-            case WAIT_CREATE_SCREEN -> {
-                if (!(mc.screen instanceof CreateWorldScreen screen)) {
-                    if (ticks > 20 * 30) {
-                        fail("the create-world screen never appeared (screen="
-                                + (mc.screen == null ? "null" : mc.screen.getClass().getSimpleName()) + ")");
-                    }
-                    return;
-                }
-                if (pressedCreate) {
-                    return;
-                }
-                AbstractButton button = findButton(screen, "selectWorld.create");
-                if (button == null) {
-                    return;
-                }
-                pressedCreate = true;
-                button.onPress();
-                stage = Stage.WAIT_WORLD;
-                ticks = 0;
-            }
-            case WAIT_WORLD -> {
-                if (mc.level == null || mc.player == null) {
-                    if (ticks > 20 * 180) {
-                        fail("the world never loaded");
-                    }
+                if (!result.ready()) {
                     return;
                 }
                 stage = Stage.PREPARE_CREATIVE;

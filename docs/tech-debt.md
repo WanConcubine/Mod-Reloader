@@ -161,9 +161,11 @@ mixin 落定 / payload / capability / 命令重放；任一之后再失败即置
    这仍不能替代统一出口——它只告诉我们「还差哪个」，每个重放仍是手写的。
 6. **harness 样板重复**：4 个检查各自复制"建世界 / 连服 / 等遮罩"逻辑（`AddCommandCheck`、`PayloadCheck`、
    `RemotePayloadCheck`、`MenuEntryCheck`），约 600 行里有大半是重复。现在它们都在 `src/dev`，抽取更安全。
-   **2026-11-19 增量**：抽出 `dev/TestWorld`（真实建世界屏 → 按 Create → 等玩家 + settle），
-   `PayloadCheck` 与 `AddCommandCheck` 已迁入（两者 harness 均 PASS）。**剩余**：`LanScreenCheck` /
-   `CapabilityCheck` / `CreativeTitleCheck` / `AtSpikeCheck` 仍各自建世界；`TestConnection` 未抽；L2 断言与 noFocus 不稳未动。
+   **2026-11-19 增量**：抽出 `dev/TestWorld`（真实建世界屏 → 按 Create → 等玩家 + settle）；
+   `PayloadCheck`、`AddCommandCheck`、`AtSpikeCheck`、`CapabilityCheck`、`CreativeTitleCheck`（含 warm-up 的
+   两次建世界）与 `LanScreenCheck` 全部迁入。已实测：payload / clientfixture / AtSpike / capabilities /
+   creative-at-title(+warm) 全 PASS；`LanScreenCheck` 因本机缺 `lanserverproperties` 未跑。
+   **剩余**：`TestConnection`（RemotePayloadCheck / MpRegistry* 的连服样板）未抽；L2 断言与 noFocus 不稳未动。
 7. ✅ **`design.md` 落后于双端化**（已完成 2026-11-15）：补了「双端化与引擎边界」一节，写明 `PlatformHooks`、
    `Capabilities`、`dev` 源集与两侧 bootstrap 的职责。
 

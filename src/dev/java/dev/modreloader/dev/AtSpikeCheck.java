@@ -53,15 +53,15 @@ public final class AtSpikeCheck {
     private static final int TIMEOUT_TICKS = 20 * 240;
 
     private enum Stage {
-        WAIT_TITLE, MEASURE_TITLE, OPEN_CREATE, WAIT_CREATE_SCREEN, WAIT_WORLD, MEASURE_WORLD, DONE
+        WAIT_TITLE, MEASURE_TITLE, WORLD, MEASURE_WORLD, DONE
     }
 
     private static final List<Path> JARS = new ArrayList<>();
+    private static final TestWorld WORLD = new TestWorld(1);
     private static Stage stage = Stage.WAIT_TITLE;
     private static int ticks;
     private static int totalTicks;
     private static boolean started;
-    private static boolean pressedCreate;
 
     private AtSpikeCheck() {
     }
@@ -103,12 +103,10 @@ public final class AtSpikeCheck {
                     return;
                 }
                 measure("title screen", mc);
-                stage = Stage.OPEN_CREATE;
+                stage = Stage.WORLD;
                 ticks = 0;
             }
-            case OPEN_CREATE -> openCreateScreen(mc);
-            case WAIT_CREATE_SCREEN -> waitForCreateScreen(mc);
-            case WAIT_WORLD -> waitForWorld(mc);
+            case WORLD -> openWorld(mc);
             case MEASURE_WORLD -> {
                 if (ticks < WORLD_SETTLE_TICKS) {
                     return;
@@ -127,47 +125,14 @@ public final class AtSpikeCheck {
         }
     }
 
-    private static void openCreateScreen(Minecraft mc) {
-        if (mc.getOverlay() != null) {
-            return;
-        }
-        try {
-            CreateWorldScreen.openFresh(mc, mc.screen);
-            stage = Stage.WAIT_CREATE_SCREEN;
-            ticks = 0;
-        } catch (Throwable t) {
-            ModReloader.LOGGER.error("[AtSpike] cannot open the create-world screen", t);
+    private static void openWorld(Minecraft mc) {
+        TestWorld.Result result = WORLD.tick(mc);
+        if (result.error() != null) {
+            ModReloader.LOGGER.error("[AtSpike] {}", result.error());
             finish();
-        }
-    }
-
-    private static void waitForCreateScreen(Minecraft mc) {
-        if (!(mc.screen instanceof CreateWorldScreen screen)) {
-            if (ticks > 20 * 30) {
-                ModReloader.LOGGER.error("[AtSpike] create-world screen did not appear");
-                finish();
-            }
             return;
         }
-        if (pressedCreate) {
-            return;
-        }
-        AbstractButton button = findButton(screen, "selectWorld.create");
-        if (button == null) {
-            return;
-        }
-        pressedCreate = true;
-        button.onPress();
-        stage = Stage.WAIT_WORLD;
-        ticks = 0;
-    }
-
-    private static void waitForWorld(Minecraft mc) {
-        if (mc.level == null || mc.player == null) {
-            if (ticks > 20 * 180) {
-                ModReloader.LOGGER.error("[AtSpike] world did not load; reporting title-screen data only");
-                finish();
-            }
+        if (!result.ready()) {
             return;
         }
         stage = Stage.MEASURE_WORLD;
@@ -314,13 +279,4 @@ public final class AtSpikeCheck {
         return new HashSet<>(names);
     }
 
-    private static AbstractButton findButton(net.minecraft.client.gui.screens.Screen screen, String key) {
-        String label = net.minecraft.client.resources.language.I18n.get(key);
-        for (var child : screen.children()) {
-            if (child instanceof AbstractButton button && label.equals(button.getMessage().getString())) {
-                return button;
-            }
-        }
-        return null;
-    }
 }
