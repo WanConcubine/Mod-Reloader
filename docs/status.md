@@ -92,6 +92,9 @@
   回滚改为尽力而为：被拒则保留加宽并 warn，`rollbackErrors` 为空。构造前失败仍正常还原。
   证据：Moonlight→Supplementaries 双 jar，`-PfailAfterModList -PfailAfterModListModId=supplementaries`
   （内嵌类回滚 ok）与 `-PfailAfterConstruct -PfailAfterConstructModId=supplementaries`（ATT 保留 + 无 ROLLBACK_PARTIAL）。
+- **AE2 L2（问题 2，2026-11-20）**：`-PverifyAe2L2=<guideme>,<ae2>` 在标题屏热加两 jar、建世界、
+    服务端直接放入 `ae2:guide`/`ae2:wireless_terminal`，右键后分别打开 `GuideScreen` 与 `MEStorageScreen`；
+    证明菜单屏/物品模型/资源在热加后可用。AE2/GuideME 白名单 J1 verified。
 - **payload 标题屏路径（2026-11-19 复核）**：`-PverifyPayload` 用重建后的 fixture PASS；诊断日志会打印
   `PAYLOAD_REGISTRATIONS`、登录后客户端/服务端连接的 `PayloadSetup` 与 `hasChannel`。
 - **脏状态与拒绝（RunState，技术债 P1-12，2026-11-19）**：注册表提交、自定义注册表窗口、构造、mixin 落定、
@@ -175,12 +178,10 @@
 
 ## 已知问题 / 坑
 
-> 追加式账本，**编号稳定**（引用不变）。共 63 条：待解决 2 / 验证缺口 5 / 结构性边界 17 / 历史与注记 15 / 已修 24。
-> **当前 actionable（2）**：61 Sodium 单例 mixin 字段（结构边界，需产品决策）· 2 AE2 的 L2 与皇后判定。
+> 追加式账本，**编号稳定**（引用不变）。共 63 条：待解决 1 / 验证缺口 5 / 结构性边界 17 / 历史与注记 15 / 已修 25。
+> **当前 actionable（1）**：61 Sodium 单例 mixin 字段（结构边界，需产品决策）。
 
 ### 待解决（需改代码）
-
-2. **皇后级判定偏保守（2026-11-19 部分解决）**：AE2 在 JBR+lateAt 下 L1 热加成功（blocks 1060→1162、items 1334→1698），GUI 未验；不再按“必须重启”处理。
 
 61. **Sodium 热加后旧渲染对象崩溃（2026-11-19；2026-11-20 分析）**：`sodium-lateat` 中 Sodium ok=true（含 4 个
     fabric 库、约 64 类 redefine）。已修 `ShaderInstance.uniformCache` NPE（add 前重建 shader 实例）。
@@ -287,6 +288,11 @@
 55. **「已选 JBR 仍要重启」是产品失败（2026-11-18 所有者）**：玩家已在启动器选了 JBR，却因缺 `-XX:+AllowEnhancedClassRedefinition` 被要求再重启——把实现细节转嫁给玩家，不可接受。**2026-11-18 收口为单一动作「为热加载增强环境做准备」**：菜单（未就绪时常驻）与失败屏都指向同一入口；已安装/正在运行的 JBR 直接复用；缺失时官方下载 → SHA-512 → 解压到 `gameDir/jbr-21.0.11`；随后自动重启并带齐 `-XX:+AllowEnhancedClassRedefinition` + `-Dmodreloader.lateAt=true`。**仍余缺口**：参数只能启动时给，启动器每次不带参数则每会话最多一次自动重启；跨会话永久生效需要启动器/整合包预设或 classloader 隔离/软重启。
 
 ### 已修
+
+2. ✅ **皇后级判定偏保守（2026-11-20 结案）**：JBR+lateAt 下 GuideME→AE2 热加 `ok=true`
+    （blocks 1060→1162、items 1334→1698）；L2 已验：进世界后 `guideme.internal.screen.GuideScreen`
+    与 `appeng.client.gui.me.common.MEStorageScreen` 均正常打开、无崩溃（`-PverifyAe2L2`）。
+    AE2/GuideME 白名单转 verified（J1）。皇后级预测属于安全方向的过估，不再要求重启。
 
 35. ✅ **post-construct 失败仍留注册表内容（2026-11-19 查明）**：Waystones 走 `DeferredRegister`，条目只在
     `RegistryStage.commit` 的 `RegisterEvent` 里注册；用 `-PfailAfterConstruct` 让它在提交前失败，

@@ -2139,3 +2139,11 @@ clientfixture（GUI 层/物品装饰）PASS、`minimap` PASS、`moonlight-lateat
   （`blocksToColor`/`overridenBlocks` 为 null，属构造态语义）。
 - 结论不变：Sodium J2（可热加，重启前致命 bug）；B 保持 opt-in，不再继续堆 per-object 适配，除非决定做
   “Sodium 专用兼容层”（需要重建其颜色/渲染状态，风险高于收益）。
+
+## 2026-11-20（问题 2 结案：AE2 L2 PASS）
+
+- 新 harness `Ae2L2Check`（`-PverifyAe2L2=<guide>,<ae2>`）：标题屏热加 GuideME → AE2（lateAt），
+  `TestWorld` 建世界，服务端直接放入 `ae2:guide` / `ae2:wireless_terminal`（创造世界无作弊，/give 会被拒），
+  右键打开界面。
+- 结果：GuideME `GuideScreen` 与 AE2 `MEStorageScreen` 均打开，无崩溃；证明菜单屏、物品模型与资源在热加后可用。
+- 白名单：AE2/GuideME J1 由 candidate 转 verified；status 问题 2 移入已修，actionable 只剩 61。

@@ -107,6 +107,10 @@ public final class DevEntry {
         if (!verifyRunState.isEmpty()) {
             RunStateClientCheck.startClient(Path.of(verifyRunState));
         }
+        String verifyAe2L2 = System.getProperty("modreloader.verifyAe2L2", "").trim();
+        if (!verifyAe2L2.isEmpty()) {
+            Ae2L2Check.start(verifyAe2L2);
+        }
         String verifyCompat = System.getProperty("modreloader.verifyCompat", "").trim();
         if (!verifyCompat.isEmpty()) {
             CompatCheck.start(verifyCompat);

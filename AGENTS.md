@@ -203,6 +203,11 @@ JAVA_HOME=~/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x/jdk-21.0.12.1+1/Conten
 # 构造期直接注册的残留路径（问题 35）：fixture 在构造器里直接 Registry.register
 ./gradlew runClient -PverifyCompat=/tmp/t4fixture/t4fixture-1.0.0.jar -PfailAfterConstruct=true -PdirectRegister=true
 
+# AE2 的 L2：标题屏热加 GuideME→AE2（需 -PlateAt），建世界后打开指南书与无线终端界面
+./gradlew runClient -PnoFocus=true \
+  -PverifyAe2L2=/tmp/modreloader-corpus/guideme-21.1.22.jar,/tmp/modreloader-corpus/appliedenergistics2-19.2.20.jar \
+  -PlateAt=true
+
 # 多 jar 场景只让一个模组失败（配合 failAfterModList / failAfterConstruct）
 #   -PfailAfterModListModId=<modId> / -PfailAfterConstructModId=<modId>
 
