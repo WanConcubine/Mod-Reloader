@@ -68,6 +68,10 @@
 
 ### 已验证
 
+- **Mixin agent 语义探针（P1-13，2026-11-19）**：`reflect/AgentTransformers` 只读扫描 Mixin agent 自己的
+  Instrumentation/transformer；`MixinAgentGuard` 据此安装，并在 late AT 与“重定义已加载目标”前检查：
+  agent 存在但包不上时拒绝，避免 `ClassFormatError`（问题 40）。实测 minimap、Jade late AT 均
+  `mixin agent guard installed (1 transformer(s) wrapped)`。
 - **Mixin 锁序语义探针（P1-13，2026-11-19）**：`LaunchPluginMonitor.probe()` 在启动时真正解析出 issue 54
   依赖的锁对象并写日志；解析失败会让 `mixin_hotadd` 变为 missing，引擎在 transform 前拒绝（避免死锁）。
   客户端与专用服实测 `Mixin lock-order monitor: resolved`、`mixin_hotadd=ok`；同时去掉了 hotadd 里唯一的

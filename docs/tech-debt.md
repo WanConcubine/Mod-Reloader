@@ -69,8 +69,13 @@ mixin 落定 / payload / capability / 命令重放；任一之后再失败即置
   `applyMixins` 在 transform 之前以 `CAPABILITY` 拒绝，而不是冒 issue 54 的死锁风险。
 - 顺带移除 `hotadd` 里唯一的客户端类字面量（`Minecraft.class` 回退），改用自身 classloader 向上找
   `TransformingClassLoader`；专用服启动实测 `Mixin lock-order monitor: resolved`、`mixin_hotadd=ok`。
-**剩余**：其余 227 处仍是“名字检查 + 使用时报错”；下一优先级是 `MixinAgentGuard` 的 agent 发现
-（问题 40/47）与 `Instrumentation` 可用性。
+- `reflect/AgentTransformers`：只读扫描 Mixin agent 自己的 `Instrumentation` → `mTransformerList` →
+  `MixinAgent$Transformer`，区分“没有 agent（无需保护）”与“agent 在但 transformer 找不到（结构变了）”。
+  `MixinAgentGuard` 用它做安装，并在两处 redefine 前按结果拒绝：
+  `LateAccessTransformers`（总是 redefine 已加载类）和 `MixinSupport`（目标已加载时）——
+  agent 在但包不上时以可读错误失败，而不是冒 `ClassFormatError`（问题 40）。
+**剩余**：其余 ~226 处仍是“名字检查 + 使用时报错”；下一优先级是 `Instrumentation` 可用性
+（`JvmAccess.get()` 的自附加路径）与 agent/redefine 的语义边界。
 
 ### P1-14 并发模型是局部补丁
 

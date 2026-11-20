@@ -107,6 +107,11 @@ public final class LateAccessTransformers {
         // InjectionError, JBR reports ClassFormatError). Suspend it for every
         // target of this jar while we capture + redefine.
         try (MixinAgentGuard ignored = MixinAgentGuard.suspend(instrumentation, byTarget.keySet())) {
+        if (!MixinAgentGuard.safeToRedefine()) {
+            return fail("the Mixin agent guard is unavailable (" + MixinAgentGuard.detail()
+                    + "); refusing late access transforms, which would be re-transformed by "
+                    + "Mixin's agent");
+        }
         for (Map.Entry<String, List<AccessTransformerRules.Rule>> entry : byTarget.entrySet()) {
             String target = entry.getKey();
             Class<?> type;

@@ -13,6 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import dev.modreloader.reflect.UnsafeAccess;
 import dev.modreloader.inspect.MixinRuntimeApi;
+import dev.modreloader.reflect.AgentTransformers;
 
 /**
  * Stops Mixin's agent from re-transforming the bytes we already mixed.
@@ -46,11 +47,26 @@ final class MixinAgentGuard implements AutoCloseable {
             new java.util.concurrent.atomic.AtomicInteger();
     private static final AtomicBoolean INSTALL_ATTEMPTED = new AtomicBoolean();
     private static volatile boolean installed;
+    private static volatile boolean agentPresent;
+    private static volatile String detail = "not probed";
 
     private final Set<String> mine = new HashSet<>();
     private boolean armed;
 
     private MixinAgentGuard() {
+    }
+
+    /**
+     * True when a redefine is safe: no Mixin agent on this side, or its
+     * transformer was wrapped. Only meaningful after the first {@link #suspend}.
+     */
+    static boolean safeToRedefine() {
+        return !agentPresent || installed;
+    }
+
+    /** Why the guard was/was not installed; goes into the refusal message. */
+    static String detail() {
+        return detail;
     }
 
     /** Adds the targets to the suppression window; never throws. */
@@ -95,44 +111,15 @@ final class MixinAgentGuard implements AutoCloseable {
 
     private static void install(Instrumentation instrumentation) {
         try {
-            // Each Java agent gets its own InstrumentationImpl; the Mixin agent
-            // registered its transformer through the instance MixinRuntime created,
-            // not through ours (which has an empty transformer list).
-            Instrumentation owner = mixinInstrumentation(instrumentation);
-            List<String> seen = new ArrayList<>();
+            AgentTransformers.Scan scan = AgentTransformers.scan(
+                    MixinRuntimeApi.class.getClassLoader(), instrumentation);
+            agentPresent = scan.agentPresent();
+            detail = scan.detail();
             int replaced = 0;
-            for (String field : new String[]{
-                    "mRetransfomableTransformerManager", "mTransformerManager"}) {
-                Object manager = UnsafeAccess.get(owner, owner.getClass(), field);
-                if (manager == null) {
-                    continue;
-                }
-                Object[] infos = (Object[]) UnsafeAccess.get(manager, manager.getClass(),
-                        "mTransformerList");
-                if (infos == null) {
-                    continue;
-                }
-                for (Object info : infos) {
-                    if (info == null) {
-                        continue;
-                    }
-                    Object transformer = UnsafeAccess.get(info, info.getClass(), "mTransformer");
-                    if (!(transformer instanceof ClassFileTransformer delegate)) {
-                        continue;
-                    }
-                    String name = delegate.getClass().getName();
-                    seen.add(name + "@" + System.identityHashCode(delegate));
-                    // Only the Mixin agent is wrapped. Other transformers (module
-                    // tracker, dist cleaner) keep their position; a single redefine
-                    // opts into blanket suppression instead, which covers them too
-                    // without re-registering anything mid-load.
-                    if (!name.equals(AGENT_TRANSFORMER)) {
-                        continue;
-                    }
-                    if (owner.removeTransformer(delegate)) {
-                        owner.addTransformer(new Guard(delegate), true);
-                        replaced++;
-                    }
+            for (AgentTransformers.Found found : scan.found()) {
+                if (found.instrumentation().removeTransformer(found.transformer())) {
+                    found.instrumentation().addTransformer(new Guard(found.transformer()), true);
+                    replaced++;
                 }
             }
             installed = replaced > 0;
@@ -140,22 +127,15 @@ final class MixinAgentGuard implements AutoCloseable {
                 ModReloader.LOGGER.info(
                         "[ModReloader] mixin agent guard installed ({} transformer(s) wrapped; "
                                 + "targets are suppressed only during redefine windows)", replaced);
+            } else if (!scan.found().isEmpty()) {
+                detail = "MixinAgent transformer found but could not be wrapped";
+                ModReloader.LOGGER.warn("[ModReloader] {}", detail);
             } else {
-                ModReloader.LOGGER.info("[ModReloader] instrumentation transformers: {}", seen);
+                ModReloader.LOGGER.info("[ModReloader] mixin agent guard not installed: {}", detail);
             }
         } catch (Throwable t) {
+            detail = "guard installation failed: " + t.getClass().getSimpleName();
             ModReloader.LOGGER.warn("[ModReloader] cannot install the mixin agent guard", t);
-        }
-    }
-
-    private static Instrumentation mixinInstrumentation(Instrumentation fallback) {
-        try {
-            Class<?> agent = Class.forName("org.spongepowered.tools.agent.MixinAgent", false,
-                    MixinRuntimeApi.class.getClassLoader());
-            Instrumentation mixin = UnsafeAccess.getStatic(agent, "instrumentation");
-            return mixin == null ? fallback : mixin;
-        } catch (Throwable t) {
-            return fallback;
         }
     }
 

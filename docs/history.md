@@ -2082,3 +2082,13 @@ clientfixture（GUI 层/物品装饰）PASS、`minimap` PASS、`moonlight-lateat
   向上找 `TransformingClassLoader`。
 - 证据：client `minimap` PASS（日志 `Mixin lock-order monitor: resolved`、`mixin_hotadd=ok`）；
   专用服 RunState harness PASS（同样 resolved/ok）；单测 111、build 绿。
+
+## 2026-11-19（P1-13 第二步：Mixin agent 语义探针）
+
+- 新增 `reflect/AgentTransformers`：只读扫描 Mixin agent 的 `Instrumentation`（`MixinAgent.instrumentation`，
+  回退调用方实例）→ 两个 manager 字段 → `mTransformerList` → `MixinAgent$Transformer`，返回
+  “无 agent / 找到 N 个 / agent 在但 transformers 不可读或无目标”三种可区分结果。
+- `MixinAgentGuard` 改用它安装；`safeToRedefine()` = 本侧无 agent 或已包上。两处在 redefine 前拒绝：
+  `LateAccessTransformers`（总是重定义已加载类）与 `MixinSupport`（目标已加载时），错误信息带扫描原因。
+- 证据：`minimap` PASS（`mixin agent guard installed (1 transformer(s) wrapped)`）；`tooltip-lateat`
+  Jade `ok=true`；build 绿、单测 111。

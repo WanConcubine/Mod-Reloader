@@ -454,6 +454,13 @@ public final class MixinSupport {
                 String dotted = target.replace('/', '.');
                 Class<?> type = loaded.get(dotted);
                 if (type != null) {
+                    if (!MixinAgentGuard.safeToRedefine()) {
+                        errors.add("refusing to redefine " + dotted + ": "
+                                + MixinAgentGuard.detail()
+                                + ". Redefining already-mixed bytes without the guard would "
+                                + "transform them twice (issue 40); restart with the jar in mods/");
+                        continue;
+                    }
                     rollback.add("restore class " + dotted,
                             () -> redefineBack(instrumentation, type, originals.get(dotted), dotted));
                     redefine(instrumentation, type, mixedBytes.get(dotted), originals.get(dotted),
