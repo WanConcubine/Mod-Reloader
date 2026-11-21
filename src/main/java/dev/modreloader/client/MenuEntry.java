@@ -1,6 +1,7 @@
 package dev.modreloader.client;
 
 import dev.modreloader.ModReloader;
+import dev.modreloader.hotadd.ModernUIAdapter;
 import dev.modreloader.ui.ModReloaderScreen;
 import dev.modreloader.watch.ModsFolderWatcher;
 import net.minecraft.client.Minecraft;
@@ -42,6 +43,9 @@ public final class MenuEntry {
         int y = MARGIN;
         event.addListener(new LogoButton(x, y, SIZE,
                 Component.translatable("modreloader.gui.entry"), MenuEntry::open));
+        // Opt-in ModernUI adapter: a screen opened after the add may use a Font that
+        // missed the mixin field; fill it before the first draw.
+        ModernUIAdapter.ensureFontBackfilled();
         ModReloader.LOGGER.debug("[ModReloader] menu entry added to {}",
                 screen.getClass().getSimpleName());
     }

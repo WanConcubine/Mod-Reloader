@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit;
  * the client (render) thread; classes are loaded through the game layer's loader
  * so the hot-added mod's own copy is used.
  */
-final class ModernUIAdapter {
+public final class ModernUIAdapter {
     static final String PROPERTY = "modreloader.modernuiAdapter";
     private static final String MOD_ID = "modernui";
     private static final String CORE = "icyllis.modernui.core.Core";
@@ -34,7 +34,7 @@ final class ModernUIAdapter {
     private ModernUIAdapter() {
     }
 
-    static boolean enabled() {
+    public static boolean enabled() {
         return Boolean.parseBoolean(System.getProperty(PROPERTY, "false"));
     }
 
@@ -134,6 +134,46 @@ final class ModernUIAdapter {
         return root.getClass().getName() + (root.getMessage() == null ? "" : ": " + root.getMessage());
     }
 
+    /**
+     * Safety net for screens that open later (ChatScreen's EditBox): if the live
+     * Font lost/never had the mixin field, fill it from the same source the mixin
+     * uses. Cheap: one field read; logs only when it actually writes.
+     */
+    public static void ensureFontBackfilled() {
+        if (!enabled() || !dev.modreloader.Platform.isClient()
+                || !net.neoforged.fml.ModList.get().isLoaded(MOD_ID)) {
+            return;
+        }
+        try {
+            Object minecraft = minecraft();
+            if (minecraft == null) {
+                return;
+            }
+            Object font = minecraft.getClass().getField("font").get(minecraft);
+            if (font == null) {
+                return;
+            }
+            Class<?> fontType = Class.forName("net.minecraft.client.gui.Font");
+            Object current = dev.modreloader.reflect.UnsafeAccess.get(font, fontType,
+                    "modernUI_MC$textRenderer");
+            if (current != null) {
+                return;
+            }
+            Class<?> engineType = Class.forName("icyllis.modernui.mc.text.TextLayoutEngine");
+            Object engine = engineType.getMethod("getInstance").invoke(null);
+            Object renderer = engine.getClass().getMethod("getTextRenderer").invoke(engine);
+            if (renderer == null) {
+                return;
+            }
+            dev.modreloader.reflect.UnsafeAccess.set(font, fontType,
+                    "modernUI_MC$textRenderer", renderer);
+            ModReloader.LOGGER.info("[ModReloader] modernui adapter: re-backfilled the live Font "
+                    + "field (was null)");
+        } catch (Throwable t) {
+            ModReloader.LOGGER.debug("[ModReloader] modernui font re-backfill failed", t);
+        }
+    }
+
     private static void run() throws Throwable {
         Class<?> core = Class.forName(CORE);
         core.getMethod("initialize").invoke(null);
@@ -184,6 +224,7 @@ final class ModernUIAdapter {
             type.getMethod("preloadShaders").invoke(null);
             ModReloader.LOGGER.info("[ModReloader] modernui adapter: TextRenderType.preloadShaders() "
                     + "replayed after the shader rebuild");
+            ensureFontBackfilled();
             return null;
         } catch (Throwable t) {
             ModReloader.LOGGER.error("[ModReloader] modernui adapter (shaders) failed", t);
