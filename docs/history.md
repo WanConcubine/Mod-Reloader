@@ -2451,3 +2451,9 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
 - 根因：AE2 在 `AppEngBase` 构造器里 `AEConfig.register(...)` 创建单例；in-world add 先对已加载类 redefine
   mixin、后 construct，服务器线程在窗口内继续 tick，导致注入代码读到未初始化静态状态。标题屏 add 无 tick，故未暴露。
 - 状态：只记录 + 三个方案（A 服务器 tick 屏障 / B 调整顺序 / C 拒绝 in-world mixin），待所有者拍板。
+
+### 问题 67 真机确认（2026-11-21 23:13 会话）
+
+- 真机日志 `logs/2026-11-21-7.log.gz`：热加 Create 后出现 4 条
+  `preserved 1 load-time access flag(s) on ...`（`UseOnContext` / `DispenserBlock` / `BlockEntityType` / `RenderType`），
+  整段 **0 次 `IllegalAccessError`**；21:57 会话（旧 jar）的 `BlockStateBase.useItemOn` 崩溃未再出现。问题 67 结案。

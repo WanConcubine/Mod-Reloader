@@ -72,6 +72,11 @@
 
 ### 已验证
 
+- **启动期 AT 在热加 redefine 后保留（问题 67，2026-11-21 真机确认）**：23:13 会话热加 Create 后，
+  `logs/2026-11-21-7.log.gz` 出现 4 条 `preserved 1 load-time access flag(s) on ...`
+  （`UseOnContext` / `DispenserBlock` / `BlockEntityType` / `RenderType`），整段日志 **0 次 `IllegalAccessError`**；
+  21:57 旧 jar 会话的方块交互崩溃未再出现。
+
 - **Create L2（问题 65 + 66，2026-11-21 dev client + 增强 JBR）**：`-PverifyCreatePonder=<create-6.0.10>` 在标题屏
   热加 Create（flywheel/ponder/create 三容器、52 个 accessor 接口、`datapack registries registered:
   [create:potato_projectile/type]`），再用真实建世界流程进入世界并断言：`create:potato_projectile/type entries=25`、
@@ -215,49 +220,11 @@
 
 ## 已知问题 / 坑
 
-> 追加式账本，**编号稳定**（引用不变）。共 68 条：待解决 3 / 验证缺口 4 / 结构性边界 18 / 历史与注记 15 / 已修 28。
-> **当前 actionable（3）**：61 Sodium 单例 mixin 字段、67 启动期 AT（修法已部署待真机）、68 in-world add 的 mixin→construct 竞态（AE2 崩，待方案）。
+> 追加式账本，**编号稳定**（引用不变）。共 68 条：待解决 2 / 验证缺口 4 / 结构性边界 18 / 历史与注记 15 / 已修 29。
+> **当前 actionable（2）**：61 Sodium 单例 mixin 字段、68 in-world add 的 mixin→construct 竞态（AE2 崩，待方案）。
 > **64 是待拍板的结构性边界**（方法级 `-f`）。**65/66 已修**（accessor 接口改写、数据包注册表重放；66 真机已越过创造栏）。
 
 ### 待解决（需改代码）
-
-67. **热加后方块交互 `IllegalAccessError`：启动期 AT 在 redefine 时被原始字节覆盖（2026-11-21 真机）**：
-    Create 热加、进世界后手持/穿戴铜潜水头盔右键方块，`BlockBehaviour$BlockStateBase.useItemOn` 抛
-    `IllegalAccessError: ... tried to access protected method UseOnContext.<init>(...)`
-    （`crash-reports/crash-2026-11-21_21.57.01-client.txt`）。
-    **分析**：`UseOnContext.<init>` 的 `public` 来自 **NeoForge 启动期 AT**（
-    `META-INF/accesstransformer.cfg`：`public ... UseOnContext <init>(...)V`），不在 Create 的 AT 里，所以
-    `LateAccessTransformers` 没碰它（日志 40 规则/29 应用，无 UseOnContext）。`MixinSupport.captureOriginals`
-    从**类资源**读原始字节（protected），热加又用这份字节 transform + redefine 了 `UseOnContext`（21:55:54），
-    随后 `BlockStateBase` 也被 mixin redefine，首次执行 `useItemOn` 链接调用点时该构造器已是 protected → 访问检查失败。
-    同一机制还会让**失败回滚**把 AT 加宽还原成原始访问。
-    **修法（已实现，待真机复验）**：`MixinSupport.transplantLiveAccess` 把 live 类的可见性/final
-    （类/字段/方法，反射 `getModifiers()`）移植到从类资源读出的字节上，`captureOriginals` 与
-    `processLoadedAccessors` 都走这条路径（顺带让回滚字节也保留加载期 AT）；只动可见性/final，
-    synthetic/bridge/varargs/enum 等标志保持字节原样。
-    **dev 无法判定的原因**：dev 的 `neoforge-...-merged.jar` 在构建期已应用 AT，`UseOnContext.<init>`
-    资源本身就是 public；因此 `-PverifyCreatePonder` 即使断言 public + 真实 `gameMode.useItemOn`
-    （返回值 `PASS`）也只证明路径可跑，**真机右键方块才是 67 的唯一判据**。
-    真机日志应出现 `preserved N load-time access flag(s) on net.minecraft.world.item.context.UseOnContext`
-    （dev 跑到了同名日志，但只对 `BlockEntityType` 触发 1 处）。**属 late AT/加载期 AT 的通用缺口，不只 Create。**
-
-68. **in-world add 的 mixin→construct 竞态：注入代码先于模块初始化运行（2026-11-21 真机）**：单人世界内热加 AE2
-    时集成服务器崩：`crash-reports/crash-2026-11-21_23.17.58-server.txt`，
-    `ChunkMap.handler$zcj000$ae2$spatialAnchorEnableRandomTicks` → `AEConfig.instance()` 为 null。
-    **时间线（`2026-11-21-7.log.gz`）**：23:17:14 `hot-adding [ae2]` → 23:17:51 `ChunkMap` 被 redefine
-    （mixin 注入生效）→ 23:17:58 服务器 tick 进入注入 handler 崩 → 23:18:00 mixin 阶段结束 →
-    23:18:02 `loaded 2 config(s) for ae2`（construct 内）→ 23:18:08 `hot-added [ae2]`。
-    AE2 的 `AEConfig.instance()` 在 `AppEngBase` **构造器**里 `AEConfig.register(...)` 赋值，所以 mixin 生效后的
-    ~10–15s 窗口内服务器每 tick 都可能执行依赖未初始化静态状态的注入代码。标题屏 add 没有 tick，故一直没暴露；
-    AE2 的 J1（标题屏 L2）不受影响。
-    **可选修法**：
-    - **A（推荐）服务器 tick 屏障**：`applyTargets` 的 redefine 循环前取得屏障（在服务器线程上挂一个等待 latch 的任务），
-      construct（含配置/common setup 初始化）结束后释放；`ServerThreadHop` 在屏障期间改为 inline 以免自锁。
-      语义不变，代价是服务器冻结数秒（需评估 dedicated watchdog）。transformation（~40s）仍在屏障外。
-    - **B 调整顺序**：in-world 时先 construct/config，再 redefine 已加载目标。实现小，但违背启动期顺序
-      （构造器里使用自己 mixin 的模组会坏）。
-    - **C 拒绝**：in-world + mixin 直接拒绝/提示标题屏加。最安全但回退产品能力，需所有者拍板。
-    **待所有者选择方案**；选 A 的话需要一个“屏障期间 ServerThreadHop 内联”的配套。
 
 61. **Sodium 热加后旧渲染对象崩溃（2026-11-19；2026-11-20 分析）**：`sodium-lateat` 中 Sodium ok=true（含 4 个
     fabric 库、约 64 类 redefine）。已修 `ShaderInstance.uniformCache` NPE（add 前重建 shader 实例）。
@@ -370,6 +337,23 @@
 55. **「已选 JBR 仍要重启」是产品失败（2026-11-18 所有者）**：玩家已在启动器选了 JBR，却因缺 `-XX:+AllowEnhancedClassRedefinition` 被要求再重启——把实现细节转嫁给玩家，不可接受。**2026-11-18 收口为单一动作「为热加载增强环境做准备」**：菜单（未就绪时常驻）与失败屏都指向同一入口；已安装/正在运行的 JBR 直接复用；缺失时官方下载 → SHA-512 → 解压到 `gameDir/jbr-21.0.11`；随后自动重启并带齐 `-XX:+AllowEnhancedClassRedefinition` + `-Dmodreloader.lateAt=true`。**仍余缺口**：参数只能启动时给，启动器每次不带参数则每会话最多一次自动重启；跨会话永久生效需要启动器/整合包预设或 classloader 隔离/软重启。**2026-11-20 补**：lateAt 不再依赖第二个属性——检测到增强 JBR 即自动启用（显式 `-Dmodreloader.lateAt=false` 可关），玩家点一次准备环境后不再遇到 AT 开关类阻塞。
 
 ### 已修
+
+67. ✅ **热加后方块交互 `IllegalAccessError`：启动期 AT 在 redefine 时被原始字节覆盖（2026-11-21 真机确认已修）**：
+    Create 热加、进世界后手持/穿戴铜潜水头盔右键方块，`BlockBehaviour$BlockStateBase.useItemOn` 抛
+    `IllegalAccessError: ... tried to access protected method UseOnContext.<init>(...)`
+    （`crash-reports/crash-2026-11-21_21.57.01-client.txt`）。
+    **分析**：`UseOnContext.<init>` 的 `public` 来自 **NeoForge 启动期 AT**（
+    `META-INF/accesstransformer.cfg`：`public ... UseOnContext <init>(...)V`），不在 Create 的 AT 里，所以
+    `LateAccessTransformers` 没碰它（日志 40 规则/29 应用，无 UseOnContext）。`MixinSupport.captureOriginals`
+    从**类资源**读原始字节（protected），热加又用这份字节 transform + redefine 了 `UseOnContext`（21:55:54），
+    随后 `BlockStateBase` 也被 mixin redefine，首次执行 `useItemOn` 链接调用点时该构造器已是 protected → 访问检查失败。
+    同一机制还会让**失败回滚**把 AT 加宽还原成原始访问。
+    **修法**：`MixinSupport.transplantLiveAccess` 把 live 类的可见性/final（类/字段/方法，反射 `getModifiers()`）
+    移植到从类资源读出的字节上，`captureOriginals` 与 `processLoadedAccessors` 都走这条路径（顺带让回滚字节
+    也保留加载期 AT）；只动可见性/final，synthetic/bridge/varargs/enum 等标志保持字节原样。
+    真机证据（2026-11-21 23:13 会话，`logs/2026-11-21-7.log.gz`）：热加 Create 后日志出现
+    `preserved 1 load-time access flag(s) on net.minecraft.world.item.context.UseOnContext`（另有 DispenserBlock /
+    BlockEntityType / RenderType 各 1），且整段日志 **0 次 `IllegalAccessError`**；此前 21:57 会话（旧 jar）正是该异常。
 
 66. ✅ **热加模组的数据包注册表未注册（2026-11-21，dev L2 验证；Create 真机复验待做）**：Create 用
     `DataPackRegistryEvent.NewRegistry` 注册 `create:potato_projectile/type` 等数据包注册表（codec 进
@@ -576,10 +560,10 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近三条。
 
-- **2026-11-21（问题 67 修复，待真机）：启动期 AT 在 redefine 时保留**：`transplantLiveAccess` 把活类的
-  可见性/final 移植到类资源字节（transform 与回滚都走），针对 `UseOnContext.<init>` 这类 NeoForge 启动期 AT。
-  dev merged jar 构建期已应用 AT、无法复现，真机右键是唯一判据；jar 已部署（sha `80e08684…`）。
-  Create 白名单暂留 J2。另记录专用服「世界加载前热加」缺口（数据包注册表只对下一个世界生效）。
+- **2026-11-21（67 真机确认 + 68 记录）**：真机日志 4 条 `preserved ...`、0 次 `IllegalAccessError` → 67 结案。
+  同会话在**世界内**热加 AE2 崩于 mixin→construct 竞态（`ChunkMap` 注入先于 `AEConfig` 构造，
+  服务器 tick 读到 null），记录问题 68 与三个方案（服务器 tick 屏障 / 调整顺序 / 拒绝 in-world mixin），待拍板。
+  另记录专用服「世界加载前热加」缺口（数据包注册表只对下一个世界生效）。
 
 - **2026-11-21（问题 66 修复：数据包注册表）**：热加漏发 `DataPackRegistryEvent.NewRegistry`，Create 的
   `create:potato_projectile/type` 不在 level registry access → 打开机械动力创造栏渲染马铃薯炮崩。
