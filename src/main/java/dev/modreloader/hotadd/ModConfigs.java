@@ -3,8 +3,10 @@ package dev.modreloader.hotadd;
 import dev.modreloader.ModReloader;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.config.ConfigTracker;
+import net.minecraft.server.MinecraftServer;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.loading.FMLPaths;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodType;
@@ -56,18 +58,25 @@ public final class ModConfigs {
                 if (config.getLoadedConfig() != null) {
                     continue;
                 }
+                // SERVER configs live in <world>/serverconfig. A title-screen add has
+                // no world yet; an in-world add does, and the mod's own tick code reads
+                // these values (Create: AllConfigs.server() NPEs when null).
+                Path serverPath = null;
                 if (config.getType() == ModConfig.Type.SERVER) {
-                    ModReloader.LOGGER.warn(
-                            "[ModReloader] {} has a SERVER config; hot-add cannot load it "
-                                    + "(needs the world's serverconfig path). Restart to apply it.",
-                            config.getFileName());
-                    continue;
+                    serverPath = serverConfigPath();
+                    if (serverPath == null) {
+                        ModReloader.LOGGER.warn(
+                                "[ModReloader] {} has a SERVER config but no world is loaded; "
+                                        + "it will stay unloaded until a restart",
+                                config.getFileName());
+                        continue;
+                    }
                 }
                 // openConfig() resolves <configDir>/<fileName>, loads it and posts
                 // ModConfigEvent.Loading; calling loadConfig() again would re-read
                 // (and on a missing/partially written file, try to recreate) it.
                 handles();
-                openConfig.invoke(config, configDir, null);
+                openConfig.invoke(config, configDir, serverPath);
                 loaded++;
             }
             ModReloader.LOGGER.info("[ModReloader] loaded {} config(s) for {}: {}",
@@ -76,6 +85,16 @@ public final class ModConfigs {
         } catch (Throwable t) {
             ModReloader.LOGGER.warn("[ModReloader] config load failed for {}; "
                     + "mods reading config values will misbehave", container.getModId(), t);
+        }
+    }
+
+    /** The running world's config directory, or {@code null} at the title screen. */
+    private static Path serverConfigPath() {
+        try {
+            MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+            return server == null ? null : server.getServerDirectory().resolve("serverconfig");
+        } catch (Throwable t) {
+            return null;
         }
     }
 
