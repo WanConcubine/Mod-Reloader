@@ -2421,3 +2421,11 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
 - 计划修法：`MixinSupport` 增加“从活类移植访问标志”（反射 modifiers → 类/字段/方法），
   应用到 transform 后字节与回滚字节；回归断言 `UseOnContext.<init>` 仍 public，并真实触发 `useItemOn`。
 - 当前处理：**只记录，未改代码**（按所有者要求先记录并推送今日改动）。Create 白名单暂留 J2。
+
+## 2026-11-21（拉取 Windows 批次并同步文档）
+
+- 快进拉取 38 个提交（`7867463`）：问题 64–67、ModernUI opt-in 适配、包装 jar、datapack 注册表重放、
+  专用服一等目标与命令权限 2、Create/Mekanism/architectury 回归。
+- 构建：`./gradlew build` 成功，新 jar `build/libs/modreloader-1.21.1-0.1.0.jar`（479,858 B，sha256 `e80b92d3…`）。
+- 白名单实际 61 行（stock T1=7/BLACK=23；jbr J1=22/J2=5/BLACK=4）；同步 release notes 矩阵、
+  verified 列表（Architectury/Controlling/JEI）与 J2 缺陷（Create/ModernUI），并修掉 status.md 的损坏行。

@@ -502,7 +502,6 @@
 
 ## 下一步
 
-));
 > **当前交接（2026-11-21）**：本日完成 Mekanism/问题 58 复验（hot-add PASS）、问题 64（方法级 `-f`，JBR 边界）、
 > ModernUI opt-in 适配（六步链路真机 PASS）、包装 jar（mezz → JEI 依赖链）、服务器一等目标（SERVER 配置更正、
 > MixinAgentGuard/AT side/CLIENT 配置三处修复、专用服 Create/Mekanism/architectury/runState/why 全 PASS、
@@ -515,8 +514,7 @@
 > **环境**：构建用 `X:` subst + 本地 Gradle 8.10（`--init-script X:/neoforged-mirror.init.gradle`）；
 > 专用服 dev 跑法 `runServer -x downloadAssets -PjbrJava=...`，并在 `build/moddev/minecraft_assets.properties`
 > 写 `assets_root`/`asset_index` 指向 `.minecraft/assets`（本机 PKIX 拦截资产下载）；`run/mods` 需 MixinRuntime。
-> **注意**：本地 `main` 比 `origin/main` 多 30 个提交（含本次 merge `e804261`），推送因 GitHub 网络 reset 未完成，
-> 恢复网络后 `git push origin main`。
+> **注意**：2026-11-21 的 30 个提交已推送；本机拉取后 `origin/main = 7867463`。
 > 证据在 [history.md](history.md)；语料/夹具：`run/`、`.minecraft/.../modreloader/staging`、`corpus/j1`。
 
 | 优先 | 任务 | 关键点 / 落点 | 验收 |
@@ -524,7 +522,7 @@
 | **P1-3** | ✅ Git 收尾 | GitHub Actions 最新 `e0a0646` 为 success；需要时打 tag | Actions 绿 |
 | **P0-新** | 流水线 L2 | 标题屏热加 → 建世界 → N tick → HUD/按键/截图；先 minimap/mouse-gestures | 断言 + 截图证据 |
 | **P0-新** | 语料扩到 20–30 个常用模组 | 小地图/JEI/HUD/输入/前置库；`check` 进 PR | 报告 + 矩阵 |
-| **P0-新** | 模组白名单实测（所有者驱动） | 61 行：stock T1×7 / BLACK×23；JBR J1×25 / J2×2 / BLACK×4；candidate 由所有者复测转 verified | TSV + 视图同步 |
+| **P0-新** | 模组白名单实测（所有者驱动） | 61 行：stock T1×7 / BLACK×23；JBR J1×22 / J2×5 / BLACK×4；candidate 由所有者复测转 verified | TSV + 视图同步 |
 | **P0-新** | ✅ Xaero's World Map config channel | `XaeroLibChannels` 窗口（`ConfigChannelRegistry.frozen`），仅对引用该类的 jar 生效；World Map `ok=true isLoaded=true` | 已转 J2 |
 | **P0-新** | 服务端一次性事件（问题 52） | `ServerLifecycleReplay` 已实现（定向调用新增监听器 + integrated server 兜底），**未验证**：进入世界复跑卡在 54 | World Map J1 |
 | **P0-新** | xaerolib mixin 阶段挂起（问题 54） | 先 `jstack` 留线程栈再杀；怀疑 Mixin/transform 锁或常驻 guard | 复跑不挂 |
@@ -582,4 +580,4 @@
   `Screen.renderWithTooltip`/`AbstractWidget.render` 去 final 后约 2 秒崩溃，`-Xint` 复现，xlog BCI 为负）。
 - **2026-11-20（0.1.0 release notes 草案）**：`docs/releases/0.1.0.md` 按“只承诺 verified + 可选扩展 +
   已知限制 + 存档警告”组织；支持矩阵与 `tools/whitelist.py check` 一致（61 行：stock T1=7/BLACK=23；
-  jbr J1=25/J2=2/BLACK=4）。candidate/fixing 不作为发布承诺。
+  jbr J1=22/J2=5/BLACK=4）。candidate/fixing 不作为发布承诺。
