@@ -2328,3 +2328,11 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
   现在输出 `note: access transformers via late AT` 且判词与 add 一致。
 - 环境备注：dev dedicated server 需要 `-x downloadAssets` 并手写 `build/moddev/minecraft_assets.properties`
   （`assets_root` + `asset_index`）指向现有 `.minecraft/assets`，绕开本机 PKIX 资产下载；`run/mods` 需放 MixinRuntime。
+
+### 服务器命令门禁（2026-11-21）
+
+专用服上 `/modreloader` 原先没有权限要求（Brigadier 默认 permission 0），任何能打命令的玩家都能热加 jar。
+`ReloaderCommands.registerServer` 现在在根节点加 `.requires(source -> source.hasPermission(2))`：控制台（4）与 OP（2+）
+可用，普通玩家不可。客户端命令（`RegisterClientCommandsEvent`）不受影响，单机/本地照旧。
+验证：`ServerAddCmdCheck` 新增断言——permission-0 命令源执行 `modreloader ping` 被拒（`denied=true`），
+控制台 `serverAddCommand` 仍 `RESULT: PASS`。

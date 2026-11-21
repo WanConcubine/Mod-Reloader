@@ -65,7 +65,7 @@
 | **工程底座** | `capabilities` 10 组全 ok；无 `libs/` 可 `clean build`；**118 个无游戏 Java 单测**；i18n 两语言**各 197 key** | `./gradlew build`/`test`；[tech-debt.md](tech-debt.md) |
 | **ModernUI 适配（opt-in 实验）** | 真机 PASS（2026-11-21）：构造前 `Core.initialize + initOpenGL`（UI 线程据此建 recording context）→ 构造后回填 `Minecraft.font`/`fontFilterFishy` 的 `modernUI_MC$textRenderer` → shader 重建后 `TextRenderType.preloadShaders()`；每 tick/每屏兜底回填。`-Dmodreloader.modernuiAdapter=true` 才启用 | `hotadd/ModernUIAdapter`；白名单 J2 |
 | **SERVER 配置** | 世界内热加：引擎立即从 `<world>/serverconfig` 加载；标题屏热加：FML 在**世界启动**时自动加载；**专用服不加载 CLIENT 配置**。实测：Create 专用服热加 `loaded 2 config(s): create-common.toml, create-server.toml` | `hotadd/ModConfigs` |
-| **专用服热加（一等目标）** | 2026-11-21 本机 dev dedicated server：Create `serverAddCommand` **PASS**（registry? 否；flywheel/ponder/create，configs common+server）；Mekanism **PASS**（registry 93、blocks→1260、items→1714、AT 客户端目标跳过）；architectury **PASS**；`serverRunState`（failAfterRegistry）**PASS**（dirty + 周期告警 + 第二次 add 拒绝）；`serverWhy` **PASS**（判词按 late AT 修正后与 add 一致） | `runServer -PserverAddCommand/-PserverRunState/-PserverWhy`；[mod-whitelist](features/mod-whitelist.md) |
+| **专用服热加（一等目标）** | 2026-11-21 本机 dev dedicated server：Create `serverAddCommand` **PASS**（registry? 否；flywheel/ponder/create，configs common+server）；Mekanism **PASS**（registry 93、blocks→1260、items→1714、AT 客户端目标跳过）；architectury **PASS**；`serverRunState`（failAfterRegistry）**PASS**（dirty + 周期告警 + 第二次 add 拒绝）；`serverWhy` **PASS**（判词按 late AT 修正后与 add 一致）；`/modreloader` 服务端要求 permission 2（控制台/OP），permission-0 源被拒（harness 实测） | `runServer -PserverAddCommand/-PserverRunState/-PserverWhy`；[mod-whitelist](features/mod-whitelist.md) |
 
 ## 验证状态
 

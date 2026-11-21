@@ -109,6 +109,21 @@ public final class ServerAddCmdCheck {
             ok &= expect(suggestions.contains(typed),
                     "completion list does not offer " + typed + " -> " + suggestions);
 
+            // A jar hot-add is an operator action on a shared server: console (4)
+            // and OPs (2+) may run it, a regular player (0) must not.
+            CommandSourceStack player = server.createCommandSourceStack()
+                    .withPermission(0).withSuppressedOutput();
+            boolean denied;
+            try {
+                denied = server.getCommands().getDispatcher()
+                        .execute("modreloader ping", player) == 0;
+            } catch (Throwable deniedSyntax) {
+                denied = true;
+            }
+            ModReloader.LOGGER.info("[ServerAddCmd] permission gate: permission-0 source denied={}",
+                    denied);
+            ok &= expect(denied, "a permission-0 source must not run /modreloader");
+
             // The console ends up in the same place: a Brigadier parse + execute on
             // the server's dispatcher with the console command source.
             String command = "modreloader add " + typed;
