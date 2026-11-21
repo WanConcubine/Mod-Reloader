@@ -15,9 +15,10 @@
 
 - `state`：`candidate` = 只过了 harness（待所有者实例确认）；`verified` = 已确认；
   `fixing` / `fixed` / `wontfix` = 修 bug 的状态。
-- 同一个 mod 在 stock 与 JBR 下**各占一行**；两行结论可以不同（例：stock BLACK / JBR J1）。
-- J1/J2 里的 **AT 模组**需要 **JBR + `-Dmodreloader.lateAt=true`**；只开
-  `-XX:+AllowEnhancedClassRedefinition` 不够（late AT 是单独的实验开关）。
+- **桶位是（JVM 环境, 模组）的组合，不是模组的全局属性**：BLACK 只表示“在**该环境**下结构性不可热加”，换一个环境可能变成 T1/J1/J2（例：Balm 为 stock BLACK / JBR J1）。同一环境内不会重复入桶。
+- J1/J2 里的 **AT 模组**需要 **JBR + `-XX:+AllowEnhancedClassRedefinition`**；
+  增强 JBR 下 late AT 自 2026-11-20 起自动启用（`-Dmodreloader.lateAt=false` 可关）。
+- stock 已可热加（T1/T2）的模组**不单列 J1/J2**：T1/T2 是更强结论，JBR 复验写进同一行的证据。
 - tier 是运行期**实际用到**的 tier（pin/fei/guifei/huanghou），不是预测。
 
 ## 总览
@@ -25,11 +26,11 @@
 | 环境 | 可热加、无 bug | 可热加、有 bug | 判不可加但可救 | 结构性不可加 |
 |---|---|---|---|---|
 | stock | T1 × 7 | T2 × 0 | T3 × 0 | BLACK × 23 |
-| JBR | J1 × 23 | J2 × 5 | — | BLACK × 4 |
+| JBR | J1 × 22 | J2 × 5 | — | BLACK × 4 |
 
 ## stock JVM（不靠 JBR）
 
-### T1 · 可热加，未发现 bug（7）
+### STOCK · T1 · 可热加，未发现 bug（7）
 
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|
@@ -37,11 +38,11 @@
 | JECharacters | jecharacters-neoforge-4.5.15.jar | PIN | candidate | - | stock harness 2026-11-17 ok=true isLoaded=true（coremod 晚注入） |
 | Rhino | rhino-2101.2.7-build.81+Rhino-1.21.jar | PIN | candidate | - | stock harness 2026-11-17 ok=true isLoaded=true |
 | Searchables | Searchables-neoforge-1.21.1-1.0.2.jar | FEI | candidate | - | stock harness 2026-11-17 CompatCheck ok=true isLoaded=true (title screen) |
-| Simple Voice Chat | voicechat-neoforge-1.21.1-2.6.27.jar | HUANGHOU | candidate | - | stock harness 2026-11-18 ok=true isLoaded=true |
+| Simple Voice Chat | voicechat-neoforge-1.21.1-2.6.27.jar | HUANGHOU | candidate | - | stock harness 2026-11-18 ok=true isLoaded=true；JBR harness 2026-11-18 也 ok=true（无 AT；lateAt 批次） |
 | 众星捧月（Ex Nihilo: Satellitium） | exnihilosatellitium-1.21.1-1.5.0.jar | GUIFEI | verified | - | owner 2026-11-17：实际可用，加入一等；stock harness 2026-11-17 ok=true isLoaded=true（注册表 add-only + datapack；存档会绑定该 mod、不可回滚） |
 | 苹果皮（AppleSkin） | appleskin-neoforge-mc1.21-3.0.9.jar | PIN | candidate | - | stock harness 2026-11-17 CompatCheck ok=true isLoaded=true |
 
-### BLACK · 结构性不可热加（23）
+### STOCK · BLACK · 结构性不可热加（23）
 
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|
@@ -71,7 +72,7 @@
 
 ## JBR（enhanced redefinition）
 
-### J1 · JBR 下可热加，未发现 bug（23）
+### JBR · J1 · JBR 下可热加，未发现 bug（22）
 
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|
@@ -86,7 +87,6 @@
 | GuideME | guideme-21.1.22.jar | HUANGHOU | verified | - | pipeline ae2-lateat L1 2026-11-19（lateAt 47 条 AT，ok=true）；L2 2026-11-20：AE2 指南书 GuideScreen 正常打开（-PverifyAe2L2） |
 | ModernFix | modernfix-neoforge-5.27.27+mc1.21.1.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18：单独与批次（GeckoLib→FerriteCore→ModernFix→MouseTweaks）均 ok=true isLoaded=true；MixinAgentGuard + 新 config 隔离 |
 | Moonlight Lib | moonlight-1.21.1-3.8.3-neoforge.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18：NewRegistryEvent 重放已实现（3 个注册表创建、commit 90→92、blocks 1060→1061、items 1333→1335、stoneId 稳定），ok=true isLoaded=true；所有者实例复测后转 verified |
-| Simple Voice Chat | voicechat-neoforge-1.21.1-2.6.27.jar | HUANGHOU | candidate | - | JBR harness 2026-11-18 ok=true isLoaded=true（无 AT；lateAt 批次） |
 | Supplementaries | supplementaries-1.21.1-4.1.1-neoforge.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18：JiJ 递归 + 自定义注册表 + 模型层重放后 ok=true isLoaded=true；blocks 1061→1306、items 1335→1584、层 213→234。2026-11-19 复跑：MapRenderer$MapInstance 的两次 @WrapOperation 冲突 → 用预混字节 + 全部 configs 重组后 ok=true；所有者实例复测后转 verified |
 | Xaero 小地图（Xaero's Minimap） | xaerominimap-neoforge-1.21.1-26.6.0.jar | HUANGHOU | candidate | - | JBR harness 2026-11-17 ok=true isLoaded=true（含 JiJ xaerolib） |
 | ZeroCore2 | ZeroCore2-1.21.1-2.4.9.jar | GUIFEI | candidate | - | JBR harness 2026-11-17 ok=true isLoaded=true |
@@ -99,7 +99,7 @@
 | 饰品栏（Curios） | curios-neoforge-9.5.1+1.21.1.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（late AT 16 rule） |
 | 鼠标手势（Mouse Tweaks） | MouseTweaks-neoforge-mc1.21-2.26.1.jar | FEI | candidate | - | JBR harness 2026-11-17 ok=true isLoaded=true（redefined AbstractContainerScreen） |
 
-### J2 · JBR 下可热加，但有 bug（5）
+### JBR · J2 · JBR 下可热加，但有 bug（5）
 
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|
@@ -109,7 +109,7 @@
 | 现代化 UI（ModernUI） | [现代化 UI] ModernUI-NeoForge-1.21.1-3.13.0.1-universal.jar | GUIFEI | verified | 需 -Dmodreloader.modernuiAdapter=true（实验适配）；未启用时热加会崩（UI thread/recording context、Font/fontFilterFishy 字段） | owner report 2026-11-21 Windows/PCL2：opt-in 适配 PASS——Core.initialize+initOpenGL、Font 与 fontFilterFishy 回填、TextRenderType.preloadShaders；hot-added + 打开聊天框无崩溃（未启用时 crash-2026-11-21_16.57.15-client.txt） |
 | 钠（Sodium） | sodium-neoforge-0.8.13+mc1.21.1.jar | FEI | fixing | 热加 ok=true；已有实例的 mixin 新增字段不初始化（结构边界）：Minecraft.fences NPE → 配置未初始化 → SpriteContents$Ticker.parent NPE；A 预检标注 J2，B 适配为 opt-in 实验 | 2026-11-20：标题屏热加 B 修好 fences/config/ticker.parent/BET 谓词/LevelRenderer.renderer 后不崩；进世界仍停在 BlockColors 状态（sodium$getProviders NPE） |
 
-### BLACK · 结构性不可热加（4）
+### JBR · BLACK · 结构性不可热加（4）
 
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|

@@ -118,9 +118,11 @@ def render(rows) -> str:
     out.append("")
     out.append("- `state`：`candidate` = 只过了 harness（待所有者实例确认）；`verified` = 已确认；")
     out.append("  `fixing` / `fixed` / `wontfix` = 修 bug 的状态。")
-    out.append("- 同一个 mod 在 stock 与 JBR 下**各占一行**；两行结论可以不同（例：stock BLACK / JBR J1）。")
-    out.append("- J1/J2 里的 **AT 模组**需要 **JBR + `-Dmodreloader.lateAt=true`**；只开")
-    out.append("  `-XX:+AllowEnhancedClassRedefinition` 不够（late AT 是单独的实验开关）。")
+    out.append("- **桶位是（JVM 环境, 模组）的组合，不是模组的全局属性**：BLACK 只表示“在**该环境**下结构性不可热加”，"
+    "换一个环境可能变成 T1/J1/J2（例：Balm 为 stock BLACK / JBR J1）。同一环境内不会重复入桶。")
+    out.append("- J1/J2 里的 **AT 模组**需要 **JBR + `-XX:+AllowEnhancedClassRedefinition`**；")
+    out.append("  增强 JBR 下 late AT 自 2026-11-20 起自动启用（`-Dmodreloader.lateAt=false` 可关）。")
+    out.append("- stock 已可热加（T1/T2）的模组**不单列 J1/J2**：T1/T2 是更强结论，JBR 复验写进同一行的证据。")
     out.append("- tier 是运行期**实际用到**的 tier（pin/fei/guifei/huanghou），不是预测。")
     out.append("")
     out.append("## 总览")
@@ -143,7 +145,7 @@ def render(rows) -> str:
             if not group:
                 continue
             empty = False
-            out.append("### " + BUCKET_TITLES[bucket] + "（%d）" % len(group))
+            out.append("### " + jvm.upper() + " · " + BUCKET_TITLES[bucket] + "（%d）" % len(group))
             out.append("")
             out.append("| 模组 | jar | tier | state | bug | 证据 |")
             out.append("|---|---|---|---|---|---|")
