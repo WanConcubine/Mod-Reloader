@@ -261,7 +261,9 @@ public final class Relauncher {
             // 3. Prove a replacement JVM is actually running before this one leaves.
             //    On Windows the child's command line may be unreadable, so it writes
             //    a marker itself as soon as it boots (Relauncher.signalStarted).
-            if (!awaitReplacement(gameDir, pid, 12)) {
+            //    The marker is written from the child's mod-loading phase; with a
+            //    large mod set that can take well over the old 12 s window.
+            if (!awaitReplacement(gameDir, pid, 60)) {
                 return Optional.of("the replacement game did not start" + tail(gameDir));
             }
             ModReloader.LOGGER.info("[ModReloader] replacement game started; exiting this process");

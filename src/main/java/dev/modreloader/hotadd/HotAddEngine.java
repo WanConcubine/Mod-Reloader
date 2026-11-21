@@ -10,7 +10,6 @@ import dev.modreloader.inspect.ModInspection;
 import dev.modreloader.inspect.ModInspector;
 import dev.modreloader.inspect.RegistrationAudit;
 import dev.modreloader.inspect.RegistrationAuditScanner;
-import dev.modreloader.launch.Relauncher;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.loading.moddiscovery.ModFile;
@@ -29,7 +28,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -167,9 +165,6 @@ public final class HotAddEngine {
             if ((failure = prepareModules(run)) != null) return recordFailure(run, failure);
             if ((failure = applyMixins(run)) != null) return recordFailure(run, failure);
             if ((failure = applyCoremods(run)) != null) return recordFailure(run, failure);
-            // Before the constructor: its config load (ModConfigs.load) runs right
-            // after @Mod construct and already touches the text/SDF pipeline.
-            if ((failure = modernUiAdapter(run)) != null) return recordFailure(run, failure);
             if ((failure = registerModList(run)) != null) return recordFailure(run, failure);
             if ((failure = construct(run)) != null) return recordFailure(run, failure);
             if ((failure = commitRegistry(run)) != null) return recordFailure(run, failure);
@@ -684,30 +679,6 @@ public final class HotAddEngine {
     }
 
     /** CONSTRUCT (+ guifei registry window) and the notice to connected clients. */
-    /**
-     * Opt-in ModernUI replay (see {@link ModernUIAdapter}). Its renderer init runs
-     * only from {@code RenderSystem.initRenderer} at startup, and the UI thread it
-     * starts while constructing cannot be rolled back, so a failure must end the
-     * process (managed relaunch) instead of returning to a half-initialized game.
-     */
-    private static Result modernUiAdapter(Run run) {
-        if (!Platform.isClient() || !run.ids.contains("modernui") || !ModernUIAdapter.enabled()) {
-            return null;
-        }
-        String error = ModernUIAdapter.initialize();
-        if (error == null) {
-            return null;
-        }
-        ModReloader.LOGGER.error("[ModReloader] modernui adapter failed: {}; its UI thread "
-                + "cannot be rolled back, restarting instead of continuing", error);
-        Optional<String> relaunch = Relauncher.saveAndRestartCurrentClient(
-                "modernui adapter failed: " + error);
-        relaunch.ifPresent(reason -> ModReloader.LOGGER.error(
-                "[ModReloader] cannot relaunch after the modernui adapter failed: {}", reason));
-        return fail(run.rollback, Stage.CONSTRUCT, FailureKind.UNKNOWN,
-                "modernui adapter failed: " + error + "; restart required");
-    }
-
     private static Result construct(Run run) throws Throwable {
         Rollback rollback = run.rollback;
         Set<String> ids = run.ids;

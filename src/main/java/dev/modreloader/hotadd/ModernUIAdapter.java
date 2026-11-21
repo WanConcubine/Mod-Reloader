@@ -39,6 +39,29 @@ final class ModernUIAdapter {
     }
 
     /**
+     * Called right after the mod's {@code @Mod} constructor and before its config
+     * load. On failure neither the add nor the game can continue safely (the mod's
+     * own threads cannot be rolled back), so this restarts and then throws.
+     */
+    static void afterConstruct(String modId) {
+        if (!MOD_ID.equals(modId) || !enabled() || !dev.modreloader.Platform.isClient()) {
+            return;
+        }
+        String error = initialize();
+        if (error == null) {
+            return;
+        }
+        ModReloader.LOGGER.error("[ModReloader] modernui adapter failed: {}; its threads cannot be "
+                + "rolled back, restarting instead of continuing", error);
+        dev.modreloader.launch.Relauncher.saveAndRestartCurrentClient(
+                        "modernui adapter failed: " + error)
+                .ifPresent(reason -> ModReloader.LOGGER.error(
+                        "[ModReloader] cannot relaunch after the modernui adapter failed: {}",
+                        reason));
+        throw new IllegalStateException("modernui adapter failed: " + error + "; restart required");
+    }
+
+    /**
      * @return {@code null} when the adapter does not apply or the init succeeded;
      *         otherwise why it failed (the caller must not roll back and continue)
      */
@@ -60,13 +83,24 @@ final class ModernUIAdapter {
                     run();
                     result.complete(null);
                 } catch (Throwable t) {
-                    result.complete(String.valueOf(t));
+                    ModReloader.LOGGER.error("[ModReloader] modernui adapter (render thread) failed", t);
+                    result.complete(rootCause(t));
                 }
             });
             return result.get(60, TimeUnit.SECONDS);
         } catch (Throwable t) {
-            return String.valueOf(t);
+            ModReloader.LOGGER.error("[ModReloader] modernui adapter failed", t);
+            return rootCause(t);
         }
+    }
+
+    /** {@code InvocationTargetException} hides the real failure; unwrap it. */
+    private static String rootCause(Throwable t) {
+        Throwable root = t;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        return root.getClass().getName() + (root.getMessage() == null ? "" : ": " + root.getMessage());
     }
 
     private static void run() throws Throwable {

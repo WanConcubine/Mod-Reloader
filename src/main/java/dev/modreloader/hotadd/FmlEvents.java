@@ -42,6 +42,11 @@ public final class FmlEvents {
         context.setActiveContainer(container);
         try {
             construct.invoke(container);
+            // ModernUI's renderer init normally runs from RenderSystem.initRenderer at
+            // startup; replay it after the constructor (its own state is ready there)
+            // and before the config load below, whose reload touches the text/SDF
+            // pipeline. Opt-in; fails the add + restarts instead of continuing.
+            ModernUIAdapter.afterConstruct(container.getModId());
             // registerConfig() only records the spec; FML normally loads it in the
             // startup sequence, so a hot-added mod would throw on the first read.
             ModConfigs.load(container);
