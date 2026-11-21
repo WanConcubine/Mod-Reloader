@@ -30,6 +30,8 @@ public final class ModernUIAdapter {
     private static final String CORE = "icyllis.modernui.core.Core";
     private static final String CONTEXT_OPTIONS = "icyllis.arc3d.engine.ContextOptions";
     private static final String CLIENT = "icyllis.modernui.mc.ModernUIClient";
+    /** Every live Font Minecraft keeps: ChatScreen's EditBox uses fontFilterFishy. */
+    private static final String[] FONT_FIELDS = {"font", "fontFilterFishy"};
 
     private ModernUIAdapter() {
     }
@@ -76,17 +78,21 @@ public final class ModernUIAdapter {
             if (minecraft == null) {
                 return "no client instance";
             }
-            Object font = minecraft.getClass().getField("font").get(minecraft);
-            if (font == null) {
-                return "Minecraft.font is null";
-            }
             Class<?> fontType = Class.forName("net.minecraft.client.gui.Font");
-            dev.modreloader.reflect.UnsafeAccess.set(font, fontType,
-                    "modernUI_MC$textRenderer", renderer);
-            ModReloader.LOGGER.info("[ModReloader] modernui adapter: backfilled "
-                    + "Font.modernUI_MC$textRenderer on the live Font (id={})",
-                    System.identityHashCode(font));
-            return null;
+            boolean any = false;
+            for (String name : FONT_FIELDS) {
+                Object font = minecraft.getClass().getField(name).get(minecraft);
+                if (font == null) {
+                    continue;
+                }
+                dev.modreloader.reflect.UnsafeAccess.set(font, fontType,
+                        "modernUI_MC$textRenderer", renderer);
+                any = true;
+                ModReloader.LOGGER.info("[ModReloader] modernui adapter: backfilled "
+                        + "Font.modernUI_MC$textRenderer on Minecraft.{} (id={})",
+                        name, System.identityHashCode(font));
+            }
+            return any ? null : "no live Font instance to backfill";
         } catch (Throwable t) {
             ModReloader.LOGGER.error("[ModReloader] modernui adapter (after construct) failed", t);
             return rootCause(t);
@@ -150,26 +156,32 @@ public final class ModernUIAdapter {
             if (minecraft == null) {
                 return;
             }
-            Object font = minecraft.getClass().getField("font").get(minecraft);
-            if (font == null) {
-                return;
-            }
             Class<?> fontType = Class.forName("net.minecraft.client.gui.Font");
-            Object current = dev.modreloader.reflect.UnsafeAccess.get(font, fontType,
-                    "modernUI_MC$textRenderer");
-            if (current != null) {
-                return;
+            Object renderer = null;
+            for (String name : FONT_FIELDS) {
+                Object font = minecraft.getClass().getField(name).get(minecraft);
+                if (font == null) {
+                    continue;
+                }
+                Object current = dev.modreloader.reflect.UnsafeAccess.get(font, fontType,
+                        "modernUI_MC$textRenderer");
+                if (current != null) {
+                    continue;
+                }
+                if (renderer == null) {
+                    Class<?> engineType = Class.forName("icyllis.modernui.mc.text.TextLayoutEngine");
+                    Object engine = engineType.getMethod("getInstance").invoke(null);
+                    renderer = engine.getClass().getMethod("getTextRenderer").invoke(engine);
+                    if (renderer == null) {
+                        return;
+                    }
+                }
+                dev.modreloader.reflect.UnsafeAccess.set(font, fontType,
+                        "modernUI_MC$textRenderer", renderer);
+                ModReloader.LOGGER.info("[ModReloader] modernui adapter: re-backfilled "
+                        + "Minecraft.{} Font field (was null, id={})",
+                        name, System.identityHashCode(font));
             }
-            Class<?> engineType = Class.forName("icyllis.modernui.mc.text.TextLayoutEngine");
-            Object engine = engineType.getMethod("getInstance").invoke(null);
-            Object renderer = engine.getClass().getMethod("getTextRenderer").invoke(engine);
-            if (renderer == null) {
-                return;
-            }
-            dev.modreloader.reflect.UnsafeAccess.set(font, fontType,
-                    "modernUI_MC$textRenderer", renderer);
-            ModReloader.LOGGER.info("[ModReloader] modernui adapter: re-backfilled the live Font "
-                    + "field (was null, id={})", System.identityHashCode(font));
         } catch (Throwable t) {
             ModReloader.LOGGER.debug("[ModReloader] modernui font re-backfill failed", t);
         }
