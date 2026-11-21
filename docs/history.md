@@ -2441,3 +2441,13 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
 - 部署：PCL 与 server-kit 同步更新，sha256 `80e08684…dcf5`；server-kit 内含 Windows JBR 步骤。
 - 专用服边界（问题 66 的延伸）：专用服世界先于控制台可用的时间点加载，add 后当前世界看不到新的
   数据包注册表；已记录为下一步「世界加载前热加」。
+
+### 问题 68（记录）：in-world add 的 mixin→construct 竞态（AE2 真机）
+
+- 真机：单人世界内热加 AE2 19.2.20，集成服务器 tick 崩
+  `NPE: AEConfig.instance() is null`（`crash-reports/crash-2026-11-21_23.17.58-server.txt`）。
+- 时间线（`logs/2026-11-21-7.log.gz`）：23:17:14 开始 add → 23:17:51 `ChunkMap` redefine（注入生效）→
+  23:17:58 服务器 tick 崩 → 23:18:00 mixin 阶段结束 → 23:18:02 配置加载（construct 内）→ 23:18:08 add 完成。
+- 根因：AE2 在 `AppEngBase` 构造器里 `AEConfig.register(...)` 创建单例；in-world add 先对已加载类 redefine
+  mixin、后 construct，服务器线程在窗口内继续 tick，导致注入代码读到未初始化静态状态。标题屏 add 无 tick，故未暴露。
+- 状态：只记录 + 三个方案（A 服务器 tick 屏障 / B 调整顺序 / C 拒绝 in-world mixin），待所有者拍板。

@@ -215,8 +215,8 @@
 
 ## 已知问题 / 坑
 
-> 追加式账本，**编号稳定**（引用不变）。共 67 条：待解决 2 / 验证缺口 4 / 结构性边界 18 / 历史与注记 15 / 已修 28。
-> **当前 actionable（2）**：61 Sodium 单例 mixin 字段、67 启动期 AT 被 redefine 覆盖（Create 方块交互崩，已定位待修）。
+> 追加式账本，**编号稳定**（引用不变）。共 68 条：待解决 3 / 验证缺口 4 / 结构性边界 18 / 历史与注记 15 / 已修 28。
+> **当前 actionable（3）**：61 Sodium 单例 mixin 字段、67 启动期 AT（修法已部署待真机）、68 in-world add 的 mixin→construct 竞态（AE2 崩，待方案）。
 > **64 是待拍板的结构性边界**（方法级 `-f`）。**65/66 已修**（accessor 接口改写、数据包注册表重放；66 真机已越过创造栏）。
 
 ### 待解决（需改代码）
@@ -240,6 +240,24 @@
     （返回值 `PASS`）也只证明路径可跑，**真机右键方块才是 67 的唯一判据**。
     真机日志应出现 `preserved N load-time access flag(s) on net.minecraft.world.item.context.UseOnContext`
     （dev 跑到了同名日志，但只对 `BlockEntityType` 触发 1 处）。**属 late AT/加载期 AT 的通用缺口，不只 Create。**
+
+68. **in-world add 的 mixin→construct 竞态：注入代码先于模块初始化运行（2026-11-21 真机）**：单人世界内热加 AE2
+    时集成服务器崩：`crash-reports/crash-2026-11-21_23.17.58-server.txt`，
+    `ChunkMap.handler$zcj000$ae2$spatialAnchorEnableRandomTicks` → `AEConfig.instance()` 为 null。
+    **时间线（`2026-11-21-7.log.gz`）**：23:17:14 `hot-adding [ae2]` → 23:17:51 `ChunkMap` 被 redefine
+    （mixin 注入生效）→ 23:17:58 服务器 tick 进入注入 handler 崩 → 23:18:00 mixin 阶段结束 →
+    23:18:02 `loaded 2 config(s) for ae2`（construct 内）→ 23:18:08 `hot-added [ae2]`。
+    AE2 的 `AEConfig.instance()` 在 `AppEngBase` **构造器**里 `AEConfig.register(...)` 赋值，所以 mixin 生效后的
+    ~10–15s 窗口内服务器每 tick 都可能执行依赖未初始化静态状态的注入代码。标题屏 add 没有 tick，故一直没暴露；
+    AE2 的 J1（标题屏 L2）不受影响。
+    **可选修法**：
+    - **A（推荐）服务器 tick 屏障**：`applyTargets` 的 redefine 循环前取得屏障（在服务器线程上挂一个等待 latch 的任务），
+      construct（含配置/common setup 初始化）结束后释放；`ServerThreadHop` 在屏障期间改为 inline 以免自锁。
+      语义不变，代价是服务器冻结数秒（需评估 dedicated watchdog）。transformation（~40s）仍在屏障外。
+    - **B 调整顺序**：in-world 时先 construct/config，再 redefine 已加载目标。实现小，但违背启动期顺序
+      （构造器里使用自己 mixin 的模组会坏）。
+    - **C 拒绝**：in-world + mixin 直接拒绝/提示标题屏加。最安全但回退产品能力，需所有者拍板。
+    **待所有者选择方案**；选 A 的话需要一个“屏障期间 ServerThreadHop 内联”的配套。
 
 61. **Sodium 热加后旧渲染对象崩溃（2026-11-19；2026-11-20 分析）**：`sodium-lateat` 中 Sodium ok=true（含 4 个
     fabric 库、约 64 类 redefine）。已修 `ShaderInstance.uniformCache` NPE（add 前重建 shader 实例）。
