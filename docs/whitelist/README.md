@@ -75,7 +75,7 @@
 
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|
-| Architectury API | architectury-13.0.12-neoforge.jar | GUIFEI | verified | - | JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（ShaderReplay 事件重放；late AT 311 rule）；owner retest 2026-11-21 Windows/PCL2：311 rule/150 类、2 mixin config、isLoaded=true，热加后 3 分钟无崩溃（问题 64 对照组） |
+| Architectury API | architectury-13.0.12-neoforge.jar | GUIFEI | verified | - | JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（ShaderReplay 事件重放；late AT 311 rule）；owner retest 2026-11-21 Windows/PCL2：311 rule/150 类、2 mixin config、isLoaded=true，热加后 3 分钟无崩溃（问题 64 对照组）；专用服 2026-11-21 serverAddCommand PASS（J1 行同时覆盖 server 路径） |
 | Balm | balm-neoforge-1.21.1-21.0.67.jar | GUIFEI | candidate | - | JBR harness 2026-11-17 ok=true isLoaded=true（含 JiJ kuma_api） |
 | Cloth Config API | cloth-config-15.0.140-neoforge.jar | PIN | candidate | - | JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（late AT 3 rule） |
 | Comforts | comforts-neoforge-9.0.5+1.21.1.jar | GUIFEI | candidate | - | JBR harness 2026-11-18 ok=true isLoaded=true（Balm 先热加） |

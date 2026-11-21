@@ -2317,3 +2317,14 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
 - 客户端侧结论不变：标题屏 add 后进世界仍崩于 Ponder accessor 接口（问题 65），Create 保持 J2；
   专用服结论已单独写入白名单 evidence。
 - 契约：`AGENTS.md` 12.5「专用服务器是一等目标」（提交 e9cd16c）。
+
+## 2026-11-21（专用服回归批次：Create/Mekanism/architectury/runstate/why 全 PASS）
+
+- `-PserverAddCommand`：Create（flywheel/ponder/create）PASS；Mekanism PASS（`registry commit: 93`，
+  blocks 1060→1260、items 1333→1714，客户端 AT 目标 `not loadable on this side` 跳过）；architectury PASS。
+- `-PserverRunState=mekanism -PfailAfterRegistry=true`：PASS（dirty、周期告警 2 次、第二次 add 拒绝）。
+- `-PserverWhy`：PASS。首跑暴露判词不一致——`why` 只说“AT 拒绝”，而 add 在增强 JBR 下用 late AT 成功；
+  已让 `HotAddWhy` 与 `LateAccessTransformers.enabled()` 同规则（显式属性优先，否则增强 JBR），
+  现在输出 `note: access transformers via late AT` 且判词与 add 一致。
+- 环境备注：dev dedicated server 需要 `-x downloadAssets` 并手写 `build/moddev/minecraft_assets.properties`
+  （`assets_root` + `asset_index`）指向现有 `.minecraft/assets`，绕开本机 PKIX 资产下载；`run/mods` 需放 MixinRuntime。
