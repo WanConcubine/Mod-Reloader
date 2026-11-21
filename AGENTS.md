@@ -279,6 +279,10 @@ Gradle 编译用 21 toolchain，只有游戏运行用 JBR。**JBR 不是所有 m
 9. **不要夸大 A0**：A0 只支持嫔级（无 mixin、无注册表）；不要在文档/UI 里写成“支持任意模组”。
 10. **不要夸大 A1**：A1.2 只验证了 `lanserverproperties` + JBR + dev client（JBR 只在布局变更时需要，2026-11-16 收窄，见 a1 §10.4）；MixinRuntime 是**可选扩展**（optional + 只通过反射调用；缺它运行时照常启动、嫔级照常、妃级/Mixin 被拦；构建不需要 `libs/`）；失败回滚覆盖 post-ModList/post-pack，**2026-11-16 补了 post-construct 的游戏总线监听器**（`EventBusSnapshot`，按实例摘除，实测 38→38）；构造器里的其它副作用（静态状态/全局注册/线程）仍不可回滚，post-construct 之后重试经测量仍失败（FML `ModLoadingException`），所以那条路径是「干净回滚 + 重启」而不是「可重试」；存档回读：内容路径有专用服重启读档 PASS（`experiments/t4-fixture`），客户端内保存→重开未做；**服务端+客户端同时妃级已验证**（2026-11-16，两侧各热加 ZeroCore2，连接存活，`-PmpFeiServer` + `-PverifyMpFei`）；不等于通用妃级支持。
 11. **不要夸大 GUI/监听**：只验证了 EasyLAN、坏 jar、Ex Nihilo 贵妃级三个场景；`scan`/`gui` 命令、失败重试、忽略记录跨重启未自动验证（`add` 命令、世界内 toast、主菜单入口与忽略恢复已有 harness）；**皇后级只提示重启**；贵妃级走实验性 add-only 热加（UI 有警告，仅验证过 fixture）。
+12.5 **专用服务器是一等目标（2026-11-21 所有者）**：任何“客户端/内置服可用”的结论都不等于服务器可用。SERVER 配置、
+    命令、payload、注册表、datapack、生命周期事件都要在专用服路径上验证；不许用“跳过 + 重启”掩盖服务器缺口。
+    专用服验证不需要 GUI：`./gradlew runServer -PserverAddCommand=<jar>`（及 `-PserverWhy`/`-PserverRunState`/`-Pmp*Server`）。
+
 12. **多人（专用服 + 独立客户端）**：连接后热加同一批 jar 时，id 由服务端快照同步给客户端（见 [t4-registry-hotadd.md](docs/features/t4-registry-hotadd.md) §9）；
     两端条目集合不一致时客户端**拒绝应用**并提示，不会部分应用、不踢人。**客户端不装 jar 的模式仍不行**（registry 的值必须本地存在）。
     `runServer` 与 `runClient` 都走 JBR + `-XX:+AllowEnhancedClassRedefinition`，专用服妃级热加已验证（2026-11-16，status 已知问题 22）。
