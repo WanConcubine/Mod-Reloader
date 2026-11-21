@@ -2205,3 +2205,24 @@ Mekanism 10.7.19.85 在标题屏经 `/modreloader add` 加入。共跑 4 次（�
 - jar 已复位：Mekanism 回到 `modreloader/staging/`，`mods/` 恢复为 MixinRuntime + modreloader；后续需要把
   PCL 的诊断参数（`-Xint`、`-ShowHiddenFrames`、`-Xlog`）去掉再跑正常场景。
 - 状态源：58 转已修（hot-add 级 PASS），64 记为结构性边界，待产品决策（`VALIDATE` 拒绝/标 J2 或 workaround）。
+
+## 2026-11-21（包装 jar：MezzConfig standalone 可热加）
+
+白名单复测时 JEI 19.71 被预检拦下（缺 `mezz_config`）。所有者指出 JEI 自带 mezz，且本机
+`mezz_config-...-standalone.jar` 并不是“不可热加的库”：它是**发行包装**——外层 manifest
+`FMLModType: GAMELIBRARY`、没有 mods.toml，唯一载荷是 `META-INF/jarjar/mezz_config-...jar`，
+内层才是真 mod（modId=`mezz_config`，234 个类）。启动期 FML 的 jarjar locator 会自动拆开它
+（日志：`Found mod file "mezz_config-....jar" [parent: ...standalone.jar]`），热加路径之前只看外层，
+于是按 `FailureKind.LIBRARY` 拒绝。
+
+改动：
+- 新增 `inspect/WrapperJars`：纯 zip 判定（外层无 mods.toml + jarjar 内层有 `[[mods]]`），按 path/size/mtime
+  缓存；`nestedModIds` 供依赖检查使用（JEI 这类**自带**前置的外层 jar 不再误报 missing）。
+- 新增 `hotadd/WrapperJar.resolve`：命中包装时用 `JarInJar`（content-addressed）抽出内层 mod，add 管线
+  转到内层文件上执行；日志 `wrapper X: hot-adding the nested mod Y`。
+- `ModInspector`：包装 jar 返回内层 mod 的预料（tier 由嵌套 mods.toml 推断、未扫类）；外层 mod 的
+  jar-in-jar modId 计入依赖满足并写 `bundled (jar-in-jar)` 备注。
+- 测试：`WrapperJarsTest` 4 个（包装/自带 mod/非 mod 内层/无 jarjar）；**118 单测**，build 绿。
+
+待真机：把 standalone 从 `mods/` 移除后启动，标题屏 `/modreloader add mezz_config-...-standalone.jar`
+应成功注册 `mezz_config`；随后 JEI 能否热加取决于其自身是否真的内嵌 mezz（jar 需放回本机核对）。

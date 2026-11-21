@@ -20,6 +20,7 @@ import org.objectweb.asm.Opcodes;
 
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -28,6 +29,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -57,6 +60,10 @@ public final class ModInspector {
             IModFile candidate = new JarModsDotTomlModFileReader()
                     .read(JarContents.of(jar), ModFileDiscoveryAttributes.DEFAULT);
             if (!(candidate instanceof ModFile modFile)) {
+                ModInspection unwrapped = inspectWrapper(jar);
+                if (unwrapped != null) {
+                    return unwrapped;
+                }
                 return failed(jar, isGameLibrary(jar)
                         ? "library jar (FMLModType: GAMELIBRARY) declares no mods; "
                                 + "hot-add needs a mod container"
@@ -67,6 +74,10 @@ public final class ModInspector {
             }
             List<IModInfo> infos = modFile.getModInfos();
             if (infos.isEmpty()) {
+                ModInspection unwrapped = inspectWrapper(jar);
+                if (unwrapped != null) {
+                    return unwrapped;
+                }
                 return failed(jar, isGameLibrary(jar)
                         ? "library jar (FMLModType: GAMELIBRARY) declares no mods; "
                                 + "hot-add needs a mod container"
@@ -90,6 +101,12 @@ public final class ModInspector {
             boolean mixins = modFile.getMixinConfigs() != null && !modFile.getMixinConfigs().isEmpty();
             List<String> mixinNames = modFile.getMixinConfigs() == null ? List.of()
                     : modFile.getMixinConfigs().stream().map(ModFileParser.MixinConfig::config).toList();
+
+            // A bundled (jar-in-jar) mod is registered by the add pipeline before the
+            // outer mod's dependency check, so it satisfies dependencies even though it
+            // is not in ModList yet (JEI ships mezz_config this way).
+            List<String> bundledIds = WrapperJars.nestedModIds(jar);
+            hotIds.addAll(bundledIds);
 
             List<ModInspection.Dependency> dependencies = new ArrayList<>();
             for (IModInfo info : infos) {
@@ -130,6 +147,9 @@ public final class ModInspector {
             List<String> notes = new ArrayList<>();
             if (!mixinNames.isEmpty()) {
                 notes.add("mixins: " + mixinNames);
+            }
+            if (!bundledIds.isEmpty()) {
+                notes.add("bundled (jar-in-jar): " + bundledIds);
             }
             if (alreadyLoaded) {
                 notes.add("already loaded");
@@ -208,6 +228,89 @@ public final class ModInspector {
     private static ModInspection failed(Path jar, String error) {
         return new ModInspection(jar, jar.getFileName().toString(), List.of(), ModInspection.Tier.PIN,
                 false, false, false, false, false, false, List.of(), List.of(), error);
+    }
+
+    /**
+     * A distribution wrapper (no mods.toml of its own, one nested jar that has
+     * one). The add pipeline runs on the nested jar; this prediction reads the
+     * nested metadata only — classes are not scanned, so the tier stays PIN unless
+     * the nested toml declares mixins.
+     */
+    private static ModInspection inspectWrapper(Path wrapper) {
+        WrapperJars.Nested nested = WrapperJars.nestedMod(wrapper);
+        if (nested == null) {
+            return null;
+        }
+        try {
+            String toml = new String(nested.modsToml(), StandardCharsets.UTF_8);
+            String modId = modsValue(toml, "modId");
+            if (modId == null) {
+                return null;
+            }
+            String version = modsValue(toml, "version");
+            String displayName = modsValue(toml, "displayName");
+            Set<String> hotIds = new HashSet<>();
+            hotIds.add(modId);
+            hotIds.addAll(WrapperJars.nestedModIds(wrapper));
+            List<ModInspection.Dependency> dependencies = parseDependencies(toml, hotIds);
+            boolean alreadyLoaded = ModList.get() != null && ModList.get().isLoaded(modId);
+            boolean mixins = toml.contains("[[mixins]]");
+
+            List<String> notes = new ArrayList<>();
+            notes.add("wrapper: uses nested " + nested.nestedPath());
+            notes.add("wrapper tier inferred from the nested mods.toml (classes not scanned)");
+            for (ModInspection.Dependency dependency : dependencies) {
+                if (dependency.required() && !dependency.satisfied()) {
+                    notes.add("missing dependency: " + dependency.modId() + " "
+                            + dependency.versionRange());
+                }
+            }
+            ModInspection.Tier tier = mixins ? ModInspection.Tier.FEI : ModInspection.Tier.PIN;
+            return new ModInspection(wrapper, wrapper.getFileName().toString(),
+                    List.of(new ModInspection.Mod(modId,
+                            displayName == null ? modId : displayName,
+                            version == null ? "" : version)),
+                    tier, mixins, false, false, alreadyLoaded,
+                    "true".equalsIgnoreCase(plainValue(toml, "clientSideOnly")), false,
+                    dependencies, notes, null);
+        } catch (Throwable t) {
+            return failed(wrapper, "wrapper jar: cannot read the nested mod metadata (" + t + ")");
+        }
+    }
+
+    private static List<ModInspection.Dependency> parseDependencies(String toml, Set<String> hotIds) {
+        List<ModInspection.Dependency> dependencies = new ArrayList<>();
+        Matcher blocks = Pattern.compile("\\[\\[dependencies\\.[^\\]]+\\]\\]([^\\[]*)").matcher(toml);
+        while (blocks.find()) {
+            String body = blocks.group(1);
+            String id = plainValue(body, "modId");
+            if (id == null) {
+                continue;
+            }
+            String type = plainValue(body, "type");
+            String range = plainValue(body, "versionRange");
+            boolean required = "required".equalsIgnoreCase(type);
+            boolean satisfied = hotIds.contains(id)
+                    || (ModList.get() != null && ModList.get().isLoaded(id));
+            dependencies.add(new ModInspection.Dependency(id, range == null ? "" : range,
+                    required, satisfied));
+        }
+        return dependencies;
+    }
+
+    /** {@code key = "value"} inside the first {@code [[mods]]} block. */
+    private static String modsValue(String toml, String key) {
+        int start = toml.indexOf("[[mods]]");
+        if (start < 0) {
+            return null;
+        }
+        int end = toml.indexOf("[[", start + 8);
+        return plainValue(end < 0 ? toml.substring(start) : toml.substring(start, end), key);
+    }
+
+    private static String plainValue(String toml, String key) {
+        Matcher matcher = Pattern.compile("(?m)^\\s*" + key + "\\s*=\\s*\"([^\"]*)\"").matcher(toml);
+        return matcher.find() ? matcher.group(1) : null;
     }
 
     private static ScanResult scanJar(Path jar) {

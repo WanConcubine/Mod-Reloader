@@ -141,7 +141,24 @@ public final class HotAddEngine {
                     Stage.VALIDATE, FailureKind.RUNTIME_DIRTY, List.of());
         }
 
-        Run run = new Run(jar);
+        // A distribution wrapper (MezzConfig "standalone") has no mods.toml of its
+        // own; at startup FML's jarjar locator turns the nested jar into the mod.
+        // Do the same here so the regular pipeline runs on the nested file.
+        Path effectiveJar = jar;
+        try {
+            WrapperJar.Unwrapped unwrapped = WrapperJar.resolve(jar);
+            if (unwrapped != null) {
+                effectiveJar = unwrapped.effective();
+                ModReloader.LOGGER.info(
+                        "[ModReloader] wrapper {}: hot-adding the nested mod {}",
+                        jar.getFileName(), unwrapped.nestedPath());
+            }
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn("[ModReloader] cannot unwrap {}; using the outer jar",
+                    jar.getFileName(), t);
+        }
+
+        Run run = new Run(effectiveJar);
         try {
             Result failure;
             if ((failure = readModFile(run)) != null) return recordFailure(run, failure);
