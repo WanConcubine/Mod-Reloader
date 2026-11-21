@@ -85,6 +85,15 @@ public final class AddCommandCheck {
             System.getProperty("modreloader.verifyAddCommandWatchJar", "").trim();
 
     /**
+     * Optional jar added in-world before the command under test (e.g. AE2 needs
+     * GuideME first). Added directly, not through the command, so the command
+     * phase stays focused on the jar it asserts.
+     */
+    private static final String PRE_JAR =
+            System.getProperty("modreloader.verifyAddCommandPre", "").trim();
+    private static boolean preAdded;
+
+    /**
      * Optional datapack phase ({@code -PverifyDatapack=true}): proves the mod's
      * {@code data/} is live in the running world, not merely committed to the
      * registry — recipes, loot tables and tags are read back from the server.
@@ -221,6 +230,12 @@ public final class AddCommandCheck {
         if (!result.ready()) {
             return;
         }
+        // The dev client runs unfocused; with pauseOnLostFocus the integrated
+        // server stops ticking and the in-world race (issue 68) would never be
+        // exercised. A real (LAN/dedicated) server keeps ticking.
+        if (mc.options != null) {
+            mc.options.pauseOnLostFocus = false;
+        }
         ModReloader.LOGGER.info("[AddCmdCheck] in world: {}", mc.level.dimension().location());
         stage = Stage.RUN_COMMAND;
         ticks = 0;
@@ -232,6 +247,20 @@ public final class AddCommandCheck {
             // as ALREADY_LOADED. Go straight to the verification.
             ModReloader.LOGGER.info("[AddCmdCheck] title-screen mode: /modreloader add is skipped");
             stage = Stage.VERIFY;
+            ticks = 0;
+            return;
+        }
+        if (!preAdded && !PRE_JAR.isEmpty()) {
+            preAdded = true;
+            Path pre = Path.of(PRE_JAR);
+            ModReloader.LOGGER.info("[AddCmdCheck] pre-add {}", pre);
+            HotAddEngine.Result preResult = HotAddEngine.add(pre);
+            ModReloader.LOGGER.info("[AddCmdCheck] pre-add result: ok={} msg={}",
+                    preResult.ok(), preResult.message());
+            if (!preResult.ok()) {
+                fail("pre-add failed: " + preResult.message());
+                return;
+            }
             ticks = 0;
             return;
         }

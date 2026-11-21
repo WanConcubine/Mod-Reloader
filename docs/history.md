@@ -2457,3 +2457,16 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
 - 真机日志 `logs/2026-11-21-7.log.gz`：热加 Create 后出现 4 条
   `preserved 1 load-time access flag(s) on ...`（`UseOnContext` / `DispenserBlock` / `BlockEntityType` / `RenderType`），
   整段 **0 次 `IllegalAccessError`**；21:57 会话（旧 jar）的 `BlockStateBase.useItemOn` 崩溃未再出现。问题 67 结案。
+
+### 问题 68 实验：服务器 tick 屏障（2026-11-21 晚，失败，默认关闭）
+
+- 实现 `ServerTickBarrier`：首个 redefine 前用 `server.execute` 的 latch 停住服务器线程，construct + common setup +
+  payload 适配后释放；`ServerThreadHop` 在屏障期间 inline；`-Dmodreloader.tickBarrier=true` 才启用（默认 false）。
+- 结果：Create 世界内 add（`-PverifyAddCommand` + `pauseOnLostFocus=false`）冻结 26s 后 PASS；
+  **AE2 世界内 add（先 GuideME）两次都在 `VM_RedefineClasses` 里 JVM 崩溃**
+  （`hs_err_pid14388.log`/`hs_err_pid22700.log`，`EXCEPTION_ACCESS_VIOLATION`，Server thread `_thread_blocked`）；
+  关掉屏障两次都 PASS（AE2 的 AEConfig NPE 是概率性的，这次没撞上）。
+- 结论：A 在当前 JBR 上不安全，默认关闭；下一步 B（in-world 先 construct 再 mixin）或 C（拒绝 in-world mixin）。
+- 顺带：release 早于 payload 适配会让 Create 的 `clientbound_chain_conveyor` 被连接拒绝
+  （`may not be sent to the client`）；释放点已移到 `runSidedStartup` 末尾。
+- harness：新增 `-PverifyAddCommandPre`（AE2 需 GuideME）与 `pauseOnLostFocus=false`。

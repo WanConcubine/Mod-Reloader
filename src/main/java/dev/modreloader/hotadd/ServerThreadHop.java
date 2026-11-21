@@ -61,6 +61,13 @@ public final class ServerThreadHop {
      * @throws Throwable whatever the task threw; unwrapped from the hop
      */
     public static <T> T call(String what, Task<T> task) throws Throwable {
+        if (ServerTickBarrier.held()) {
+            // The server thread is parked in the tick barrier while an in-world add
+            // is between its first redefine and common setup. Nothing on the server
+            // side runs, so the exclusive access this hop exists for is already
+            // guaranteed - hopping would just wait for the parked thread.
+            return task.run();
+        }
         MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
         if (server == null) {
             // Title screen / a dedicated server that is not running yet: there is

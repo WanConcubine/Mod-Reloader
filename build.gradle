@@ -285,6 +285,11 @@ neoForge {
                 // at a time, and log a verdict per jar (comma-separated, deps first).
                 systemProperty 'modreloader.verifyCompat', verifyCompat
             }
+            if (providers.gradleProperty('tickBarrier').orNull != null) {
+                // Dev switch for the in-world add barrier (issue 68 experiments).
+                systemProperty 'modreloader.tickBarrier',
+                        providers.gradleProperty('tickBarrier').get()
+            }
             if (verifyCreatePonder) {
                 // Issue 65: hot-add Create, then force PonderRenderTypes.<clinit>,
                 // which goes through ponder's static @Invoker interface.
@@ -429,6 +434,11 @@ neoForge {
                 // Leave the world running after the automated gameplay checks so
                 // the manual items (barrel/crucible/compost) can be played.
                 systemProperty 'modreloader.verifyGameplayKeepOpen', 'true'
+            }
+            if (providers.gradleProperty('verifyAddCommandPre').orNull) {
+                // In-world add this jar before the one under test (AE2 needs GuideME).
+                systemProperty 'modreloader.verifyAddCommandPre',
+                        providers.gradleProperty('verifyAddCommandPre').get()
             }
             if (providers.gradleProperty('verifyAddCommandModId').orNull) {
                 systemProperty 'modreloader.verifyAddCommandModId',

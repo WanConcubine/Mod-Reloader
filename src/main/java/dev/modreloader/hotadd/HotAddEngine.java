@@ -197,6 +197,10 @@ public final class HotAddEngine {
             return succeed(run);
         } catch (Throwable t) {
             return recordFailure(run, unexpected(run, t));
+        } finally {
+            // Idempotent: a failure between the first redefine and common setup must
+            // not leave the server frozen.
+            ServerTickBarrier.release();
         }
     }
 
@@ -981,6 +985,11 @@ public final class HotAddEngine {
         //     screen); the side decides, the engine does not.
         run.commandsReplayed = true;
         hooks.replayCommands();
+        // The mod is constructed and every one-shot setup ran, including the payload
+        // setup of already-open connections. Only now may the server tick again:
+        // released earlier, Create's server tick sent a clientbound payload before
+        // its channel existed on the connection ("may not be sent to the client").
+        ServerTickBarrier.release();
         return null;
     }
 

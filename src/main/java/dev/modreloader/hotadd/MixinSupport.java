@@ -640,6 +640,13 @@ public final class MixinSupport {
             return new Applied(redefined, eager, deferred);
         }
 
+        // From here on the mixin is live on loaded classes while the mod itself is
+        // not constructed yet. At the title screen nothing ticks; in a running world
+        // the server thread would execute injected handlers against uninitialised
+        // static state (AE2's ChunkMap -> AEConfig.instance() null, issue 68). The
+        // engine releases the barrier after common setup.
+        ServerTickBarrier.hold("in-world add: mixins through common setup");
+
         Set<String> dottedTargets = new HashSet<>();
         for (String target : targets) {
             dottedTargets.add(target.replace('/', '.'));

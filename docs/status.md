@@ -226,6 +226,28 @@
 
 ### 待解决（需改代码）
 
+68. **in-world add 的 mixin→construct 竞态：注入代码先于模块初始化运行（2026-11-21 真机；方案 A 实验失败）**：
+    单人世界内热加 AE2 时集成服务器崩：`crash-reports/crash-2026-11-21_23.17.58-server.txt`，
+    `ChunkMap.handler$zcj000$ae2$spatialAnchorEnableRandomTicks` → `AEConfig.instance()` 为 null。
+    **时间线（`2026-11-21-7.log.gz`）**：23:17:14 `hot-adding [ae2]` → 23:17:51 `ChunkMap` redefine
+    （注入生效）→ 23:17:58 服务器 tick 进入注入 handler 崩 → 23:18:02 配置加载（construct 内）→ 23:18:08 完成。
+    AE2 在 `AppEngBase` 构造器里 `AEConfig.register(...)`。标题屏 add 无 tick；专用服**控制台** add 在服务器线程内
+    执行、tick 本来就停着，所以竞态主要打击**客户端/LAN 主机的世界内 add**。
+    **方案 A 实验（`ServerTickBarrier`，现默认关闭）**：首个 redefine 前用 `server.execute` 的 latch 停住服务器线程，
+    payload 适配后释放。Create 世界内 add 冻结 26s 后 PASS；但 **AE2 世界内 add 两次都在
+    `VM_RedefineClasses` 里 JVM 崩溃**（`EXCEPTION_ACCESS_VIOLATION`；`run/hs_err_pid14388.log`、
+    `hs_err_pid22700.log`，Server thread `_thread_blocked`），而同 harness 关掉屏障两次都 PASS
+    （AE2 竞态本身是概率性的）。屏障的崩溃风险高于它修掉的竞态，因此 `-Dmodreloader.tickBarrier`
+    默认 **false**，只用于继续排查。
+    顺带修正释放时机：早于 payload 适配释放会让 Create 的服务器 tick 发 `clientbound_chain_conveyor`
+    被拒（`may not be sent to the client`）；现释放点在 `runSidedStartup` 末尾。
+    **下一步（待拍板）**：
+    - **B**：in-world 时先 `registerModList`+`construct`（含配置）再 applyMixins，从根上消除窗口；
+      代价是 construct 看到未混入的已加载类（构造器依赖自身 mixin 的模组会坏）。
+    - **C**：in-world + mixin 直接拒绝并提示标题屏加（最安全，需所有者确认）。
+    harness 已加 `-PverifyAddCommandPre`（AE2 需先加 GuideME）与 `pauseOnLostFocus=false`
+    （让集成服务器真的 tick，否则测不到竞态）。
+
 61. **Sodium 热加后旧渲染对象崩溃（2026-11-19；2026-11-20 分析）**：`sodium-lateat` 中 Sodium ok=true（含 4 个
     fabric 库、约 64 类 redefine）。已修 `ShaderInstance.uniformCache` NPE（add 前重建 shader 实例）。
     **A（已实现）**：`MixinSupport` 检测“给有活单例的类新增实例字段”，成功消息标 `J2` 并列出目标
