@@ -174,6 +174,15 @@ public final class Relauncher {
     }
 
     /**
+     * For callers that must not name the client class (the hot-add engine).
+     * Same behaviour as {@link #saveAndRestart(Minecraft, String)}.
+     */
+    public static Optional<String> saveAndRestartCurrentClient(String reason) {
+        Minecraft minecraft = Minecraft.getInstance();
+        return minecraft == null ? Optional.of("no client") : saveAndRestart(minecraft, reason);
+    }
+
+    /**
      * B: restart on a different JVM. The caller must have confirmed with the user -
      * this overrides the launcher's choice for this session only; the next launch
      * still uses whatever the launcher is configured with.
