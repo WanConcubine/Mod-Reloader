@@ -63,7 +63,8 @@
 | **late AT（实验性）** | Jade 57/39、JEI 34/16、Controlling 1/1；Jade 回滚 39/39 ok；**类级 `public-f` 拒绝**（`stage=VALIDATE kind=ACCESS_TRANSFORMER`）；**方法级 `-f` 重定义后调用点崩（问题 64）**；**嵌套 mod AT 已接入**（2026-11-19：Create/Iris 越过嵌套 AT）；**增强 JBR 下自动启用**（`-Dmodreloader.lateAt=false` 可关） | `-PlateAt=true` 仅 dev 覆盖；[late-at.md](features/late-at.md) |
 | **失败回滚** | post-ModList / post-pack 恢复 ModList/module/config/类/资源包；post-construct 监听器按实例摘除 | `-PverifyRollback` / `-PfailAfterModList` / `-PfailAfterPack` / `-PfailAfterConstruct` |
 | **工程底座** | `capabilities` 10 组全 ok；无 `libs/` 可 `clean build`；**118 个无游戏 Java 单测**；i18n 两语言**各 197 key** | `./gradlew build`/`test`；[tech-debt.md](tech-debt.md) |
-| **ModernUI 适配（opt-in 实验）** | 复刻启动期 `MixinRenderSystem.onInitRenderer`：`Core.initialize()` → `ContextOptions` → `Core.initOpenGL(...)`；失败走托管重启（其 UI 线程不可回滚）。`-Dmodreloader.modernuiAdapter=true` 才启用 | `hotadd/ModernUIAdapter`；待真机 |
+| **ModernUI 适配（opt-in 实验）** | 真机 PASS（2026-11-21）：构造前 `Core.initialize + initOpenGL`（UI 线程据此建 recording context）→ 构造后回填 `Minecraft.font`/`fontFilterFishy` 的 `modernUI_MC$textRenderer` → shader 重建后 `TextRenderType.preloadShaders()`；每 tick/每屏兜底回填。`-Dmodreloader.modernuiAdapter=true` 才启用 | `hotadd/ModernUIAdapter`；白名单 J2 |
+| **SERVER 配置（世界内热加）** | 有世界时从 `world/serverconfig` 加载 SERVER 配置（此前一律跳过 → Create `AllConfigs.server()` NPE）；标题屏仍跳过并提示重启 | `hotadd/ModConfigs`；待复验 |
 
 ## 验证状态
 
@@ -190,8 +191,8 @@
 
 ## 已知问题 / 坑
 
-> 追加式账本，**编号稳定**（引用不变）。共 64 条：待解决 1 / 验证缺口 4 / 结构性边界 18 / 历史与注记 15 / 已修 26。
-> **当前 actionable（2）**：61 Sodium 单例 mixin 字段、64 方法级 `-f`（均为结构边界，需产品决策）。
+> 追加式账本，**编号稳定**（引用不变）。共 65 条：待解决 2 / 验证缺口 4 / 结构性边界 18 / 历史与注记 15 / 已修 26。
+> **当前 actionable（3）**：61 Sodium 单例 mixin 字段、64 方法级 `-f`、65 accessor 接口 mixin（需产品决策/实现）。
 
 ### 待解决（需改代码）
 
@@ -206,6 +207,14 @@
     标题屏热加已不再崩；**进世界热加**仍停在 Sodium 的 `BlockColors` 状态（`blocksToColor`/`overridenBlocks`
     未初始化 → `sodium$getProviders` NPE）。这是重建 Sodium 构造态语义，不是单字段回填；适配需要逐对象/逐状态。
     **按所有者决定保持 J2**（事实可热加，但重启前存在致命级 bug），B 未默认启用。
+
+65. **热加 Mixin 的 accessor/`@Invoker` 接口未被改写（2026-11-21）**：Create（`ponder`）的
+    `RenderTypeAccessor` 是 `@Mixin(RenderType.class)` 的接口，静态 `catnip$create` 是 Mixin 的
+    “未应用”桩（直接抛 `AssertionError: Mixin application failed!`）。热加时我们对目标类做了 transform，
+    但这个**接口本身**没有走 Mixin 的处理（静态 invoker 的真实实现要写回接口），于是 Ponder 首次渲染世界
+    （`PonderRenderTypes.<clinit>`）就断言失败。标题屏 add 本身 `ok=true`；进世界即崩。
+    **待解决**：在 `MixinSupport` 里识别 mixin config 中的接口/accessor 类，按 Mixin 语义处理（或显式拒绝并提示重启）。
+    证据：`crash-reports/crash-2026-11-21_18.33.26-client.txt`；白名单 Create → J2。
 
 ### 验证缺口（已实现/已修，缺证据）
 
@@ -467,6 +476,8 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近三条。
 
+- **2026-11-21（ModernUI 适配 PASS；Create 进世界边界）**：ModernUI opt-in 适配真机通过（hot-add + 聊天框无崩溃）；
+  Create 标题屏 add ok，但进世界崩于 Ponder 静态 accessor 接口未改写（问题 65），世界内加另有 SERVER 配置 NPE（已修）。
 - **2026-11-21（J1 白名单复测第一批）**：Windows/PCL2 + 增强 JBR 同会话热加 Architectury（311 rule/150 类）、
   Searchables、Controlling（1 rule）、Jade（57 rule）；均 `isLoaded=true`、无崩溃。Architectury/Controlling
   转 verified；**Jade 因字体变暗（问题 56）转 J2**；**JEI 19.71 被 mezz_config 前置拦下**——standalone 为无

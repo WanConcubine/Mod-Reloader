@@ -2269,3 +2269,22 @@ UI 线程（Looper/Choreographer），回滚后继续绘制 → `UI recording co
 - 顺带修引擎时序：`rebuildShaderInstances` 从“资源包注入前”移到“注入后”，修 `modernui:shaders/...`
   在旧 manager 里找不到的 `FileNotFoundException`（提交 c2d35f3）。
 - 构建绿（118 单测、ArchitectureTest 通过），提交 6036507；待真机。
+
+## 2026-11-21（ModernUI opt-in 适配 PASS；Create L2 崩溃定位）
+
+- ModernUI（3.13.0.1）：六轮真机后，适配链路定型并 PASS——
+  1) 构造 **前** `Core.initialize()` + `Core.initOpenGL(options)`（其 UI 线程在构造期启动，必须已有 GPU device）；
+  2) 构造后回填 **`Minecraft.font` 和 `Minecraft.fontFilterFishy`** 的 `modernUI_MC$textRenderer`
+     （ChatScreen 的 EditBox 用后者；此前只填 font，按 `/` 即崩）；
+  3) shader 重建后 `TextRenderType.preloadShaders()`（config reload 早于 shader 注册，current SDF shader 为 null）；
+  4) 每 tick + 每个屏幕 Init.Post 兜底回填。
+  日志：`modernui adapter: Core.initialize + Core.initOpenGL...`、`backfilled ... Minecraft.font/fontFilterFishy`、
+  `TextRenderType.preloadShaders()...`、`hot-added [modernui]`；打开聊天框无崩溃。默认关闭，
+  `-Dmodreloader.modernuiAdapter=true` 启用；白名单 ModernUI → J2。
+- Create（6.0.10，含 ponder/flywheel 嵌套）：
+  - **世界内 add** 崩于 `AllConfigs.server()` 为 null（SERVER 配置被跳过）。已让 `ModConfigs.load` 在有世界时
+    从 `<world>/serverconfig` 加载 SERVER 配置（标题屏仍跳过并提示），已部署待复验。
+  - **标题屏 add 成功、进世界崩**：`ponder` 的 `RenderTypeAccessor` 是 `@Mixin(RenderType.class)` 接口，
+    静态 `@Invoker` 在“未被 Mixin 应用”时是直接抛 `AssertionError("Mixin application failed!")` 的桩；
+    热加只 transform 了目标类，**接口自身没有被 Mixin 改写**，`PonderRenderTypes.<clinit>` 首次世界渲染即断言。
+    记问题 65（待解决），白名单 Create → J2（能加，进世界不可用）。
