@@ -19,6 +19,8 @@ import org.spongepowered.asm.mixin.transformer.IMixinTransformer;
 import java.io.InputStream;
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodType;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -29,6 +31,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import dev.modreloader.reflect.UnsafeAccess;
 import dev.modreloader.inspect.MixinRuntimeApi;
 import dev.modreloader.reflect.JvmAccess;
@@ -62,6 +65,13 @@ import dev.modreloader.reflect.LaunchPluginMonitor;
  * While transforming, only the configs added by this call are active: otherwise
  * a later hot-add re-applies earlier mods' mixins to the new target bytes.
  *
+ * <p>Accessor/invoker interfaces are mixin classes that Mixin rewrites when the
+ * interface itself is defined (static {@code @Invoker} methods get a call into
+ * the target's generated accessor). That only happens when the config was
+ * prepared with Mixin's coprocessors attached as listeners - see
+ * {@link #attachConfigListeners}. Interfaces loaded before this add are
+ * transformed and redefined by {@link #processLoadedAccessors}.
+ *
  * <p>Limits: this re-applies every registered config to loaded target bytes. It
  * is only safe when the target has not been changed by another agent, and it
  * needs JBR ({@code -XX:+AllowEnhancedClassRedefinition}) for layout changes.
@@ -90,6 +100,7 @@ public final class MixinSupport {
     }
 
     private static final Map<String, RemovedConfig> REMOVED_CONFIGS = new HashMap<>();
+    private static final Set<String> LISTENED_CONFIGS = ConcurrentHashMap.newKeySet();
 
     private MixinSupport() {
     }
@@ -109,6 +120,23 @@ public final class MixinSupport {
             errors.add("MixinRuntime (mr) is unusable: " + apiProblems);
             return new Report(configNames, registered, skipped, List.of(), List.of(), List.of(),
                     List.of(), errors, warnings);
+        }
+
+        // Snapshot Mixin's accessor registry before preparing: preparing a config
+        // is what registers accessor/invoker interfaces with the coprocessor that
+        // rewrites them on load, so the difference is what this add introduced.
+        Object processor = null;
+        Map<String, Object> accessorRegistry = null;
+        Set<String> accessorsBefore = Set.of();
+        try {
+            processor = MixinRuntimeApi.getProcessor(MixinRuntimeApi.getTransformer());
+            accessorRegistry = accessorRegistry(processor);
+            if (accessorRegistry != null) {
+                accessorsBefore = new HashSet<>(accessorRegistry.keySet());
+            }
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn(
+                    "[ModReloader] cannot read Mixin's accessor registry before preparing configs", t);
         }
 
         List<LoadedConfig> loadedConfigs = new ArrayList<>();
@@ -148,11 +176,14 @@ public final class MixinSupport {
         }
 
         Applied applied = new Applied(List.of(), List.of(), List.of());
+        Map<String, Class<?>> loadedNow = Map.of();
         if (errors.isEmpty() && !registered.isEmpty()) {
-            Map<String, Class<?>> loadedNow = loadedClasses();
+            loadedNow = loadedClasses();
             Map<String, byte[]> originals = captureOriginals(targets, loadedNow);
             IMixinTransformer transformer = MixinRuntimeApi.getTransformer();
-            Object processor = MixinRuntimeApi.getProcessor(transformer);
+            if (processor == null) {
+                processor = MixinRuntimeApi.getProcessor(transformer);
+            }
             for (LoadedConfig loaded : loadedConfigs) {
                 if (!registered.contains(loaded.name())) {
                     continue;
@@ -183,6 +214,23 @@ public final class MixinSupport {
                     MixinRuntimeApi.setConfigs(processor, allActive);
                     MixinRuntimeApi.setPendingConfigs(processor, allPending);
                 }
+            }
+        }
+
+        if (errors.isEmpty() && accessorRegistry != null) {
+            List<String> accessors = new ArrayList<>();
+            for (String name : accessorRegistry.keySet()) {
+                if (!accessorsBefore.contains(name)) {
+                    accessors.add(name);
+                }
+            }
+            if (!accessors.isEmpty()) {
+                ModReloader.LOGGER.info(
+                        "[ModReloader] accessor/invoker interface mixin(s), rewritten when the "
+                                + "interface class is defined: {}", accessors);
+                // Registered mixin classes already loaded by an earlier add keep
+                // Mixin's stub forever; the coprocessor only fires on definition.
+                processLoadedAccessors(accessors, loadedNow, rollback, errors, warnings);
             }
         }
 
@@ -289,10 +337,141 @@ public final class MixinSupport {
             ModReloader.LOGGER.warn("[ModReloader] cannot reset MixinConfig.prepared for {}", configName, t);
         }
 
+        attachConfigListeners(config);
         IMixinTransformer transformer = MixinRuntimeApi.getTransformer();
         MixinRuntimeApi.prepare(config, transformer);
         postInitialise(config, transformer);
         raiseCompatibilityLevel(config, configName);
+    }
+
+    /**
+     * {@code MixinProcessor.prepareConfigs} registers every coprocessor and the
+     * inheritance tracker as listeners on each config before preparing it. The
+     * accessor coprocessor is the only one that matters for hot-add: it records
+     * each accessor/invoker interface at {@code onPrepare} and rewrites that
+     * interface's static methods when the interface class is defined. Preparing a
+     * config by hand skips this, so ponder's {@code RenderTypeAccessor} kept
+     * Mixin's "Mixin application failed!" stub and the first render in a hot-added
+     * Create crashed (issue 65).
+     */
+    private static void attachConfigListeners(IMixinConfig config) {
+        String name = config.getName();
+        if (!LISTENED_CONFIGS.add(name)) {
+            return;
+        }
+        try {
+            Object processor = MixinRuntimeApi.getProcessor(MixinRuntimeApi.getTransformer());
+            Object coprocessors = UnsafeAccess.get(processor, processor.getClass(), "coprocessors");
+            Class<?> listenerType = Class.forName(
+                    "org.spongepowered.asm.mixin.transformer.MixinConfig$IListener");
+            MethodHandle addListener = UnsafeAccess.trusted().findVirtual(
+                    Class.forName("org.spongepowered.asm.mixin.transformer.MixinConfig"),
+                    "addListener", MethodType.methodType(void.class, listenerType));
+            int attached = 0;
+            if (coprocessors instanceof Iterable<?> iterable) {
+                for (Object coprocessor : iterable) {
+                    if (listenerType.isInstance(coprocessor)) {
+                        addListener.invoke(config, coprocessor);
+                        attached++;
+                    }
+                }
+            }
+            Object tracker = UnsafeAccess.getStatic(Class.forName(
+                    "org.spongepowered.asm.mixin.transformer.MixinInheritanceTracker"), "INSTANCE");
+            addListener.invoke(config, tracker);
+            ModReloader.LOGGER.info("[ModReloader] mixin config {}: attached {} processor listener(s) "
+                    + "for on-load interface rewriting", name, attached);
+        } catch (Throwable t) {
+            LISTENED_CONFIGS.remove(name);
+            ModReloader.LOGGER.warn(
+                    "[ModReloader] cannot attach Mixin processor listeners to {}", name, t);
+        }
+    }
+
+    /** Mixin's live accessor-coprocessor registry ({@code class name -> MixinInfo}). */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> accessorRegistry(Object processor) {
+        try {
+            Object coprocessors = UnsafeAccess.get(processor, processor.getClass(), "coprocessors");
+            if (coprocessors instanceof Iterable<?> iterable) {
+                for (Object coprocessor : iterable) {
+                    try {
+                        Object registry = UnsafeAccess.get(coprocessor, coprocessor.getClass(),
+                                "accessorMixins");
+                        if (registry instanceof Map<?, ?> map) {
+                            return (Map<String, Object>) map;
+                        }
+                    } catch (IllegalStateException notTheAccessorCoprocessor) {
+                        // another coprocessor; keep looking
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn("[ModReloader] cannot inspect Mixin's accessor registry", t);
+        }
+        return null;
+    }
+
+    /**
+     * A class name registered with the accessor coprocessor is rewritten by Mixin
+     * when it is <em>defined</em>. If an earlier add already loaded it, rewrite and
+     * redefine it here instead, or its static {@code @Invoker} methods stay stubs.
+     */
+    private static void processLoadedAccessors(List<String> accessors, Map<String, Class<?>> loaded,
+                                               Rollback rollback, List<String> errors,
+                                               List<String> warnings) {
+        Instrumentation instrumentation;
+        try {
+            instrumentation = JvmAccess.get();
+        } catch (Throwable t) {
+            errors.add("cannot obtain Instrumentation: " + t);
+            return;
+        }
+        for (String dotted : accessors) {
+            Class<?> type = loaded.get(dotted);
+            if (type == null) {
+                continue;
+            }
+            byte[] original = ClassBytesCache.get(dotted);
+            if (original == null) {
+                original = readClassResource(dotted);
+            }
+            if (original == null) {
+                warnings.add("accessor interface " + dotted + " is already loaded and its bytes "
+                        + "cannot be read; its static @Invoker methods stay stubs until restart");
+                continue;
+            }
+            byte[] processed;
+            try {
+                processed = transformBytes(original, dotted);
+            } catch (Throwable t) {
+                errors.add("transform accessor interface " + dotted + ": " + describe(t));
+                continue;
+            }
+            if (processed == null) {
+                errors.add("mixin transform returned null for accessor interface: " + dotted);
+                continue;
+            }
+            if (java.util.Arrays.equals(processed, original)) {
+                warnings.add("accessor interface " + dotted + " is already loaded and Mixin did not "
+                        + "rewrite it; its static @Invoker methods stay stubs until restart");
+                continue;
+            }
+            if (!MixinAgentGuard.safeToRedefine()) {
+                errors.add("refusing to redefine accessor interface " + dotted + ": "
+                        + MixinAgentGuard.detail());
+                continue;
+            }
+            byte[] before = original;
+            rollback.add("restore class " + dotted,
+                    () -> redefineBack(instrumentation, type, before, dotted));
+            List<String> redefined = new ArrayList<>();
+            redefine(instrumentation, type, processed, original, dotted, redefined, errors);
+            if (!redefined.isEmpty()) {
+                ModReloader.LOGGER.info(
+                        "[ModReloader] redefined already-loaded accessor interface {}", dotted);
+            }
+        }
     }
 
     /**

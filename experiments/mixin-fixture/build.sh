@@ -40,7 +40,7 @@ CP="$ROOT/build/moddev/artifacts/neoforge-21.1.265-merged.jar:$(paste -sd: "$CP_
 rm -rf "$OUT/classes" && mkdir -p "$OUT/classes"
 mkdir -p "$OUT/emptysrc"
 "$JDK_HOME/bin/javac" -proc:none -sourcepath "$OUT/emptysrc" -cp "$CP" -d "$OUT/classes" \
-  "$(dirname "$0")"/src/mixinfixture/MixinFixtureMod.java src/mixinfixture/Probe.java src/mixinfixture/mixin/ProbeMixin.java
+  $(find "$(dirname "$0")/src" -name '*.java')
 "$JDK_HOME/bin/jar" cf "$OUT/mixinfixture-1.0.0.jar" \
   -C "$OUT/classes" . -C "$(dirname "$0")/resources" .
 echo "built $OUT/mixinfixture-1.0.0.jar"

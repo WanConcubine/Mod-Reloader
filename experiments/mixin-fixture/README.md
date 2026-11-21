@@ -4,6 +4,12 @@
 mixin 在 `HEAD` 处 `setReturnValue(2)`。因为 `Probe` 在热加时**还没加载**，mixin 在类 define 时织入，
 不需要 JBR 的 enhanced redefinition；`Probe.value()` 是否变成 2 就是「mixin 真的生效了」的断言。
 
+另有一个静态 `@Invoker` 接口 `mixinfixture.mixin.accessor.AccessTargetInvoker`（形状同 ponder 的
+`RenderTypeAccessor`：桩体抛 `AssertionError("Mixin application failed!")`），目标是 `AccessTarget` 的私有静态
+`hidden()`。harness 在热加**之后**才加载这个接口并调用它：Mixin 的 accessor coprocessor 只在该接口
+define 时改写方法体，返回值必须是 `reached-target`。这条断言覆盖问题 65（热加时没把 coprocessor 挂到
+config 上 → 接口保留桩体 → Create 进世界崩溃）。
+
 用来验证 2026-11-16 收窄后的 JBR 门禁（`docs/features/a1-mixin-hotadd.md` §10.4）：
 以前「有 mixin 就要 JBR」会在入口整包拒绝，现在只有「已加载类的布局变更」才需要 JBR。
 
@@ -26,8 +32,9 @@ mixin 在 `HEAD` 处 `setReturnValue(2)`。因为 `Probe` 在热加时**还没�
 期望日志：
 
 ```
-[MixinFixtureCheck] hot-add result: ok=true ... (mixins [mixinfixture.mixins.json], redefined [], eager [mixinfixture.Probe], deferred [])
+[MixinFixtureCheck] hot-add result: ok=true ... (mixins [mixinfixture.mixins.json], redefined [], eager [mixinfixture.Probe, mixinfixture.AccessTarget], deferred [])
 [MixinFixtureCheck] Probe.value() = 2 (JBR=true, enhancedRedefinition=false): expected 2
+[MixinFixtureCheck] AccessTargetInvoker.mixinfixture$hidden() = reached-target: expected reached-target
 [MixinFixtureCheck] RESULT: PASS
 ```
 

@@ -2336,3 +2336,30 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
 可用，普通玩家不可。客户端命令（`RegisterClientCommandsEvent`）不受影响，单机/本地照旧。
 验证：`ServerAddCmdCheck` 新增断言——permission-0 命令源执行 `modreloader ping` 被拒（`denied=true`），
 控制台 `serverAddCommand` 仍 `RESULT: PASS`。
+
+## 2026-11-21（问题 65：热加 Mixin 的 accessor/invoker 接口从未被改写）
+
+- 现象（上一批真机）：Create 标题屏热加 `ok=true`，进世界首次渲染 `PonderRenderTypes.<clinit>` 调
+  `RenderTypeAccessor.catnip$create` 抛 `AssertionError: Mixin application failed!`；崩溃栈里该接口带
+  `re:mixin` 标记但方法体仍是注解处理器生成的桩。
+- 机制（Mixin 0.8.7 / sponge-mixin 0.16.4）：accessor 接口属于 loadable mixin，`MixinProcessor.applyMixins`
+  对每个类先跑 `coprocessors.process`；`MixinCoprocessorAccessor` 在接口 define 时用
+  `MixinInfo.getClassNode(0)` 生成静态代理（`invokestatic <target>.<generated>`）并 `Bytecode.replace`。
+  它靠 `onPrepare` 学习接口名，而 listener 是 `MixinProcessor.prepareConfigs` 调
+  `MixinConfig.addListener(coprocessor)` 挂上的。热加路径只调 `MixinConfig.prepare(extensions)`，
+  没有 listener → `accessorMixins` 为空 → `couldTransformClass=false` → 原字节加载。
+- 修法（`MixinSupport`）：
+  - `attachConfigListeners`：prepare 前把 processor 的 4 个 coprocessor（passthrough / synthetic-inner /
+    accessor / nest-host）与 `MixinInheritanceTracker.INSTANCE` 挂到该 config（每 config 只挂一次）。
+  - prepare 前后快照 accessor registry，新出现的接口记日志；
+  - `processLoadedAccessors`：已被早先 add 加载的接口用 `transformClassBytes` 重算并 redefine（带原字节回滚）。
+- 回归夹具：`experiments/mixin-fixture` 新增 `AccessTarget`（私有静态 `hidden()`）与
+  `mixin/accessor/AccessTargetInvoker`（静态 `@Invoker`，桩体同 ponder）；`MixinFixtureCheck` 在 add 后加载接口并调用。
+  构建脚本改为编译 `src` 下全部 java。
+- 证据（dev client，`-PnoJbr=true -PverifyMixinFixture=/tmp/mixinfixture/mixinfixture-1.0.0.jar`）：
+  `mixin config mixinfixture.mixins.json: attached 4 processor listener(s)` →
+  `accessor/invoker interface mixin(s) ... [mixinfixture.mixin.accessor.AccessTargetInvoker]` →
+  `AccessTargetInvoker.mixinfixture$hidden() = reached-target` → `RESULT: PASS`。
+- 部署：`build/libs/modreloader-1.21.1-0.1.0.jar` 已覆盖到 PCL
+  `.minecraft/versions/1.21.1-NeoForge_21.1.266/mods/`（2026-11-21 20:57），并用 `javap` 确认部署包含新方法。
+- 仍缺：Create 真机进世界复验；白名单 Create 暂留 J2。

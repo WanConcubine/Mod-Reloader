@@ -1,7 +1,7 @@
 # 项目状态
 
 > **唯一状态源。** 每次会话先读这里；改状态只改这里，不要在各处复制。过程记录见 [history.md](history.md)。
-> 最后更新：2026-11-20
+> 最后更新：2026-11-21
 
 ## 一句话
 
@@ -70,6 +70,14 @@
 ## 验证状态
 
 ### 已验证
+
+- **accessor/invoker 接口在热加后被 Mixin 改写（问题 65，2026-11-21 dev client，`-PnoJbr=true`）**：
+  `MixinSupport` 在 prepare 前把 processor 的 4 个 coprocessor 与 `MixinInheritanceTracker` 挂到新 config
+  （日志 `attached 4 processor listener(s) for on-load interface rewriting`），accessor 接口在 define 时由
+  `MixinCoprocessorAccessor` 写入静态代理；夹具 `mixinfixture.mixin.accessor.AccessTargetInvoker`（桩体抛
+  `AssertionError("Mixin application failed!")`）在 add 后加载并调用返回 `reached-target`，
+  `-PverifyMixinFixture` → `RESULT: PASS`。已加载过的接口由 `processLoadedAccessors` 做
+  transform + redefine（带回滚）。**Create 真机进世界尚未复验。**
 
 - **专用服 Create 热加（2026-11-21，本机 dev dedicated server）**：`runServer -PserverAddCommand=<create-6.0.10>`
   在控制台路径 `RESULT: PASS`，`verify create isLoaded=true`。过程中修掉三个**服务器侧**缺口：
@@ -199,7 +207,8 @@
 ## 已知问题 / 坑
 
 > 追加式账本，**编号稳定**（引用不变）。共 65 条：待解决 2 / 验证缺口 4 / 结构性边界 18 / 历史与注记 15 / 已修 26。
-> **当前 actionable（3）**：61 Sodium 单例 mixin 字段、64 方法级 `-f`、65 accessor 接口 mixin（需产品决策/实现）。
+> **当前 actionable（2）**：61 Sodium 单例 mixin 字段、64 方法级 `-f`。**65 已修**（coprocessor listener 缺失；
+> 夹具 PASS，Create 真机复验待做）。
 
 ### 待解决（需改代码）
 
@@ -215,13 +224,24 @@
     未初始化 → `sodium$getProviders` NPE）。这是重建 Sodium 构造态语义，不是单字段回填；适配需要逐对象/逐状态。
     **按所有者决定保持 J2**（事实可热加，但重启前存在致命级 bug），B 未默认启用。
 
-65. **热加 Mixin 的 accessor/`@Invoker` 接口未被改写（2026-11-21）**：Create（`ponder`）的
+65. **热加 Mixin 的 accessor/`@Invoker` 接口未被改写（2026-11-21，已修；真机复验待做）**：Create（`ponder`）的
     `RenderTypeAccessor` 是 `@Mixin(RenderType.class)` 的接口，静态 `catnip$create` 是 Mixin 的
     “未应用”桩（直接抛 `AssertionError: Mixin application failed!`）。热加时我们对目标类做了 transform，
     但这个**接口本身**没有走 Mixin 的处理（静态 invoker 的真实实现要写回接口），于是 Ponder 首次渲染世界
     （`PonderRenderTypes.<clinit>`）就断言失败。标题屏 add 本身 `ok=true`；进世界即崩。
-    **待解决**：在 `MixinSupport` 里识别 mixin config 中的接口/accessor 类，按 Mixin 语义处理（或显式拒绝并提示重启）。
-    证据：`crash-reports/crash-2026-11-21_18.33.26-client.txt`；白名单 Create → J2。
+    **根因（JVM/Mixin 级）**：Mixin 0.8.7 的 accessor 接口是 *loadable mixin*，由
+    `MixinCoprocessorAccessor`（+ `MixinCoprocessorPassthrough`）在**接口类 define 时**改写；
+    这两个 coprocessor 只在 `MixinProcessor.prepareConfigs` 里被 `MixinConfig.addListener` 注册、并在
+    `MixinConfig.prepare` 的 `onPrepare` 回调里登记接口名。我们热加时直接调
+    `MixinConfig.prepare(extensions)`，跳过了 listener 注册，coprocessor 不认识该接口 →
+    `couldTransformClass=false` → 接口按原字节加载（连 IllegalClassLoadError 都不触发）→ 保留桩体。
+    **修法**：`MixinSupport.attachConfigListeners` 在 prepare 前把 processor 的 4 个 coprocessor
+    （passthrough/synthetic-inner/accessor/nest-host）与 `MixinInheritanceTracker.INSTANCE` 挂到新 config 上；
+    另外对“上一次 add 已经加载过”的 accessor 接口做 `transformClassBytes` + redefine（`processLoadedAccessors`）。
+    证据：`experiments/mixin-fixture` 新增静态 `@Invoker` 接口（桩体同 ponder）→
+    `-PnoJbr=true -PverifyMixinFixture=...` 日志 `attached 4 processor listener(s)`、
+    `AccessTargetInvoker.mixinfixture$hidden() = reached-target`、`RESULT: PASS`；jar 已部署到 PCL（2026-11-21 20:57）。
+    **仍缺**：Create 真机进世界复验（此前崩溃：`crash-reports/crash-2026-11-21_18.33.26-client.txt`）；白名单 Create 暂留 J2。
 
 ### 验证缺口（已实现/已修，缺证据）
 
@@ -442,7 +462,8 @@
 > ModernUI opt-in 适配（六步链路真机 PASS）、包装 jar（mezz → JEI 依赖链）、服务器一等目标（SERVER 配置更正、
 > MixinAgentGuard/AT side/CLIENT 配置三处修复、专用服 Create/Mekanism/architectury/runState/why 全 PASS、
 > 命令权限 2）、shader 重建时序修复。白名单：JBR J1=22 / J2=5 / BLACK=4（61 行）。
-> **下一批（建议）**：① 问题 65（accessor/接口 mixin 改写，解 Create 客户端进世界）；② 问题 64 产品决策；
+> **下一批（建议）**：① Create 真机复验（问题 65 已修，夹具 PASS；进世界不再应崩于 Ponder accessor）；
+> ② 问题 64 产品决策；
 > ③ 剩余 J1 candidate（Cloth/Balm/GeckoLib/Curios/Patchouli/Embeddium/ModernFix/FerriteCore/Xaero 小地图/
 > voicechat/mcwifipnp/e4mc/Farmer's Delight/Comforts/Moonlight/Supplementaries/ZeroCore2）；④ 专用服多人
 > （`mpRegistryServer`/`mpFeiServer`，需客户端配合）与 datapack/payload 专用服回归；⑤ ModernUI 默认可否开启。
@@ -485,6 +506,12 @@
 ## 最近变更
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近三条。
+
+- **2026-11-21（问题 65 修复：accessor/invoker 接口）**：根因是热加时手工 `MixinConfig.prepare` 跳过了
+  `MixinProcessor.prepareConfigs` 的 coprocessor listener 注册，`MixinCoprocessorAccessor` 不知道新接口，
+  静态 `@Invoker` 保留桩体。`MixinSupport` 现在在 prepare 前挂 4 个 coprocessor + inheritance tracker，
+  并对已加载接口做 transform+redefine；mixin 夹具新增静态 `@Invoker` 回归（`-PnoJbr=true` PASS），
+  jar 已部署到 PCL，等 Create 真机进世界复验。
 
 - **2026-11-21（专用服回归批次 PASS）**：Create/Mekanism/architectury 的 `serverAddCommand` 均 PASS；`serverRunState`
   （failAfterRegistry）与 `serverWhy` PASS。服务器侧修复：MixinAgentGuard 无 transform 视为安全、AT 目标按 side 跳过、
