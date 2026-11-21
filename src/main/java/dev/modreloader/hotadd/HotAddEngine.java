@@ -175,6 +175,20 @@ public final class HotAddEngine {
             }
             if ((failure = registerModList(run)) != null) return recordFailure(run, failure);
             if ((failure = construct(run)) != null) return recordFailure(run, failure);
+            // ModernUI's Font mixin field exists on the live Font only after the add;
+            // its UI thread is already running, so a failure here must restart.
+            String modernUiFont = ModernUIAdapter.afterConstruct(run.ids);
+            if (modernUiFont != null) {
+                ModReloader.LOGGER.error("[ModReloader] modernui adapter (after construct) failed: "
+                        + "{}; restarting instead of continuing", modernUiFont);
+                dev.modreloader.launch.Relauncher.saveAndRestartCurrentClient(
+                                "modernui adapter failed: " + modernUiFont)
+                        .ifPresent(reason -> ModReloader.LOGGER.error(
+                                "[ModReloader] cannot relaunch after the modernui adapter failed: {}",
+                                reason));
+                return fail(run.rollback, Stage.CONSTRUCT, FailureKind.UNKNOWN,
+                        "modernui adapter failed: " + modernUiFont + "; restart required");
+            }
             if ((failure = commitRegistry(run)) != null) return recordFailure(run, failure);
             if ((failure = replayCommonStartup(run)) != null) return recordFailure(run, failure);
             if ((failure = injectPacks(run)) != null) return recordFailure(run, failure);

@@ -54,6 +54,45 @@ final class ModernUIAdapter {
     }
 
     /**
+     * After the constructor: its {@code Font} mixin adds the instance field
+     * {@code modernUI_MC$textRenderer}, initialized only from Font's constructor.
+     * The {@code Minecraft.font} object predates the mixin, so its field is null and
+     * the first drawn string (a toast) NPEs. Backfill it from the same source the
+     * mixin uses ({@code TextLayoutEngine.getInstance().getTextRenderer()}).
+     */
+    static String afterConstruct(java.util.Set<String> ids) {
+        if (ids == null || !ids.contains(MOD_ID) || !enabled()
+                || !dev.modreloader.Platform.isClient()) {
+            return null;
+        }
+        try {
+            Class<?> engineType = Class.forName("icyllis.modernui.mc.text.TextLayoutEngine");
+            Object engine = engineType.getMethod("getInstance").invoke(null);
+            Object renderer = engine.getClass().getMethod("getTextRenderer").invoke(engine);
+            if (renderer == null) {
+                return "TextLayoutEngine.getTextRenderer() returned null";
+            }
+            Object minecraft = minecraft();
+            if (minecraft == null) {
+                return "no client instance";
+            }
+            Object font = minecraft.getClass().getField("font").get(minecraft);
+            if (font == null) {
+                return "Minecraft.font is null";
+            }
+            Class<?> fontType = Class.forName("net.minecraft.client.gui.Font");
+            dev.modreloader.reflect.UnsafeAccess.set(font, fontType,
+                    "modernUI_MC$textRenderer", renderer);
+            ModReloader.LOGGER.info("[ModReloader] modernui adapter: backfilled "
+                    + "Font.modernUI_MC$textRenderer on the live Font");
+            return null;
+        } catch (Throwable t) {
+            ModReloader.LOGGER.error("[ModReloader] modernui adapter (after construct) failed", t);
+            return rootCause(t);
+        }
+    }
+
+    /**
      * @return {@code null} when the adapter does not apply or the init succeeded;
      *         otherwise why it failed (the caller must not roll back and continue)
      */
