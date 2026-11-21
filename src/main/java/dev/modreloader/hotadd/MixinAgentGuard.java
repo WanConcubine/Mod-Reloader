@@ -113,8 +113,20 @@ final class MixinAgentGuard implements AutoCloseable {
         try {
             AgentTransformers.Scan scan = AgentTransformers.scan(
                     MixinRuntimeApi.class.getClassLoader(), instrumentation);
-            agentPresent = scan.agentPresent();
+            // Only an *active* Mixin agent can re-transform bytes. With no
+            // MixinRuntime the agent class ships with Mixin but has no transformer
+            // registered (measured on a dedicated server 2026-11-21), so treating
+            // "class present" as unsafe refused every late AT there.
+            boolean mixinRuntime = net.neoforged.fml.ModList.get() != null
+                    && net.neoforged.fml.ModList.get().isLoaded("mr");
+            agentPresent = !scan.found().isEmpty() || (scan.agentPresent() && mixinRuntime);
             detail = scan.detail();
+            if (!scan.found().isEmpty()) {
+                detail = scan.detail();
+            } else if (scan.agentPresent() && !mixinRuntime) {
+                detail = "MixinAgent has no transformer and MixinRuntime is absent; "
+                        + "nothing can re-transform on redefine";
+            }
             int replaced = 0;
             for (AgentTransformers.Found found : scan.found()) {
                 if (found.instrumentation().removeTransformer(found.transformer())) {

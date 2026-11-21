@@ -271,6 +271,9 @@ public final class MixinSupport {
 
         Mixins.addConfiguration(configName);
         IMixinConfig config = findConfig(configName);
+        ModReloader.LOGGER.info("[ModReloader] mixin config {}: side={} platform={}",
+                configName, MixinEnvironment.getDefaultEnvironment().getSide(),
+                dev.modreloader.Platform.isClient() ? "client" : "server");
         raiseCompatibilityLevel(config, configName);
         if (!config.hasDecoration(FabricUtil.KEY_MOD_ID)) {
             config.decorate(FabricUtil.KEY_MOD_ID, modId);

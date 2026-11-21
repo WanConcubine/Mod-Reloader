@@ -61,6 +61,12 @@ public final class ModConfigs {
                 // SERVER configs live in <world>/serverconfig. A title-screen add has
                 // no world yet; an in-world add does, and the mod's own tick code reads
                 // these values (Create: AllConfigs.server() NPEs when null).
+                if (!dev.modreloader.Platform.isClient()
+                        && config.getType() == ModConfig.Type.CLIENT) {
+                    // FML never loads client configs on a dedicated server; doing
+                    // it there runs client-side config code with no client.
+                    continue;
+                }
                 Path serverPath = null;
                 if (config.getType() == ModConfig.Type.SERVER) {
                     serverPath = serverConfigPath();

@@ -136,6 +136,15 @@ public final class LateAccessTransformers {
                 skipped++;
                 messages.add("skip " + target + ": not present on this side");
                 continue;
+            } catch (RuntimeException e) {
+                // A dedicated server refuses client classes with a RuntimeException
+                // from RuntimeDistCleaner (measured 2026-11-21: Create's AT targets
+                // RenderType). Skipping the rule is correct: the class cannot exist
+                // on this side.
+                skipped++;
+                messages.add("skip " + target + ": not loadable on this side ("
+                        + e.getClass().getSimpleName() + ")");
+                continue;
             }
             if (!instrumentation.isModifiableClass(type)) {
                 skipped++;
