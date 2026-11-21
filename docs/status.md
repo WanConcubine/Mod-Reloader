@@ -437,18 +437,21 @@
 
 ## 下一步
 
-> **当前交接（2026-11-20，已推送 `a8d787c`）**：技术债收口；问题 2/35/50/63 结案；61 定 J2（B 实验 opt-in，
-> 进世界仍停 `BlockColors`）；增强 JBR 下 lateAt 自动开启；MixinRuntime 明确为可选扩展。
-> **2026-11-21 真机补**：问题 58 复验 PASS（Mekanism 标题屏热加成功）；新开 **64**——方法级 `-f` 在 JBR 下
-> 可 redefine 但随后调用点崩（`-Xint` 复现、xlog BCI 为负），需产品决策（拒绝/标 J2 或 workaround）。
-> **发布口径**：[releases/0.1.0.md](releases/0.1.0.md) 草案已提交——只承诺 `verified` 行（当前 3 行：
-> stock T1 的 dogfood，JBR J1 的 GuideME、AE2），candidate/fixing 一律标“待复测”。
-> **下一项（所有者驱动）**：① whitelist 真实复测（agent 不代跑批次）；② J2“成功后再崩”的预检/标注口径
-> 需产品决策（现行：成功消息标 `J2`，不阻断）；③ 生产启动器/干净实例冒烟；④ Windows/PCL2 全链路。
-> 证据在 [history.md](history.md)；JBR 在 `run/jbr-21.0.11`（gitignored），语料 `/tmp/modreloader-corpus`。
-> 风险：`MixinAgentGuard` 依赖内部字段（找不到 no-op）；`ClassBytesCache` 不覆盖 eager loaded 目标。
-> ⚠️ 本机 dev client 显示层不稳：优先不需要 GL 的活，一次只起一个客户端场景；harness 命令见 [AGENTS §2](../AGENTS.md)，
-> **热加类 harness 要求 `run/mods/` 里没有众星捧月 jar**。
+));
+> **当前交接（2026-11-21）**：本日完成 Mekanism/问题 58 复验（hot-add PASS）、问题 64（方法级 `-f`，JBR 边界）、
+> ModernUI opt-in 适配（六步链路真机 PASS）、包装 jar（mezz → JEI 依赖链）、服务器一等目标（SERVER 配置更正、
+> MixinAgentGuard/AT side/CLIENT 配置三处修复、专用服 Create/Mekanism/architectury/runState/why 全 PASS、
+> 命令权限 2）、shader 重建时序修复。白名单：JBR J1=22 / J2=5 / BLACK=4（61 行）。
+> **下一批（建议）**：① 问题 65（accessor/接口 mixin 改写，解 Create 客户端进世界）；② 问题 64 产品决策；
+> ③ 剩余 J1 candidate（Cloth/Balm/GeckoLib/Curios/Patchouli/Embeddium/ModernFix/FerriteCore/Xaero 小地图/
+> voicechat/mcwifipnp/e4mc/Farmer's Delight/Comforts/Moonlight/Supplementaries/ZeroCore2）；④ 专用服多人
+> （`mpRegistryServer`/`mpFeiServer`，需客户端配合）与 datapack/payload 专用服回归；⑤ ModernUI 默认可否开启。
+> **环境**：构建用 `X:` subst + 本地 Gradle 8.10（`--init-script X:/neoforged-mirror.init.gradle`）；
+> 专用服 dev 跑法 `runServer -x downloadAssets -PjbrJava=...`，并在 `build/moddev/minecraft_assets.properties`
+> 写 `assets_root`/`asset_index` 指向 `.minecraft/assets`（本机 PKIX 拦截资产下载）；`run/mods` 需 MixinRuntime。
+> **注意**：本地 `main` 比 `origin/main` 多 30 个提交（含本次 merge `e804261`），推送因 GitHub 网络 reset 未完成，
+> 恢复网络后 `git push origin main`。
+> 证据在 [history.md](history.md)；语料/夹具：`run/`、`.minecraft/.../modreloader/staging`、`corpus/j1`。
 
 | 优先 | 任务 | 关键点 / 落点 | 验收 |
 |---|---|---|---|
