@@ -2479,3 +2479,12 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
   新增 harness `-PverifyAddCommandPre`、`pauseOnLostFocus=false`、`-PtickBarrier=true`。
 - 部署：PCL jar sha `80e08684…dcf5`（65/66/67）；`server-kit.zip` 已同步（Windows JBR 步骤）。
 - Git：本地已推送至 `origin/main`（尖端见 status 交接）；代理 7897 TLS 失败，直连重试成功。
+
+## 2026-11-22（0.1.0-beta 发布：许可证改为 GPLv3）
+
+- 所有者指示：许可证由 MIT 改为 GPLv3，并发布 0.1.0 beta。
+- `LICENSE` 换为 GPLv3 全文 + 版权声明；`gradle.properties` / `neoforge.mods.toml` / README 同步为
+  `GPL-3.0-only`；新增 ADR-0016。旧 `v0.1.0` tag 保持 MIT，不追溯。
+- 版本 `0.1.0-beta`；发布 jar 内含 `META-INF/LICENSE`；`./gradlew build` 成功，118 单测。
+- 产物：`build/libs/modreloader-1.21.1-0.1.0-beta.jar`，497,608 B，sha256
+  `5ba576ca75be5a8e3065e58f428458417344eca2f12b415e6f38cf64a00434fd`；tag `v0.1.0-beta`。

@@ -2,13 +2,15 @@
 
 让 Minecraft 模组在游戏运行时**安全地增删 / 更新 / 热重载**。
 
-> 状态（2026-11-18，细节以 [docs/status.md](docs/status.md) 为准）：分析器 v0 可运行；运行时在 NeoForge 1.21.1 dev 环境
+> 当前预发布：**0.1.0-beta**（GPL-3.0-only）。
+>
+> 状态（2026-11-22，细节以 [docs/status.md](docs/status.md) 为准）：分析器 v0 可运行；运行时在 NeoForge 1.21.1 dev 环境
 > 验证到四档里的前三档——**嫔级**（无 mixin/注册表）、**妃级**（mixin + 布局变更，JBR 只在改已加载类布局时需要）、
 > **贵妃级 add-only**（方块/物品 + 资源包/创造栏 + datapack + capability），含真实 dogfood 众星捧月 1.5.0；皇后级只提示重启。
 > **AT**：stock 是硬边界；JBR late AT 只覆盖**成员级** access/final（Jade/JEI/Controlling L1 PASS），
 > 类级 `public-f`（去类的 final）不可用，会被拒绝并提示重启（[late-at](docs/features/late-at.md) §5.1）。
 > 失败回滚覆盖 post-ModList / post-pack / post-construct 监听器；构造器其它副作用、post-construct 重试仍不行。
-> 工程侧：`PlatformHooks` 双端解耦、`Capabilities` 锚点守卫、`dev/` 不进发布 jar、**93 个无游戏 Java 单测**；
+> 工程侧：`PlatformHooks` 双端解耦、`Capabilities` 锚点守卫、`dev/` 不进发布 jar、**118 个无游戏 Java 单测**；
 > 兼容性流水线 v0（`tools/pipeline`）与无焦点 L1（`-PnoFocus=true`）。皇后级与软重启未开始；已知/未验证项见
 > [status](docs/status.md)，功能文档见 [docs/features/](docs/features/)。
 > 短期目标是把工具做出来给社区用，论文/研究输出留到以后。
@@ -292,7 +294,7 @@ experiments/
 2. **分层升级**：先试最便宜的 tier，失败再升级；贵妃/皇后级明确告知用户。
 3. **可回滚**：任何写操作前备份；切换失败必须能回到原状。
 4. **解释优先**：不只给结论，要给理由（哪个 mixin、哪个注册表、哪个 native）。
-5. **开源可审计**：不做闭源 native hook；许可证 MIT（见 [LICENSE](LICENSE)）。
+5. **开源可审计**：不做闭源 native hook；许可证 **GPL-3.0-only**（见 [LICENSE](LICENSE)）。
 
 ## 下一步
 

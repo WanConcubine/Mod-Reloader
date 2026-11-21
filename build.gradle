@@ -10,6 +10,13 @@ base {
     archivesName = "${mod_id}-${minecraft_version}"
 }
 
+// The distributed jar must carry its license (GPL-3.0-only).
+tasks.named('jar', Jar) {
+    from('LICENSE') {
+        into 'META-INF'
+    }
+}
+
 // `-PnoJbr=true`: start the game without -XX:+AllowEnhancedClassRedefinition, i.e.
 // the "no enhanced redefinition" path that a stock JVM also takes. Used to verify
 // that mixins into not-yet-loaded classes and layout-preserving changes still work.

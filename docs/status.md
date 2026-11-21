@@ -586,6 +586,9 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近三条。
 
+- **2026-11-22（0.1.0-beta 发布：GPLv3）**：许可证 MIT → **GPL-3.0-only**（ADR-0016）；
+  版本 `0.1.0-beta`，jar `build/libs/modreloader-1.21.1-0.1.0-beta.jar`（497,608 B，sha256 `5ba576ca…`），
+  tag `v0.1.0-beta`；发布 jar 内含 `META-INF/LICENSE`；旧 `v0.1.0` 保持 MIT；单测 118。
 - **2026-11-21（67 真机确认 + 68 记录）**：真机日志 4 条 `preserved ...`、0 次 `IllegalAccessError` → 67 结案。
   同会话在**世界内**热加 AE2 崩于 mixin→construct 竞态（`ChunkMap` 注入先于 `AEConfig` 构造，
   服务器 tick 读到 null），记录问题 68 与三个方案（服务器 tick 屏障 / 调整顺序 / 拒绝 in-world mixin），待拍板。

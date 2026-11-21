@@ -20,6 +20,7 @@
 | [0013](0013-late-coremod.md) | 热加 jar 的 coremod（`ICoreMod`）在独立 module layer 里晚注入；JBR 只在「已加载类 + 布局变更」时必需 | Proposed（jecharacters 拼音搜索功能验证通过） |
 | [0014](0014-no-caller-rewrite-for-at.md) | 不改写调用方来“模拟 AT”（Stage-0 否决） | Accepted（所有者 2026-11-17） |
 | [0015](0015-player-side-zero-tinkering.md) | 玩家侧零手工：能力由运行时自动准备，不删能力 | Accepted（所有者 2026-11-18 修正） |
+| [0016](0016-gplv3-license.md) | 许可证改为 GPL-3.0-only（0.1.0-beta 起） | Accepted（所有者 2026-11-22） |
 
 ## 模板
 
