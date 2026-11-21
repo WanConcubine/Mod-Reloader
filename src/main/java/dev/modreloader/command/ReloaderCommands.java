@@ -48,7 +48,9 @@ public final class ReloaderCommands {
     }
 
     public static void registerServer(RegisterCommandsEvent event) {
-        event.getDispatcher().register(tree());
+        // A dedicated server is shared: a jar hot-add must not be a player command.
+        // Console has permission 4, operators 2+; regular players are refused.
+        event.getDispatcher().register(tree().requires(source -> source.hasPermission(2)));
     }
 
     /**
