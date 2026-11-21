@@ -253,7 +253,8 @@
     不会重跑构造器，旧 `Font` 实例拿到的字段是 `0.0f`，闪烁分支常开，所有文字约 65% 亮度（真机截图：字体变暗）。
     这是问题 45（新增字段不初始化）的第二个实例；`layoutChange` 现在把字段增减也算作布局变更：无 JBR 前置拒绝，
     JBR 下照常尝试并额外打印“旧实例保持 JVM 默认值，需重启才完全正确”的警告。Jade 的变暗不是崩溃，
-    实测重启并让 Jade 正常加载即可恢复；是否把 Jade 记为“需重启才正确渲染”由所有者按白名单规则决定。
+    实测重启并让 Jade 正常加载即可恢复；**2026-11-21 所有者 Windows/PCL2 实例复测复现**（`keyMappings 34→39`、
+    late AT 57 rule），按白名单规则 Jade 的 JBR 行转 **J2**（bug 列：「热加后字体变暗，重启后正常」）。
 
 64. **方法级 `-f`（去已加载方法的 final）在 JBR 下不可用（2026-11-21 真机复现）**：Mekanism 的 AT 含
     `public-f Screen renderWithTooltip(Lnet/minecraft/client/gui/GuiGraphics;IIF)V` 与
@@ -461,12 +462,13 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近三条。
 
+- **2026-11-21（J1 白名单复测第一批）**：Windows/PCL2 + 增强 JBR 同会话热加 Architectury（311 rule/150 类）、
+  Searchables、Controlling（1 rule）、Jade（57 rule）；均 `isLoaded=true`、无崩溃。Architectury/Controlling
+  转 verified；**Jade 因字体变暗（问题 56）转 J2**；**JEI 19.71 被 mezz_config 前置拦下**——standalone 为无
+  container 的 GAMELIBRARY，需启动期在 `mods/` 后再复测。
 - **2026-11-21（Mekanism 真机复验）**：问题 58 修复生效——标题屏热加成功（注册表 93、blocks→1260、
   items→1714、层→224、`isLoaded=true`），`robit` NPE 消失；随后暴露**方法级 `-f`** 在 JBR 下不可用（问题 64：
   `Screen.renderWithTooltip`/`AbstractWidget.render` 去 final 后约 2 秒崩溃，`-Xint` 复现，xlog BCI 为负）。
 - **2026-11-20（0.1.0 release notes 草案）**：`docs/releases/0.1.0.md` 按“只承诺 verified + 可选扩展 +
   已知限制 + 存档警告”组织；支持矩阵与 `tools/whitelist.py check` 一致（61 行：stock T1=7/BLACK=23；
   jbr J1=25/J2=2/BLACK=4）。candidate/fixing 不作为发布承诺。
-- **2026-11-20（lateAt 随增强 JBR 自动开启）**：`LateAccessTransformers.enabled()` 在属性未显式设置时
-  随增强 JBR 自动启用（`-Dmodreloader.lateAt=false` 可关）；玩家点一次「准备环境」后不再遇到 AT 开关类阻塞。
-  验证：JBR 默认 Jade 57 条 AT 自动应用、`ok=true`；Temurin stock 干净 `ACCESS_TRANSFORMER` 拒绝；单测 114。
