@@ -167,6 +167,30 @@ final class ModernUIAdapter {
                 + "replayed before the constructor (UI thread will create the recording context)");
     }
 
+    /**
+     * After the resource reload / shader rebuild: ModernUI's config reload runs
+     * {@code TextRenderType.toggleSDFShaders} during construct, before its shader
+     * JSONs were registered, so the "current" SDF shaders stay null and the first
+     * drawn string NPEs in {@code RenderType.draw}. preloadShaders() re-reads the
+     * now-registered instances.
+     */
+    static String afterClientStartup(java.util.Set<String> ids) {
+        if (ids == null || !ids.contains(MOD_ID) || !enabled()
+                || !dev.modreloader.Platform.isClient()) {
+            return null;
+        }
+        try {
+            Class<?> type = Class.forName("icyllis.modernui.mc.text.TextRenderType");
+            type.getMethod("preloadShaders").invoke(null);
+            ModReloader.LOGGER.info("[ModReloader] modernui adapter: TextRenderType.preloadShaders() "
+                    + "replayed after the shader rebuild");
+            return null;
+        } catch (Throwable t) {
+            ModReloader.LOGGER.error("[ModReloader] modernui adapter (shaders) failed", t);
+            return rootCause(t);
+        }
+    }
+
     private static void copyBoolean(Class<?> type, Object options, String field, Object property)
             throws ReflectiveOperationException {
         if (property != null) {

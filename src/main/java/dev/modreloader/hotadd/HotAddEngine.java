@@ -930,6 +930,18 @@ public final class HotAddEngine {
         } catch (Throwable t) {
             ModReloader.LOGGER.warn("[ModReloader] staged client replay failed", t);
         }
+        String modernUiShaders = ModernUIAdapter.afterClientStartup(run.ids);
+        if (modernUiShaders != null) {
+            ModReloader.LOGGER.error("[ModReloader] modernui adapter (shaders) failed: {}; "
+                    + "restarting instead of continuing", modernUiShaders);
+            dev.modreloader.launch.Relauncher.saveAndRestartCurrentClient(
+                            "modernui adapter failed: " + modernUiShaders)
+                    .ifPresent(reason -> ModReloader.LOGGER.error(
+                            "[ModReloader] cannot relaunch after the modernui adapter failed: {}",
+                            reason));
+            return fail(rollback, Stage.CLIENT, FailureKind.UNKNOWN,
+                    "modernui adapter failed: " + modernUiShaders + "; restart required");
+        }
         SodiumBootstrap.afterClientStartup(run.ids);
         run.keysAfter = hooks.keyMappingCount();
 
