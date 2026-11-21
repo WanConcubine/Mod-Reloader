@@ -2470,3 +2470,12 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
 - 顺带：release 早于 payload 适配会让 Create 的 `clientbound_chain_conveyor` 被连接拒绝
   （`may not be sent to the client`）；释放点已移到 `runSidedStartup` 末尾。
 - harness：新增 `-PverifyAddCommandPre`（AE2 需 GuideME）与 `pauseOnLostFocus=false`。
+
+## 2026-11-21 深夜交接
+
+- 真机链路：Create 进世界通过 → 66 数据包注册表修复确认（创造栏不再崩）→ 67 启动期 AT 修复确认
+  （4 条 `preserved`、0 次 IllegalAccessError）→ 世界内热加 AE2 暴露 68（mixin→construct 竞态）。
+- 68 方案 A（tick 屏障）实验失败：AE2 两次 JBR VM 崩溃，默认关闭；下一步 B（in-world 先 construct 再 mixin）。
+  新增 harness `-PverifyAddCommandPre`、`pauseOnLostFocus=false`、`-PtickBarrier=true`。
+- 部署：PCL jar sha `80e08684…dcf5`（65/66/67）；`server-kit.zip` 已同步（Windows JBR 步骤）。
+- Git：本地已推送至 `origin/main`（尖端见 status 交接）；代理 7897 TLS 失败，直连重试成功。

@@ -533,19 +533,23 @@
 
 ## 下一步
 
-> **当前交接（2026-11-21）**：本日完成 Mekanism/问题 58 复验（hot-add PASS）、问题 64（方法级 `-f`，JBR 边界）、
-> ModernUI opt-in 适配（六步链路真机 PASS）、包装 jar（mezz → JEI 依赖链）、服务器一等目标（SERVER 配置更正、
-> MixinAgentGuard/AT side/CLIENT 配置三处修复、专用服 Create/Mekanism/architectury/runState/why 全 PASS、
-> 命令权限 2）、shader 重建时序修复。白名单：JBR J1=22 / J2=5 / BLACK=4（61 行）。
-> **下一批（建议）**：① Create 真机复验（65+66 已修，dev L2 PASS；开两个创造栏、触发 Ponder）；
-> ② 问题 64 产品决策；
-> ③ 剩余 J1 candidate（Cloth/Balm/GeckoLib/Curios/Patchouli/Embeddium/ModernFix/FerriteCore/Xaero 小地图/
-> voicechat/mcwifipnp/e4mc/Farmer's Delight/Comforts/Moonlight/Supplementaries/ZeroCore2）；④ 专用服多人
-> （`mpRegistryServer`/`mpFeiServer`，需客户端配合）与 datapack/payload 专用服回归；⑤ ModernUI 默认可否开启。
+> **当前交接（2026-11-21 深夜）**：本日先完成 Mekanism/58 复验、64、ModernUI opt-in、包装 jar、专用服一等目标
+> （Create/Mekanism/architectury/runState/why 全 PASS、命令权限 2）。夜间真机连续修复并确认：
+> **65** accessor 接口（coprocessor listener）、**66** 数据包注册表（`DataPackRegistryEvent` 重放；真机创造栏已不再崩）、
+> **67** 启动期 AT 丢失（`transplantLiveAccess`；真机日志 4 条 `preserved`、0 次 `IllegalAccessError`）。
+> **68 未结**：世界内 add 的 mixin→construct 竞态（AE2 `AEConfig` NPE）。方案 A（服务器 tick 屏障）已实现并实验：
+> Create 世界内 add PASS（冻结 26s），但 AE2 两次在 `VM_RedefineClasses` 里 JVM 崩溃（`hs_err_pid14388/22700.log`），
+> 关屏障两次 PASS → **屏障默认关闭**（`-Dmodreloader.tickBarrier=true` 才开）。下一步 B：in-world 先 construct 后 mixin。
+> **部署**：PCL `mods/modreloader-1.21.1-0.1.0.jar` sha `80e08684…dcf5`（含 65/66/67，不含屏障）；
+> `server-kit/` + `server-kit.zip` 同步该 jar 与 Windows JBR 步骤。白名单 Create 仍 J2（等玩法确认后转 J1）。
+> **下一批（建议）**：① 实现问题 68 方案 B（in-world construct 先于 mixin）并用 Create/AE2 世界内回归 + 专用服复验；
+> ② 64 产品决策；③ Create 白名单转 J1（玩法确认）；④ 真人双端（朋友在线时；首测先用无数据包注册表的模组；
+> Create 专用服还需「世界加载前热加」）；⑤ 剩余 J1 candidate；⑥ ModernUI 默认可否开启。
 > **环境**：构建用 `X:` subst + 本地 Gradle 8.10（`--init-script X:/neoforged-mirror.init.gradle`）；
-> 专用服 dev 跑法 `runServer -x downloadAssets -PjbrJava=...`，并在 `build/moddev/minecraft_assets.properties`
-> 写 `assets_root`/`asset_index` 指向 `.minecraft/assets`（本机 PKIX 拦截资产下载）；`run/mods` 需 MixinRuntime。
-> **注意**：2026-11-21 的 30 个提交已推送；本机拉取后 `origin/main = 7867463`。
+> 专用服 dev 跑法 `runServer -x downloadAssets -PjbrJava=...`，`build/moddev/minecraft_assets.properties` 指向
+> `.minecraft/assets`；`run/mods` 需 MixinRuntime。新增 harness：`-PverifyAddCommandPre`（AE2 需 GuideME 先加）、
+> `pauseOnLostFocus=false`（让集成服务器真的 tick）、`-PtickBarrier=true`（实验）、`-PverifyCreatePonder`（Create L2）。
+> **Git**：`main == origin/main`（见下方尖端）；SakuraCat 代理 7897 对 git TLS 失败，推送用直连多试几次。
 > 证据在 [history.md](history.md)；语料/夹具：`run/`、`.minecraft/.../modreloader/staging`、`corpus/j1`。
 
 | 优先 | 任务 | 关键点 / 落点 | 验收 |
