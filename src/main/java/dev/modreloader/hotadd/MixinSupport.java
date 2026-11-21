@@ -441,6 +441,7 @@ public final class MixinSupport {
                         + "cannot be read; its static @Invoker methods stay stubs until restart");
                 continue;
             }
+            original = transplantLiveAccess(type, original, dotted);
             byte[] processed;
             try {
                 processed = transformBytes(original, dotted);
@@ -777,6 +778,87 @@ public final class MixinSupport {
         return writer.toByteArray();
     }
 
+    /**
+     * Copies visibility and {@code final} from the live class onto bytes read from a
+     * class resource.
+     *
+     * <p>ModLauncher applies access transformers while <em>defining</em> a class, so
+     * the resource is the pre-AT shape. Redefining a hot-add target from it silently
+     * dropped widening such as NeoForge's
+     * {@code public UseOnContext.<init>}: the next {@code BlockStateBase.useItemOn}
+     * threw {@code IllegalAccessError} (issue 67). Only the visibility/final bits are
+     * taken from the live class; flags the transformer itself needs (synthetic,
+     * bridge, varargs, enum, ...) stay exactly as the bytecode has them.
+     */
+    private static byte[] transplantLiveAccess(Class<?> live, byte[] bytes, String dotted) {
+        try {
+            ClassNode node = new ClassNode();
+            ClassReader reader = new ClassReader(bytes);
+            reader.accept(node, 0);
+            int mask = org.objectweb.asm.Opcodes.ACC_PUBLIC
+                    | org.objectweb.asm.Opcodes.ACC_PROTECTED
+                    | org.objectweb.asm.Opcodes.ACC_PRIVATE
+                    | org.objectweb.asm.Opcodes.ACC_FINAL;
+            int changes = 0;
+
+            int classAccess = (node.access & ~mask) | (live.getModifiers() & mask);
+            if (classAccess != node.access) {
+                node.access = classAccess;
+                changes++;
+            }
+
+            Map<String, Integer> fieldAccess = new HashMap<>();
+            for (java.lang.reflect.Field field : live.getDeclaredFields()) {
+                fieldAccess.put(field.getName() + ":" + org.objectweb.asm.Type.getDescriptor(
+                        field.getType()), field.getModifiers());
+            }
+            for (FieldNode field : node.fields) {
+                Integer access = fieldAccess.get(field.name + ":" + field.desc);
+                if (access != null) {
+                    int updated = (field.access & ~mask) | (access & mask);
+                    if (updated != field.access) {
+                        field.access = updated;
+                        changes++;
+                    }
+                }
+            }
+
+            Map<String, Integer> methodAccess = new HashMap<>();
+            for (java.lang.reflect.Method method : live.getDeclaredMethods()) {
+                methodAccess.put(method.getName()
+                                + org.objectweb.asm.Type.getMethodDescriptor(method),
+                        method.getModifiers());
+            }
+            for (java.lang.reflect.Constructor<?> constructor : live.getDeclaredConstructors()) {
+                methodAccess.put("<init>"
+                                + org.objectweb.asm.Type.getConstructorDescriptor(constructor),
+                        constructor.getModifiers());
+            }
+            for (MethodNode method : node.methods) {
+                Integer access = methodAccess.get(method.name + method.desc);
+                if (access != null) {
+                    int updated = (method.access & ~mask) | (access & mask);
+                    if (updated != method.access) {
+                        method.access = updated;
+                        changes++;
+                    }
+                }
+            }
+
+            if (changes == 0) {
+                return bytes;
+            }
+            ClassWriter writer = new ClassWriter(reader, 0);
+            node.accept(writer);
+            ModReloader.LOGGER.info("[ModReloader] preserved {} load-time access flag(s) on {} "
+                    + "(the class resource does not contain startup ATs)", changes, dotted);
+            return writer.toByteArray();
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn("[ModReloader] cannot preserve the live access of {}", dotted, t);
+            return bytes;
+        }
+    }
+
     /** Mixin wraps the real failure; keep the whole cause chain in the report. */
     private static String describe(Throwable t) {
         StringBuilder builder = new StringBuilder();
@@ -985,6 +1067,12 @@ public final class MixinSupport {
                             "[ModReloader] no class-file resource for {}; falling back to a "
                                     + "retransform capture (this applies prepared mixins)", dotted);
                     bytes = ClassBytes.of(instrumentation, type);
+                }
+                if (bytes != null && type != null) {
+                    // The resource is the pre-transformer shape; the live class already
+                    // carries load-time ATs (NeoForge's own, not ours). Redefining from
+                    // the resource would undo them (issue 67).
+                    bytes = transplantLiveAccess(type, bytes, dotted);
                 }
                 if (bytes == null) {
                     ModReloader.LOGGER.warn("[ModReloader] no original bytes for {}; rollback limited",

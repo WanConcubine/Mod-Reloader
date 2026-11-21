@@ -2429,3 +2429,15 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
 - 构建：`./gradlew build` 成功，新 jar `build/libs/modreloader-1.21.1-0.1.0.jar`（479,858 B，sha256 `e80b92d3…`）。
 - 白名单实际 61 行（stock T1=7/BLACK=23；jbr J1=22/J2=5/BLACK=4）；同步 release notes 矩阵、
   verified 列表（Architectury/Controlling/JEI）与 J2 缺陷（Create/ModernUI），并修掉 status.md 的损坏行。
+
+### 问题 67 修复：redefine 时保留加载期 AT（2026-11-21 晚）
+
+- 修法：`MixinSupport.transplantLiveAccess` 从活类的 `getModifiers()` 取可见性/final，覆盖到
+  `captureOriginals`/`processLoadedAccessors` 读出的类资源字节上（只动可见性/final，其它标志保持原样）；
+  回滚基线同样带 AT。dev 跑出 `preserved 1 load-time access flag(s) on BlockEntityType`，机制生效。
+- 关键限制：dev 的 `neoforge-...-merged.jar` 构建期已应用 AT，`UseOnContext.<init>` 资源本身就是 public，
+  **dev 无法复现 67**；`-PverifyCreatePonder` 增加了构造器可见性断言与真实
+  `gameMode.useItemOn(...)`（`PASS`），但真机右键方块才是唯一判据。
+- 部署：PCL 与 server-kit 同步更新，sha256 `80e08684…dcf5`；server-kit 内含 Windows JBR 步骤。
+- 专用服边界（问题 66 的延伸）：专用服世界先于控制台可用的时间点加载，add 后当前世界看不到新的
+  数据包注册表；已记录为下一步「世界加载前热加」。

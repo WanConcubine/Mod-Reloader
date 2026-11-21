@@ -126,8 +126,56 @@ public final class CreatePonderCheck {
         List<String> problems = new ArrayList<>();
         checkRegistry(mc, problems);
         checkPotatoCannon(mc, problems);
+        checkStartupAt(mc, problems);
         checkPonderRenderTypes(problems);
         finish(problems.isEmpty(), problems);
+    }
+
+    /**
+     * Issue 67: {@code UseOnContext.<init>} is public thanks to NeoForge's startup AT.
+     * Redefining it from the pre-AT class resource made it protected again and the
+     * next {@code BlockStateBase.useItemOn} threw {@code IllegalAccessError}.
+     */
+    private static void checkStartupAt(Minecraft mc, List<String> problems) {
+        if (mc.level == null || mc.player == null) {
+            problems.add("no level/player for the startup-AT check");
+            return;
+        }
+        try {
+            Class<?> useOn = Class.forName("net.minecraft.world.item.context.UseOnContext", true,
+                    CreatePonderCheck.class.getClassLoader());
+            java.lang.reflect.Constructor<?> constructor = useOn.getDeclaredConstructor(
+                    net.minecraft.world.level.Level.class, Player.class,
+                    net.minecraft.world.InteractionHand.class, ItemStack.class,
+                    net.minecraft.world.phys.BlockHitResult.class);
+            ModReloader.LOGGER.info("[CreatePonderCheck] UseOnContext.<init> modifiers: {}",
+                    java.lang.reflect.Modifier.toString(constructor.getModifiers()));
+            if (!java.lang.reflect.Modifier.isPublic(constructor.getModifiers())) {
+                problems.add("UseOnContext.<init> is not public after the hot-add: the load-time AT "
+                        + "was lost (issue 67)");
+                return;
+            }
+            Object context = constructor.newInstance(mc.level, mc.player,
+                    net.minecraft.world.InteractionHand.MAIN_HAND, mc.player.getMainHandItem(),
+                    new net.minecraft.world.phys.BlockHitResult(
+                            net.minecraft.world.phys.Vec3.atCenterOf(mc.player.blockPosition()),
+                            net.minecraft.core.Direction.UP, mc.player.blockPosition(), false));
+            ModReloader.LOGGER.info("[CreatePonderCheck] constructed UseOnContext: {}", context != null);
+            // The client-prediction path from the crash: BlockStateBase.useItemOn builds
+            // this context itself, so a lost AT throws IllegalAccessError right here.
+            net.minecraft.core.BlockPos below = mc.player.blockPosition().below();
+            net.minecraft.world.phys.BlockHitResult hit = new net.minecraft.world.phys.BlockHitResult(
+                    net.minecraft.world.phys.Vec3.atCenterOf(below),
+                    net.minecraft.core.Direction.UP, below, false);
+            Object used = mc.gameMode.useItemOn(mc.player,
+                    net.minecraft.world.InteractionHand.MAIN_HAND, hit);
+            ModReloader.LOGGER.info("[CreatePonderCheck] gameMode.useItemOn(...) = {}", used);
+        } catch (Throwable t) {
+            Throwable cause = t.getCause() == null ? t : t.getCause();
+            problems.add("UseOnContext.<init> is not callable after the hot-add: "
+                    + cause.getClass().getSimpleName() + ": " + cause.getMessage()
+                    + " (issue 67: load-time AT lost)");
+        }
     }
 
     private static void checkRegistry(Minecraft mc, List<String> problems) {

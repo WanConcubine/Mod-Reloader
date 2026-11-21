@@ -231,10 +231,15 @@
     从**类资源**读原始字节（protected），热加又用这份字节 transform + redefine 了 `UseOnContext`（21:55:54），
     随后 `BlockStateBase` 也被 mixin redefine，首次执行 `useItemOn` 链接调用点时该构造器已是 protected → 访问检查失败。
     同一机制还会让**失败回滚**把 AT 加宽还原成原始访问。
-    **修复方向**：把 live 类的访问标志（类/字段/方法，反射 `getModifiers()`）移植到 transform 后的字节上，
-    并以同样方式处理回滚字节（类似现有 `transplantAccess`，但来源是活类而不是类资源）；
-    回归断言：热加后 `UseOnContext.<init>(Level,Player,InteractionHand,ItemStack,BlockHitResult)` 仍为 public，
-    并真正走一次 `BlockStateBase.useItemOn`。**属 late AT/加载期 AT 的通用缺口，不只 Create。**
+    **修法（已实现，待真机复验）**：`MixinSupport.transplantLiveAccess` 把 live 类的可见性/final
+    （类/字段/方法，反射 `getModifiers()`）移植到从类资源读出的字节上，`captureOriginals` 与
+    `processLoadedAccessors` 都走这条路径（顺带让回滚字节也保留加载期 AT）；只动可见性/final，
+    synthetic/bridge/varargs/enum 等标志保持字节原样。
+    **dev 无法判定的原因**：dev 的 `neoforge-...-merged.jar` 在构建期已应用 AT，`UseOnContext.<init>`
+    资源本身就是 public；因此 `-PverifyCreatePonder` 即使断言 public + 真实 `gameMode.useItemOn`
+    （返回值 `PASS`）也只证明路径可跑，**真机右键方块才是 67 的唯一判据**。
+    真机日志应出现 `preserved N load-time access flag(s) on net.minecraft.world.item.context.UseOnContext`
+    （dev 跑到了同名日志，但只对 `BlockEntityType` 触发 1 处）。**属 late AT/加载期 AT 的通用缺口，不只 Create。**
 
 61. **Sodium 热加后旧渲染对象崩溃（2026-11-19；2026-11-20 分析）**：`sodium-lateat` 中 Sodium ok=true（含 4 个
     fabric 库、约 64 类 redefine）。已修 `ShaderInstance.uniformCache` NPE（add 前重建 shader 实例）。
@@ -364,6 +369,8 @@
     `PonderRenderTypes` 正常 → `RESULT: PASS`。`./gradlew build` 绿（`ReplayCatalogTest` 23 项）。
     **真机已确认**：2026-11-21 21:55 会话中 `datapack registries registered: [create:potato_projectile/type]`，
     再开机械动力创造栏不再出现该异常（随后暴露问题 67，见待解决）。白名单 Create 仍 J2 直到 67 修复。
+    **专用服边界**：专用服启动即加载世界，控制台 add 发生在世界加载之后 → 当前世界仍看不到新数据包注册表
+    （客户端从服务端同步，同样没有）；需要「世界加载前热加」机制（见下一步）。
 
 65. ✅ **热加 Mixin 的 accessor/`@Invoker` 接口未被改写（2026-11-21，dev 验证；Create 真机复验待做）**：Create（`ponder`）的
     `RenderTypeAccessor` 是 `@Mixin(RenderType.class)` 的接口，静态 `catnip$create` 是 Mixin 的
@@ -544,16 +551,17 @@
 | **P3-1** | GUI/watcher Phase 3/4 | 主菜单弹窗、失败面板、多候选/依赖排序、同 mod id 冲突 | [gui-mod-watcher.md](features/gui-mod-watcher.md) |
 | **P3-2** | 产品化下一步 | 托管重启端到端、嵌套 mod 容器、可分发形态、coremod target 报告 | [managed-relaunch.md](features/managed-relaunch.md) 未验证项 |
 | **P3-3** | 分析器 Fabric 校准 | intermediary 名 → 核心类识别；置信度校准 | 校准表扩充 |
+| **P0-新** | 专用服「世界加载前热加」 | 数据包注册表只对下一个世界生效；专用服目前只能在世界加载后 add。方案：启动期从 `modreloader/inbox` 或控制台参数（如 `--modreloader-add=…`）在 `WorldLoader` 之前热加，再加载世界 | 专用服 Create 当前世界可用（`potato_projectile/type` 存在） |
 | **tech-debt** | ✅ P0-5/P0-6/P1-12/P1-13（高风险）/P1-14（规则）/P2-10/P2-15（TestWorld/TestConnection）/包分层 | [tech-debt.md](tech-debt.md) | 构建绿 + 回归 |
 
 ## 最近变更
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近三条。
 
-- **2026-11-21（问题 67 记录：启动期 AT 被 redefine 覆盖）**：Create 进世界后右键方块 →
-  `IllegalAccessError: BlockStateBase.useItemOn -> protected UseOnContext.<init>`。根因是 `UseOnContext.<init>`
-  的 public 来自 NeoForge 启动期 AT（不是 Create 的），热加用类资源的原始字节 redefine 它时把 AT 丢了；
-  已记录修复方向（把活类访问标志移植到 transform/回滚字节，附回归断言）。Create 白名单暂留 J2。
+- **2026-11-21（问题 67 修复，待真机）：启动期 AT 在 redefine 时保留**：`transplantLiveAccess` 把活类的
+  可见性/final 移植到类资源字节（transform 与回滚都走），针对 `UseOnContext.<init>` 这类 NeoForge 启动期 AT。
+  dev merged jar 构建期已应用 AT、无法复现，真机右键是唯一判据；jar 已部署（sha `80e08684…`）。
+  Create 白名单暂留 J2。另记录专用服「世界加载前热加」缺口（数据包注册表只对下一个世界生效）。
 
 - **2026-11-21（问题 66 修复：数据包注册表）**：热加漏发 `DataPackRegistryEvent.NewRegistry`，Create 的
   `create:potato_projectile/type` 不在 level registry access → 打开机械动力创造栏渲染马铃薯炮崩。
