@@ -120,6 +120,9 @@ python3 tools/pipeline/run.py report
 # 先 build 夹具：experiments/mixin-fixture/build.sh /tmp/mixinfixture
 ./gradlew runClient -PnoJbr=true -PverifyMixinFixture=/tmp/mixinfixture/mixinfixture-1.0.0.jar
 
+# 问题 65：热加 Create 后强制 PonderRenderTypes.<clinit>（静态 @Invoker 接口的 define 时改写路径）
+./gradlew runClient -PverifyCreatePonder=<create-1.21.1-6.0.10.jar>
+
 # coremod 晚注入（jecharacters → JEI 拼音搜索）；**JEI 必须在 run/mods**，否则断言会报 JEI not installed
 ./gradlew runClient -PverifyPinyin=/Users/<you>/Downloads/jecharacters-neoforge-4.5.15.jar
 

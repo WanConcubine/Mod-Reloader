@@ -115,6 +115,10 @@ public final class DevEntry {
         if (!verifyCompat.isEmpty()) {
             CompatCheck.start(verifyCompat);
         }
+        String verifyCreatePonder = System.getProperty("modreloader.verifyCreatePonder", "").trim();
+        if (!verifyCreatePonder.isEmpty()) {
+            CreatePonderCheck.start(Path.of(verifyCreatePonder));
+        }
         String verifyPinyin = System.getProperty("modreloader.verifyPinyin", "").trim();
         if (!verifyPinyin.isEmpty()) {
             PinyinCheck.start(Path.of(verifyPinyin));

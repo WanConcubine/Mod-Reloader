@@ -2375,3 +2375,16 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
 - 夹具侧只做常量提取（`INVOKER`），产品 jar 与 20:57 部署版本一致；`compileJava`/`compileDevJava` 绿。
 - 尚未覆盖：`processLoadedAccessors`（接口在 add 前已加载）没有夹具路径——夹具 jar 在 add 前不在模块路径上，
   无法在不污染 loader 的前提下预加载；保留该分支用于“构造后失败回滚再重试”等场景。
+
+### Create 专用检查（2026-11-21 晚）：PonderRenderTypes 的静态 invoker 路径 PASS
+
+- 新增 dev harness `-PverifyCreatePonder=<jar>`（`CreatePonderCheck`）：标题屏热加 Create，20 tick 后反射
+  `Class.forName("net.createmod.catnip.render.PonderRenderTypes", true)` 并调用 `fluid()` / `outlineSolid()`；
+  这正是 18:33 崩溃的 `<clinit>`（`RenderTypeAccessor.catnip$create`）。
+- 实测（dev client + 增强 JBR）：add `ok=true`（flywheel/ponder/create 三容器），
+  accessor registry 登记 **52** 个接口（含 `RenderTypeAccessor`、flywheel/ponder/create 的其余 accessor）；
+  `fluid() = RenderType[ponder:fluid:...]`、`outlineSolid() = RenderType[ponder:outline_solid:...]`、`RESULT: PASS`。
+- 同批布局警告（J2，问题 45/56 同族）：`ItemStack` +`create$CLIPBOARD_ID`、`BlockEntityType` +flywheel visualizer/
+  sodiumPredicate、`EntityType` +visualizer、`MapItemSavedData`/`ArmorTrim`/`PoseStack`/`LevelRenderer` 也新增字段；
+  活实例保持 JVM 默认值。进世界是否可见错误留给真机观察。
+- 仍未验证：PCL 真机进世界（手动）；白名单 Create 暂留 J2。

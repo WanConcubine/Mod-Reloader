@@ -71,6 +71,14 @@
 
 ### 已验证
 
+- **Create 的 Ponder 静态 `@Invoker` 路径（问题 65，2026-11-21 dev client + 增强 JBR）**：
+  `-PverifyCreatePonder=<create-6.0.10>` 标题屏热加 Create（flywheel/ponder/create 三容器，52 个 accessor/invoker
+  接口注册），随后反射触发 `PonderRenderTypes.<clinit>`（正是此前抛 `AssertionError` 的位置）：
+  `fluid()` / `outlineSolid()` 返回真实 `RenderType`，`RESULT: PASS`。同批 J2 警告：`ItemStack`（`create$CLIPBOARD_ID`）/
+  `BlockEntityType`/`EntityType`（flywheel visualizer）给已加载类新增实例字段（问题 45/56 同族），
+  活实例（`ItemStack.EMPTY` 等）保持 JVM 默认值——进世界是否可见错误仍需真机观察。
+  **真机进世界（PCL）仍未验证。**
+
 - **accessor/invoker 接口在热加后被 Mixin 改写（问题 65，2026-11-21 dev client，`-PnoJbr=true`）**：
   `MixinSupport` 在 prepare 前把 processor 的 4 个 coprocessor 与 `MixinInheritanceTracker` 挂到新 config
   （日志 `attached 4 processor listener(s) for on-load interface rewriting`），accessor 接口在 define 时由
@@ -341,7 +349,8 @@
     证据：`experiments/mixin-fixture` 新增静态 `@Invoker` 接口（桩体同 ponder）→
     `-PnoJbr=true -PverifyMixinFixture=...` 日志 `attached 4 processor listener(s)`、
     `AccessTargetInvoker.mixinfixture$hidden() = reached-target`、`RESULT: PASS`；专用服 Create `serverAddCommand`
-    复跑仍 PASS；jar 已部署到 PCL（2026-11-21 20:57）。
+    复跑仍 PASS；Create 专用检查 `-PverifyCreatePonder` 也 PASS（`PonderRenderTypes` 正常初始化）；jar 已部署到 PCL
+    （2026-11-21 20:57）。
     影响面（只读扫描本机 34 个 jar，含嵌套 jarjar，条件：类含 `Mixin application failed!` + `@Invoker`）：
     只有 Create/ponder 的 `RenderTypeAccessor` 命中，其余安装包/staging 无此类桩。
     **仍缺**：Create 真机进世界复验（此前崩溃：`crash-reports/crash-2026-11-21_18.33.26-client.txt`）；白名单 Create 暂留 J2。

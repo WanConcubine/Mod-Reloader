@@ -110,6 +110,7 @@ def verifyDatapack = providers.gradleProperty('verifyDatapack').orNull
 def verifyDatapackAtTitle = providers.gradleProperty('verifyDatapackAtTitle').orNull
 def verifyGameplay = providers.gradleProperty('verifyGameplay').orNull
 def verifyCompat = providers.gradleProperty('verifyCompat').orNull
+def verifyCreatePonder = providers.gradleProperty('verifyCreatePonder').orNull
 def verifyAe2L2 = providers.gradleProperty('verifyAe2L2').orNull
 def verifyMenu = providers.gradleProperty('verifyMenu').orNull
 def verifyDelete = providers.gradleProperty('verifyDelete').orNull
@@ -283,6 +284,11 @@ neoForge {
                 // Compatibility matrix: hot-add real jars at the title screen, one
                 // at a time, and log a verdict per jar (comma-separated, deps first).
                 systemProperty 'modreloader.verifyCompat', verifyCompat
+            }
+            if (verifyCreatePonder) {
+                // Issue 65: hot-add Create, then force PonderRenderTypes.<clinit>,
+                // which goes through ponder's static @Invoker interface.
+                systemProperty 'modreloader.verifyCreatePonder', verifyCreatePonder
             }
             if (providers.gradleProperty('verifyCompatSettle').orNull) {
                 // Extra ticks after the last jar so the hot-add resource reload can
