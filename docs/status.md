@@ -206,9 +206,9 @@
 
 ## 已知问题 / 坑
 
-> 追加式账本，**编号稳定**（引用不变）。共 65 条：待解决 2 / 验证缺口 4 / 结构性边界 18 / 历史与注记 15 / 已修 26。
-> **当前 actionable（2）**：61 Sodium 单例 mixin 字段、64 方法级 `-f`。**65 已修**（coprocessor listener 缺失；
-> 夹具 PASS，Create 真机复验待做）。
+> 追加式账本，**编号稳定**（引用不变）。共 65 条：待解决 1 / 验证缺口 4 / 结构性边界 18 / 历史与注记 15 / 已修 27。
+> **当前 actionable（1）**：61 Sodium 单例 mixin 字段。**64 是待拍板的结构性边界**（方法级 `-f`）。
+> **65 已修**（coprocessor listener 缺失；夹具与专用服回归 PASS，Create 客户端真机复验待做）。
 
 ### 待解决（需改代码）
 
@@ -223,27 +223,6 @@
     标题屏热加已不再崩；**进世界热加**仍停在 Sodium 的 `BlockColors` 状态（`blocksToColor`/`overridenBlocks`
     未初始化 → `sodium$getProviders` NPE）。这是重建 Sodium 构造态语义，不是单字段回填；适配需要逐对象/逐状态。
     **按所有者决定保持 J2**（事实可热加，但重启前存在致命级 bug），B 未默认启用。
-
-65. **热加 Mixin 的 accessor/`@Invoker` 接口未被改写（2026-11-21，已修；真机复验待做）**：Create（`ponder`）的
-    `RenderTypeAccessor` 是 `@Mixin(RenderType.class)` 的接口，静态 `catnip$create` 是 Mixin 的
-    “未应用”桩（直接抛 `AssertionError: Mixin application failed!`）。热加时我们对目标类做了 transform，
-    但这个**接口本身**没有走 Mixin 的处理（静态 invoker 的真实实现要写回接口），于是 Ponder 首次渲染世界
-    （`PonderRenderTypes.<clinit>`）就断言失败。标题屏 add 本身 `ok=true`；进世界即崩。
-    **根因（JVM/Mixin 级）**：Mixin 0.8.7 的 accessor 接口是 *loadable mixin*，由
-    `MixinCoprocessorAccessor`（+ `MixinCoprocessorPassthrough`）在**接口类 define 时**改写；
-    这两个 coprocessor 只在 `MixinProcessor.prepareConfigs` 里被 `MixinConfig.addListener` 注册、并在
-    `MixinConfig.prepare` 的 `onPrepare` 回调里登记接口名。我们热加时直接调
-    `MixinConfig.prepare(extensions)`，跳过了 listener 注册，coprocessor 不认识该接口 →
-    `couldTransformClass=false` → 接口按原字节加载（连 IllegalClassLoadError 都不触发）→ 保留桩体。
-    **修法**：`MixinSupport.attachConfigListeners` 在 prepare 前把 processor 的 4 个 coprocessor
-    （passthrough/synthetic-inner/accessor/nest-host）与 `MixinInheritanceTracker.INSTANCE` 挂到新 config 上；
-    另外对“上一次 add 已经加载过”的 accessor 接口做 `transformClassBytes` + redefine（`processLoadedAccessors`）。
-    证据：`experiments/mixin-fixture` 新增静态 `@Invoker` 接口（桩体同 ponder）→
-    `-PnoJbr=true -PverifyMixinFixture=...` 日志 `attached 4 processor listener(s)`、
-    `AccessTargetInvoker.mixinfixture$hidden() = reached-target`、`RESULT: PASS`；jar 已部署到 PCL（2026-11-21 20:57）。
-    影响面（只读扫描本机 34 个 jar，含嵌套 jarjar，条件：类含 `Mixin application failed!` + `@Invoker`）：
-    只有 Create/ponder 的 `RenderTypeAccessor` 命中，其余安装包/staging 无此类桩。
-    **仍缺**：Create 真机进世界复验（此前崩溃：`crash-reports/crash-2026-11-21_18.33.26-client.txt`）；白名单 Create 暂留 J2。
 
 ### 验证缺口（已实现/已修，缺证据）
 
@@ -344,6 +323,28 @@
 55. **「已选 JBR 仍要重启」是产品失败（2026-11-18 所有者）**：玩家已在启动器选了 JBR，却因缺 `-XX:+AllowEnhancedClassRedefinition` 被要求再重启——把实现细节转嫁给玩家，不可接受。**2026-11-18 收口为单一动作「为热加载增强环境做准备」**：菜单（未就绪时常驻）与失败屏都指向同一入口；已安装/正在运行的 JBR 直接复用；缺失时官方下载 → SHA-512 → 解压到 `gameDir/jbr-21.0.11`；随后自动重启并带齐 `-XX:+AllowEnhancedClassRedefinition` + `-Dmodreloader.lateAt=true`。**仍余缺口**：参数只能启动时给，启动器每次不带参数则每会话最多一次自动重启；跨会话永久生效需要启动器/整合包预设或 classloader 隔离/软重启。**2026-11-20 补**：lateAt 不再依赖第二个属性——检测到增强 JBR 即自动启用（显式 `-Dmodreloader.lateAt=false` 可关），玩家点一次准备环境后不再遇到 AT 开关类阻塞。
 
 ### 已修
+
+65. ✅ **热加 Mixin 的 accessor/`@Invoker` 接口未被改写（2026-11-21，dev 验证；Create 真机复验待做）**：Create（`ponder`）的
+    `RenderTypeAccessor` 是 `@Mixin(RenderType.class)` 的接口，静态 `catnip$create` 是 Mixin 的
+    “未应用”桩（直接抛 `AssertionError: Mixin application failed!`）。热加时我们对目标类做了 transform，
+    但这个**接口本身**没有走 Mixin 的处理（静态 invoker 的真实实现要写回接口），于是 Ponder 首次渲染世界
+    （`PonderRenderTypes.<clinit>`）就断言失败。标题屏 add 本身 `ok=true`；进世界即崩。
+    **根因（JVM/Mixin 级）**：Mixin 0.8.7 的 accessor 接口是 *loadable mixin*，由
+    `MixinCoprocessorAccessor`（+ `MixinCoprocessorPassthrough`）在**接口类 define 时**改写；
+    这两个 coprocessor 只在 `MixinProcessor.prepareConfigs` 里被 `MixinConfig.addListener` 注册、并在
+    `MixinConfig.prepare` 的 `onPrepare` 回调里登记接口名。我们热加时直接调
+    `MixinConfig.prepare(extensions)`，跳过了 listener 注册，coprocessor 不认识该接口 →
+    `couldTransformClass=false` → 接口按原字节加载（连 IllegalClassLoadError 都不触发）→ 保留桩体。
+    **修法**：`MixinSupport.attachConfigListeners` 在 prepare 前把 processor 的 4 个 coprocessor
+    （passthrough/synthetic-inner/accessor/nest-host）与 `MixinInheritanceTracker.INSTANCE` 挂到新 config 上；
+    另外对“上一次 add 已经加载过”的 accessor 接口做 `transformClassBytes` + redefine（`processLoadedAccessors`）。
+    证据：`experiments/mixin-fixture` 新增静态 `@Invoker` 接口（桩体同 ponder）→
+    `-PnoJbr=true -PverifyMixinFixture=...` 日志 `attached 4 processor listener(s)`、
+    `AccessTargetInvoker.mixinfixture$hidden() = reached-target`、`RESULT: PASS`；专用服 Create `serverAddCommand`
+    复跑仍 PASS；jar 已部署到 PCL（2026-11-21 20:57）。
+    影响面（只读扫描本机 34 个 jar，含嵌套 jarjar，条件：类含 `Mixin application failed!` + `@Invoker`）：
+    只有 Create/ponder 的 `RenderTypeAccessor` 命中，其余安装包/staging 无此类桩。
+    **仍缺**：Create 真机进世界复验（此前崩溃：`crash-reports/crash-2026-11-21_18.33.26-client.txt`）；白名单 Create 暂留 J2。
 
 58. ✅ **层/渲染器重放顺序（2026-11-21 真机复验 PASS）**：Mekanism 10.7.19 在 Windows/PCL2 + 增强 JBR 下标题屏热加
     成功：late AT 94 规则/43 类、注册表 93 个重放、blocks 1060→1260、items 1333→1714、自定义注册表 4 个、
