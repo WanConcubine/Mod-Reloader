@@ -64,6 +64,8 @@ public final class ReplayCatalog {
     public static final String REGISTER_EVENT = "net.neoforged.neoforge.registries.RegisterEvent";
     public static final String REGISTER_NEW_REGISTRY =
             "net.neoforged.neoforge.registries.NewRegistryEvent";
+    public static final String REGISTER_DATA_PACK_REGISTRIES =
+            "net.neoforged.neoforge.registries.DataPackRegistryEvent$NewRegistry";
     public static final String REGISTER_CAPABILITIES =
             "net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent";
 
@@ -89,6 +91,7 @@ public final class ReplayCatalog {
             REGISTER_PAYLOAD_HANDLERS,
             REGISTER_EVENT,
             REGISTER_NEW_REGISTRY,
+            REGISTER_DATA_PACK_REGISTRIES,
             REGISTER_CAPABILITIES);
 
     private static final Set<String> COVERED = Set.copyOf(ENTRIES);

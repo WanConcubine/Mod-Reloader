@@ -36,6 +36,7 @@ class ReplayCatalogTest {
                 ReplayCatalog.REGISTER_PAYLOAD_HANDLERS,
                 ReplayCatalog.REGISTER_EVENT,
                 ReplayCatalog.REGISTER_NEW_REGISTRY,
+                ReplayCatalog.REGISTER_DATA_PACK_REGISTRIES,
                 ReplayCatalog.REGISTER_CAPABILITIES)) {
             assertTrue(ReplayCatalog.covered().contains(event), event);
         }
@@ -45,6 +46,6 @@ class ReplayCatalogTest {
     void catalogSizeIsPinned() {
         // A new replay must make this fail once, on purpose, together with the
         // audit docs and the client registration test that exercises it.
-        assertEquals(22, ReplayCatalog.entries().size());
+        assertEquals(23, ReplayCatalog.entries().size());
     }
 }

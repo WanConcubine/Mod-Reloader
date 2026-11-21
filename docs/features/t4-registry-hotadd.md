@@ -326,3 +326,27 @@ capability 五项 present、每次 `registry commit … stoneId 1 -> 1 (stable)`
   或在重建期间暂停区块编解码；两者都还没做，也没有稳定复现手段。
 - harness / watcher / GUI 这条路径上 render 线程自己就在 hop 里阻塞，解码不会与窗口重叠，所以这条路径的风险实际被消除了。
 - 同一套线程假设没有单测覆盖（要真服务器）；回归靠 `-PverifyAddCommand -PverifyGameplay`。
+
+## 12. 数据包注册表（`DataPackRegistryEvent.NewRegistry`，问题 66，2026-11-21）
+
+内置/自定义注册表（`NewRegistryEvent`）之外，还有一种**按世界加载**的注册表：`DataPackRegistryEvent.NewRegistry`
+把 codec 交给 NeoForge 的 `DataPackRegistriesHooks`，世界加载时由 `WorldLoader` → `RegistryDataLoader`
+从 `data/<任意命名空间>/<注册表命名空间>/<路径>/` 读 JSON 建表；带网络 codec 的还会同步给客户端。
+
+热加原先不发这个事件，Create 的 `create:potato_projectile/type`（马铃薯炮弹药类型）在客户端 level
+`RegistryAccess` 里不存在：打开机械动力创造栏渲染马铃薯炮时
+`IllegalStateException: Registry create:potato_projectile/type not found`。
+
+修法（`hotadd/DatapackRegistries`）：
+
+- construct 之后，对新容器逐个 `OneShotReplay.fire` 同一个 `NewRegistry` 事件，再调包私有 `process()`；
+- 重复 key 拒绝：`addRegistryCodec` 无去重，重复条目会让 registry loader 出错；遇到已存在的 key 视为重试并跳过；
+- 加入 `inspect/ReplayCatalog`（审计与被审计的是同一张表）。
+
+时序：`WorldLoader` 用的是 `getDataPackRegistries()` 的**活视图**，网络同步列表 `SYNCHRONIZED_REGISTRIES`
+也是活视图，所以**标题屏热加对下一个世界/连接生效**；已打开的世界持有冻结的 `RegistryAccess`，
+新注册表只对下次加载可见（日志会说明，需要重启）。
+
+证据（dev client + 增强 JBR，`-PverifyCreatePonder=<create>`）：热加 Create → 建世界 →
+`create:potato_projectile/type entries=25`、`PotatoCannonItem.getAmmo()` 不再抛（返回 null，装饰器判空跳过）、
+`PonderRenderTypes` 正常 → `RESULT: PASS`。

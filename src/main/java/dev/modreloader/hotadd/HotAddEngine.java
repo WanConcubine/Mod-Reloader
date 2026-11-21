@@ -761,6 +761,17 @@ public final class HotAddEngine {
                                 + ": " + t.getMessage() + ". Restart with the jar in mods/.");
             }
         }
+        // Datapack registries are created per world from the codecs registered here
+        // (Create's potato_projectile/type and friends). The world loader reads a
+        // live list, so a title-screen add covers the next world; an already open
+        // world keeps its frozen registry view (logged in DatapackRegistries).
+        try {
+            DatapackRegistries.replay(run.containers);
+        } catch (Throwable t) {
+            return fail(rollback, Stage.CONSTRUCT, FailureKind.CUSTOM_REGISTRY,
+                    "datapack registry replay failed: " + t.getClass().getSimpleName()
+                            + ": " + t.getMessage() + ". Restart with the jar in mods/.");
+        }
         String failAfterConstructMod =
                 System.getProperty("modreloader.failAfterConstructModId", "").trim();
         if (Boolean.getBoolean("modreloader.failAfterConstruct")

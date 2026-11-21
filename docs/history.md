@@ -2388,3 +2388,19 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
   sodiumPredicate、`EntityType` +visualizer、`MapItemSavedData`/`ArmorTrim`/`PoseStack`/`LevelRenderer` 也新增字段；
   活实例保持 JVM 默认值。进世界是否可见错误留给真机观察。
 - 仍未验证：PCL 真机进世界（手动）；白名单 Create 暂留 J2。
+
+### 问题 66：数据包注册表未重放（2026-11-21，真机暴露后修复）
+
+- 真机进度：问题 65 修复后 **Create 能进世界**；打开第一个机械动力创造栏（渲染马铃薯炮的装饰器）崩：
+  `IllegalStateException: Registry create:potato_projectile/type not found`
+  （`crash-reports/crash-2026-11-21_21.31.03-client.txt`）。另一个 Create 页签不触发该路径，故不崩。
+- 根因：Create `CreateRegistriesImpl.registerDatapackRegistries` 用 `DataPackRegistryEvent.NewRegistry` 注册
+  数据包注册表；热加只重放 `NewRegistryEvent`，数据包 codec 没进 `DataPackRegistriesHooks`，世界加载时不会建表。
+- 修法：新增 `hotadd/DatapackRegistries`（construct 后对新容器发事件 + `process()`；重复 key 拒绝），
+  接入 `ReplayCatalog`（23 项）。记录两个活视图：`getDataPackRegistries()`（WorldLoader）与
+  `SYNCHRONIZED_REGISTRIES`（网络同步），标题屏 add → 下一个世界生效；已打开世界需重启。
+- 过程中修掉一个 JDK 21 细节：`Unsafe.objectFieldOffset` 拒绝 record 字段（`DataPackRegistryData`），
+  改走 trusted `findGetter` 读 `loaderData`。
+- 证据：`-PverifyCreatePonder` 升级为 L2（TestWorld 建世界）→ `entries=25`、`getAmmo()` 返回 null（装饰器判空）、
+  Ponder 渲染类型正常 → `RESULT: PASS`；`./gradlew build` 绿。部署 jar sha256 `a51bacb1…6335`（21:43）。
+- 仍未验证：PCL 真机再开同一个创造栏；白名单 Create 暂留 J2。

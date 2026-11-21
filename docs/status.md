@@ -51,6 +51,7 @@
 | **贵妃级 add-only** | blocks 1060→1061 / items 1333→1334 / states +1、stoneId 稳定；放置存盘 + 重启读档；创造栏 `rebuilt 14 tab(s)` | [t4-registry-hotadd.md](features/t4-registry-hotadd.md) |
 | **大内容热加（Create）** | JBR+lateAt 下 ok=true；blocks 1060→1703、items 1333→2032；同批 flywheel/ponder、6 个 mixin config、约 70 类 redefine（L1，玩法未验） | pipeline `create-lateat`；[status 问题 59](status.md) |
 | **自定义注册表** | `NewRegistryEvent` 重放：构造期窗口 + 只对新容器 fire + `fill()`；夹具 `registryfixture:trades` `custom registry RESULT: PASS`；Moonlight 建 3 个注册表、commit 90→92、`ok=true` | `-PverifyCompat=<jar> -PverifyCustomRegistry=<id>`；[research-newregistry-hotadd.md](research-newregistry-hotadd.md) |
+| **数据包注册表** | `DataPackRegistryEvent.NewRegistry` 重放（只对新容器）→ 下一个世界/连接可见；Create 建世界后 `create:potato_projectile/type entries=25`、`PotatoCannonItem.getAmmo()` 不抛 | `-PverifyCreatePonder=<create>`；[status 问题 66](status.md) |
 | **datapack 热加载** | dogfood recipes 0→164 / loot 0→75、真实合成与掉落；标题屏 + 新世界可用维度；**删除/更新实测不可行** | [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) §9/§10；`-PverifyDatapack`、`-PverifyWorldgen` |
 | **dogfood 玩法** | 七表非空；锤/筛/合成命中；`beRenderers 6/6`、图标 `181/181`；创造栏第 2/2 页、182 项 | [dogfood-gameplay.md](features/dogfood-gameplay.md) |
 | **多人** | 相反顺序热加 → `ids match ... (29475 lines)`；未装 jar 的客户端先收通知再被 datapack 同步踢；ack 落日志 | [t4-registry-hotadd.md](features/t4-registry-hotadd.md) §9/§10 |
@@ -71,13 +72,13 @@
 
 ### 已验证
 
-- **Create 的 Ponder 静态 `@Invoker` 路径（问题 65，2026-11-21 dev client + 增强 JBR）**：
-  `-PverifyCreatePonder=<create-6.0.10>` 标题屏热加 Create（flywheel/ponder/create 三容器，52 个 accessor/invoker
-  接口注册），随后反射触发 `PonderRenderTypes.<clinit>`（正是此前抛 `AssertionError` 的位置）：
-  `fluid()` / `outlineSolid()` 返回真实 `RenderType`，`RESULT: PASS`。同批 J2 警告：`ItemStack`（`create$CLIPBOARD_ID`）/
-  `BlockEntityType`/`EntityType`（flywheel visualizer）给已加载类新增实例字段（问题 45/56 同族），
-  活实例（`ItemStack.EMPTY` 等）保持 JVM 默认值——进世界是否可见错误仍需真机观察。
-  **真机进世界（PCL）仍未验证。**
+- **Create L2（问题 65 + 66，2026-11-21 dev client + 增强 JBR）**：`-PverifyCreatePonder=<create-6.0.10>` 在标题屏
+  热加 Create（flywheel/ponder/create 三容器、52 个 accessor 接口、`datapack registries registered:
+  [create:potato_projectile/type]`），再用真实建世界流程进入世界并断言：`create:potato_projectile/type entries=25`、
+  `PotatoCannonItem.getAmmo()` 不再抛（返回 null，装饰器判空跳过）、`PonderRenderTypes.fluid()/outlineSolid()`
+  正常 → `RESULT: PASS`。仍未自动打开创造栏 GUI（断言的是同一条 lookup/decorator 代码路径），PCL 真机待复验。
+  同批 J2 警告：`ItemStack`（`create$CLIPBOARD_ID`）/`BlockEntityType`/`EntityType`（flywheel visualizer）
+  给已加载类新增实例字段（问题 45/56 同族），活实例保持 JVM 默认值。
 
 - **accessor/invoker 接口在热加后被 Mixin 改写（问题 65，2026-11-21 dev client，`-PnoJbr=true`）**：
   `MixinSupport` 在 prepare 前把 processor 的 4 个 coprocessor 与 `MixinInheritanceTracker` 挂到新 config
@@ -214,9 +215,9 @@
 
 ## 已知问题 / 坑
 
-> 追加式账本，**编号稳定**（引用不变）。共 65 条：待解决 1 / 验证缺口 4 / 结构性边界 18 / 历史与注记 15 / 已修 27。
+> 追加式账本，**编号稳定**（引用不变）。共 66 条：待解决 1 / 验证缺口 4 / 结构性边界 18 / 历史与注记 15 / 已修 28。
 > **当前 actionable（1）**：61 Sodium 单例 mixin 字段。**64 是待拍板的结构性边界**（方法级 `-f`）。
-> **65 已修**（coprocessor listener 缺失；夹具与专用服回归 PASS，Create 客户端真机复验待做）。
+> **65/66 已修**（accessor 接口改写、数据包注册表重放；dev L2 与专用服回归 PASS，Create 客户端真机待复验）。
 
 ### 待解决（需改代码）
 
@@ -332,6 +333,22 @@
 
 ### 已修
 
+66. ✅ **热加模组的数据包注册表未注册（2026-11-21，dev L2 验证；Create 真机复验待做）**：Create 用
+    `DataPackRegistryEvent.NewRegistry` 注册 `create:potato_projectile/type` 等数据包注册表（codec 进
+    `DataPackRegistriesHooks`，世界加载时按 datapack 的 `data/<ns>/<registry>/` 建表并填条目）。
+    热加漏发该事件 → 客户端 level `RegistryAccess` 不认识它 → 打开机械动力创造栏渲染马铃薯炮时
+    `IllegalStateException: Registry create:potato_projectile/type not found`
+    （`crash-reports/crash-2026-11-21_21.31.03-client.txt`；另一个 Create 页签不触发该路径，所以不崩）。
+    **修法**：`hotadd/DatapackRegistries` 在 construct 后对新容器逐个 `OneShotReplay` 发
+    `DataPackRegistryEvent.NewRegistry`，再调包私有 `process()`；重复 key 拒绝（`addRegistryCodec`
+    无去重，重复会让 registry loader 出错）。加入 `ReplayCatalog`（审计口径同步）。
+    世界加载用 `getDataPackRegistries()` 的**活视图**，网络同步用 `SYNCHRONIZED_REGISTRIES` 活视图，
+    所以标题屏热加对**下一个**世界/连接生效；已打开的世界保留冻结视图（日志说明，需重启）。
+    证据：`-PverifyCreatePonder`（dev client + 增强 JBR）热加 Create → 建世界 →
+    `create:potato_projectile/type entries=25`、`PotatoCannonItem.getAmmo() = null`（装饰器判空跳过，此前此处抛异常）、
+    `PonderRenderTypes` 正常 → `RESULT: PASS`。`./gradlew build` 绿（`ReplayCatalogTest` 23 项）。
+    **仍缺**：PCL 真机再开同一个创造栏；白名单 Create 暂留 J2。
+
 65. ✅ **热加 Mixin 的 accessor/`@Invoker` 接口未被改写（2026-11-21，dev 验证；Create 真机复验待做）**：Create（`ponder`）的
     `RenderTypeAccessor` 是 `@Mixin(RenderType.class)` 的接口，静态 `catnip$create` 是 Mixin 的
     “未应用”桩（直接抛 `AssertionError: Mixin application failed!`）。热加时我们对目标类做了 transform，
@@ -421,7 +438,7 @@
 
 43. ✅ **JourneyMap 资源重载崩溃（已修）**：根因是 late AT 去**类** final 把 `NativeImage`/`ModelPart` 的构造打成 null；现在前置拒绝（见 44）。
 
-46. ✅ **自定义注册表（`NewRegistryEvent`）已支持（2026-11-18）**：构造期临时恢复 `pendingModdedRegistries`，构造后只对新容器 fire `NewRegistryEvent` 并调用包私有 `fill()`；`RegisterEvent`/freeze/快照由现有 `RegistryStage` 动态覆盖。夹具 + Moonlight 验证；失败语义：`fill()` 之后失败只能 dirty。datapack 注册表、`ModifyRegistriesEvent` 仍不重放。见 [research-newregistry-hotadd.md](research-newregistry-hotadd.md)。
+46. ✅ **自定义注册表（`NewRegistryEvent`）已支持（2026-11-18）**：构造期临时恢复 `pendingModdedRegistries`，构造后只对新容器 fire `NewRegistryEvent` 并调用包私有 `fill()`；`RegisterEvent`/freeze/快照由现有 `RegistryStage` 动态覆盖。夹具 + Moonlight 验证；失败语义：`fill()` 之后失败只能 dirty。datapack 注册表自 2026-11-21 起重放（问题 66，`DatapackRegistries`）；`ModifyRegistriesEvent` 仍不重放。见 [research-newregistry-hotadd.md](research-newregistry-hotadd.md)。
 
 47. ✅ **late AT 对已混入的类二次 transform（2026-11-18，已修）**：Supplementaries 的 AT redefine `Entity`（Moonlight 已混入）时，Mixin agent 仍二次注入 → `ClassFormatError`。修法：`MixinAgentGuard` 改为常驻 wrapper（2026-11-18 晚已收窄为只包 Mixin agent，靠 `blanket()` 覆盖其它路径，待复验），并在每次 `redefineClasses` 期间用 `blanket()` **全局抑制**（JBR 该路径不一定传类名，按名匹配不可靠）。复跑日志：`transform guard installed (4 transformer(s) wrapped)`、Moonlight `ok=true`，Entity 不再报错。同类问题（40/41）的第三份。
 
@@ -474,7 +491,7 @@
 > ModernUI opt-in 适配（六步链路真机 PASS）、包装 jar（mezz → JEI 依赖链）、服务器一等目标（SERVER 配置更正、
 > MixinAgentGuard/AT side/CLIENT 配置三处修复、专用服 Create/Mekanism/architectury/runState/why 全 PASS、
 > 命令权限 2）、shader 重建时序修复。白名单：JBR J1=22 / J2=5 / BLACK=4（61 行）。
-> **下一批（建议）**：① Create 真机复验（问题 65 已修，夹具 PASS；进世界不再应崩于 Ponder accessor）；
+> **下一批（建议）**：① Create 真机复验（65+66 已修，dev L2 PASS；开两个创造栏、触发 Ponder）；
 > ② 问题 64 产品决策；
 > ③ 剩余 J1 candidate（Cloth/Balm/GeckoLib/Curios/Patchouli/Embeddium/ModernFix/FerriteCore/Xaero 小地图/
 > voicechat/mcwifipnp/e4mc/Farmer's Delight/Comforts/Moonlight/Supplementaries/ZeroCore2）；④ 专用服多人
@@ -497,7 +514,7 @@
 | **P0-新** | xaerolib mixin 阶段挂起（问题 54） | 先 `jstack` 留线程栈再杀；怀疑 Mixin/transform 锁或常驻 guard | 复跑不挂 |
 | **P1-新** | ✅ 资源顺序（问题 53） | 阶段重排：注册 → 注入包/启动重载 → client setup 任务 → payload；`createReload` 同步换 manager | `minimap-addon` World Map/Minimap `ok=true` |
 | **P0-新** | 类级 AT 的启动期替代 | 启动扫描队列里的 AT，在**加载期**去 final（覆盖 `NativeImage` 这类启动即加载的类） | 夹具/真实 jar 复跑 |
-| **P0-新** | ✅ 自定义注册表（`NewRegistryEvent`） | `CustomRegistries` + `RegistryStage` 窗口；夹具 `custom registry RESULT: PASS`，Moonlight `ok=true`（3 个注册表）。剩余：`fill()` 后失败 dirty、datapack 注册表/`ModifyRegistriesEvent` 不重放、CraftTweaker 未复跑 | Moonlight J1（candidate） |
+| **P0-新** | ✅ 自定义注册表（`NewRegistryEvent`） | `CustomRegistries` + `RegistryStage` 窗口；夹具 `custom registry RESULT: PASS`，Moonlight `ok=true`（3 个注册表）。剩余：`fill()` 后失败 dirty、`ModifyRegistriesEvent` 不重放、CraftTweaker 未复跑；datapack 注册表已由问题 66 补上 | Moonlight J1（candidate） |
 | **P0-新** | ✅ late AT 对已混类二次 transform（问题 47） | 常驻 wrapper 包裹全部 transformer + 每次 redefine 的 `blanket()` 全局抑制；Moonlight 复跑 `ok=true`，Entity 不再报错 | 批次复跑 |
 | **P0-新** | ✅ 嵌套 MixinSquared bootstrap（问题 48） | `JarInJar` 递归 3 层拆包；3 个嵌套库进 module path，MixinSquared config 可加载。Supplementaries 越过 MIXIN/CONSTRUCT | 批次复跑 |
 | **P0-新** | ✅ 模型层/Skull 模型（问题 49） | `RegisterLayerDefinitions` 重放 + `EntityModelSet` roots 重建；全容器先层后渲染器；FMLClientSetup 窗口内放开 client-loading 门禁。Supplementaries 层 213→234、`ok=true` | 批次复跑 |
@@ -518,6 +535,11 @@
 ## 最近变更
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近三条。
+
+- **2026-11-21（问题 66 修复：数据包注册表）**：热加漏发 `DataPackRegistryEvent.NewRegistry`，Create 的
+  `create:potato_projectile/type` 不在 level registry access → 打开机械动力创造栏渲染马铃薯炮崩。
+  `DatapackRegistries` 在 construct 后补发并 `process()`（重复 key 拒绝）；dev L2 建世界后
+  `entries=25`、`getAmmo()` 不抛，`ReplayCatalogTest` 23 项。jar 已部署（sha `a51bacb1…`），待真机复验。
 
 - **2026-11-21（问题 65 修复：accessor/invoker 接口）**：根因是热加时手工 `MixinConfig.prepare` 跳过了
   `MixinProcessor.prepareConfigs` 的 coprocessor listener 注册，`MixinCoprocessorAccessor` 不知道新接口，
