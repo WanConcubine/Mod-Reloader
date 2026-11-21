@@ -253,7 +253,8 @@
     不会重跑构造器，旧 `Font` 实例拿到的字段是 `0.0f`，闪烁分支常开，所有文字约 65% 亮度（真机截图：字体变暗）。
     这是问题 45（新增字段不初始化）的第二个实例；`layoutChange` 现在把字段增减也算作布局变更：无 JBR 前置拒绝，
     JBR 下照常尝试并额外打印“旧实例保持 JVM 默认值，需重启才完全正确”的警告。Jade 的变暗不是崩溃，
-    实测重启并让 Jade 正常加载即可恢复；是否把 Jade 记为“需重启才正确渲染”由所有者按白名单规则决定。
+    实测重启并让 Jade 正常加载即可恢复。**2026-11-21 定**：按白名单规则记为 **JBR J2**（能加但有 bug），
+    bug 列写明“文字约 65% 亮度，重启恢复”；JBR 计数 J1 24→23 / J2 2→3。
 
 ### 历史与注记（分析器/环境/过期）
 
@@ -400,8 +401,9 @@
 
 > **当前交接（2026-11-20，已推送 `a8d787c`）**：技术债收口；问题 2/35/50/63 结案；61 定 J2（B 实验 opt-in，
 > 进世界仍停 `BlockColors`）；增强 JBR 下 lateAt 自动开启；MixinRuntime 明确为可选扩展。
-> **发布口径**：[releases/0.1.0.md](releases/0.1.0.md) 草案已提交——只承诺 `verified` 行（当前 3 行：
-> stock T1 的 dogfood，JBR J1 的 GuideME、AE2），candidate/fixing 一律标“待复测”。
+> **发布口径**：[releases/0.1.0.md](releases/0.1.0.md) 草案已提交——只承诺**无缺陷的 verified 行**（当前 3 行：
+> stock T1 的 dogfood，JBR J1 的 GuideME、AE2）；Jade 的 J2 行已 verified 但带字体变暗缺陷（问题 56），
+> 只进“已知缺陷”表。candidate/fixing 一律标“待复测”。
 > **下一项（所有者驱动）**：① whitelist 真实复测（agent 不代跑批次）；② J2“成功后再崩”的预检/标注口径
 > 需产品决策（现行：成功消息标 `J2`，不阻断）；③ 生产启动器/干净实例冒烟；④ Windows/PCL2 全链路。
 > 证据在 [history.md](history.md)；JBR 在 `run/jbr-21.0.11`（gitignored），语料 `/tmp/modreloader-corpus`。
@@ -414,7 +416,7 @@
 | **P1-3** | ✅ Git 收尾 | GitHub Actions 最新 `e0a0646` 为 success；需要时打 tag | Actions 绿 |
 | **P0-新** | 流水线 L2 | 标题屏热加 → 建世界 → N tick → HUD/按键/截图；先 minimap/mouse-gestures | 断言 + 截图证据 |
 | **P0-新** | 语料扩到 20–30 个常用模组 | 小地图/JEI/HUD/输入/前置库；`check` 进 PR | 报告 + 矩阵 |
-| **P0-新** | 模组白名单实测（所有者驱动） | 60 行：stock T1×7 / BLACK×23；JBR J1×24 / J2×2 / BLACK×4；candidate 由所有者复测转 verified | TSV + 视图同步 |
+| **P0-新** | 模组白名单实测（所有者驱动） | 60 行：stock T1×7 / BLACK×23；JBR J1×23 / J2×3 / BLACK×4；candidate 由所有者复测转 verified | TSV + 视图同步 |
 | **P0-新** | ✅ Xaero's World Map config channel | `XaeroLibChannels` 窗口（`ConfigChannelRegistry.frozen`），仅对引用该类的 jar 生效；World Map `ok=true isLoaded=true` | 已转 J2 |
 | **P0-新** | 服务端一次性事件（问题 52） | `ServerLifecycleReplay` 已实现（定向调用新增监听器 + integrated server 兜底），**未验证**：进入世界复跑卡在 54 | World Map J1 |
 | **P0-新** | xaerolib mixin 阶段挂起（问题 54） | 先 `jstack` 留线程栈再杀；怀疑 Mixin/transform 锁或常驻 guard | 复跑不挂 |
@@ -443,7 +445,7 @@
 
 - **2026-11-20（0.1.0 release notes 草案）**：`docs/releases/0.1.0.md` 按“只承诺 verified + 可选扩展 +
   已知限制 + 存档警告”组织；支持矩阵与 `tools/whitelist.py check` 一致（60 行：stock T1=7/BLACK=23；
-  jbr J1=24/J2=2/BLACK=4）。candidate/fixing 不作为发布承诺。
+  jbr J1=23/J2=3/BLACK=4）。candidate/fixing 不作为发布承诺。
 - **2026-11-20（lateAt 随增强 JBR 自动开启）**：`LateAccessTransformers.enabled()` 在属性未显式设置时
   随增强 JBR 自动启用（`-Dmodreloader.lateAt=false` 可关）；玩家点一次「准备环境」后不再遇到 AT 开关类阻塞。
   验证：JBR 默认 Jade 57 条 AT 自动应用、`ok=true`；Temurin stock 干净 `ACCESS_TRANSFORMER` 拒绝；单测 114。

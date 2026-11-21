@@ -2187,3 +2187,12 @@ clientfixture（GUI 层/物品装饰）PASS、`minimap` PASS、`moonlight-lateat
 - 规则补充（mod-whitelist.md）：T1/T2 优先于 J1/J2；J1/J2 只留给 stock 不行的模组，JBR 复验写进同一行证据。
   视图“怎么读”与 release notes 的矩阵/候选列表同步。
 - 校验：`python3 tools/whitelist.py check` → 60 行；stock T1=7/BLACK=23；jbr J1=24/J2=2/BLACK=4。
+
+## 2026-11-21（Jade 白名单修正：J1 → J2）
+
+- 问题 56 已于 2026-11-18 真机确认：`FontMixin` 给已加载 `Font` 新增 `glint` 字段，旧实例保持 JVM 默认值，
+  所有文字约 65% 亮度；重启恢复，非崩溃。
+- 按规则“能加但有 bug”= J2：Jade 的 JBR 行由 J1 改 J2，bug 列写明缺陷；state 由 candidate 转 verified
+  （owner 真机证据 + harness 4-jar 连加无崩溃）。
+- 计数：JBR J1 24→23 / J2 2→3；发布承诺仍只列无缺陷的 3 行（Jade 进“已知缺陷”表）。
+- release notes（矩阵、4.2 缺陷表、4.4 候选列表）、status（数字与问题 56）与白名单视图同步。

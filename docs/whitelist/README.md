@@ -26,7 +26,7 @@
 | 环境 | 可热加、无 bug | 可热加、有 bug | 判不可加但可救 | 结构性不可加 |
 |---|---|---|---|---|
 | stock | T1 × 7 | T2 × 0 | T3 × 0 | BLACK × 23 |
-| JBR | J1 × 24 | J2 × 2 | — | BLACK × 4 |
+| JBR | J1 × 23 | J2 × 3 | — | BLACK × 4 |
 
 ## stock JVM（不靠 JBR）
 
@@ -72,7 +72,7 @@
 
 ## JBR（enhanced redefinition）
 
-### JBR · J1 · JBR 下可热加，未发现 bug（24）
+### JBR · J1 · JBR 下可热加，未发现 bug（23）
 
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|
@@ -96,16 +96,16 @@
 | 应用能源 2（AE2） | appliedenergistics2-19.2.20.jar | GUIFEI | verified | - | pipeline ae2-lateat L1 2026-11-19（ok=true，blocks→1162/items→1698）；L2 2026-11-20：进世界后 GuideScreen 与 MEStorageScreen 均打开、无崩溃（-PverifyAe2L2） |
 | 机械动力（Create） | create-1.21.1-6.0.10.jar | GUIFEI | candidate | - | pipeline create-lateat 2026-11-19：ok=true isLoaded=true；blocks 1060→1703、items 1333→2032（JBR+lateAt；L1，玩法未验） |
 | 物品管理器（JEI） | jei-1.21.1-neoforge-19.70.0.469.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-17 ok=true（hot-added [mezz_config, jei]，34 rule） |
-| 玉（Jade） | Jade-1.21.1-NeoForge-15.10.6.jar | FEI | candidate | - | JBR+lateAt harness 2026-11-17：reload 串行化修复后 4-jar 连加（Searchables→Controlling→Jade→JEI）无崩溃、屏幕正常恢复；原崩溃 crash-2026-11-17_20.13.47-client.txt（config translation） |
 | 铁氧体核心（FerriteCore） | ferritecore-7.0.3-neoforge.jar | FEI | candidate | - | JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（MixinAgentGuard） |
 | 饰品栏（Curios） | curios-neoforge-9.5.1+1.21.1.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（late AT 16 rule） |
 | 鼠标手势（Mouse Tweaks） | MouseTweaks-neoforge-mc1.21-2.26.1.jar | FEI | candidate | - | JBR harness 2026-11-17 ok=true isLoaded=true（redefined AbstractContainerScreen） |
 
-### JBR · J2 · JBR 下可热加，但有 bug（2）
+### JBR · J2 · JBR 下可热加，但有 bug（3）
 
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|
 | Xaero 世界地图（Xaero's World Map） | xaeroworldmap-neoforge-1.21.1-1.47.0.jar | HUANGHOU | candidate | 热加成功；进世界后服务端初始化缺失（ServerStartedEvent 未重放，serverPlayerTickHandler null）；标题屏 loadLater 崩（需已有世界） | JBR harness 2026-11-18：ConfigChannelRegistry frozen 窗口生效，CompatCheck ok=true isLoaded=true；标题屏 tick 抛 NoSuchElementException（模组自身 loadLater）；世界内 add 返回 1 后 integrated server 玩家 tick NPE（WorldMap.serverPlayerTickHandler null）。需重放 ServerStartedEvent / 用已有存档复测；2026-11-18 晚：`ServerStarting/Started` 定向重放已实现但未验证（进入世界复跑卡在 xaerolib mixin 阶段，需 jstack） |
+| 玉（Jade） | Jade-1.21.1-NeoForge-15.10.6.jar | FEI | verified | FontMixin 给已加载 Font 新增 glint 字段不初始化旧实例 → 文字约 65% 亮度（问题 56），重启恢复 | owner 真机 2026-11-18（Windows/PCL2/JBR）热加成功；harness 2026-11-17 4-jar 连加无崩溃；缺陷见 status 问题 56 |
 | 钠（Sodium） | sodium-neoforge-0.8.13+mc1.21.1.jar | FEI | fixing | 热加 ok=true；已有实例的 mixin 新增字段不初始化（结构边界）：Minecraft.fences NPE → 配置未初始化 → SpriteContents$Ticker.parent NPE；A 预检标注 J2，B 适配为 opt-in 实验 | 2026-11-20：标题屏热加 B 修好 fences/config/ticker.parent/BET 谓词/LevelRenderer.renderer 后不崩；进世界仍停在 BlockColors 状态（sodium$getProviders NPE） |
 
 ### JBR · BLACK · 结构性不可热加（4）
