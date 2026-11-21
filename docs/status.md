@@ -224,7 +224,7 @@
 
 6. **LAN 模组是妃级布局变更**：需要 JBR；`online-mode` 可能要重启集成服务器。
 
-7. **A1 剩余边界**：构造器其它副作用（静态状态/全局注册/线程）不可回滚；不能 undefine module；post-construct 重试仍失败（干净回滚 + 重启）。
+7. **A1 剩余边界**：构造器其它副作用（静态状态/全局注册/线程）不可回滚；不能 undefine module；post-construct 重试仍失败（干净回滚 + 重启）。**2026-11-21 实例**：ModernUI（现代化 UI）构造后失败（`RuntimeException: null`），回滚后其启动的 UI 线程继续绘制并崩（`UI recording context has not been created yet`），游戏退出；已记 JBR BLACK（见白名单）。
 
 10. **没有删/更新路径**：已加载（尤其织入 mixin）的类无法卸载；datapack 删除实测不可能。
 

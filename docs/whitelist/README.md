@@ -25,7 +25,7 @@
 | 环境 | 可热加、无 bug | 可热加、有 bug | 判不可加但可救 | 结构性不可加 |
 |---|---|---|---|---|
 | stock | T1 × 7 | T2 × 0 | T3 × 0 | BLACK × 23 |
-| JBR | J1 × 24 | J2 × 3 | — | BLACK × 4 |
+| JBR | J1 × 24 | J2 × 3 | — | BLACK × 5 |
 
 ## stock JVM（不靠 JBR）
 
@@ -108,7 +108,7 @@
 | 玉（Jade） | Jade-1.21.1-NeoForge-15.10.6.jar | FEI | verified | 热加后字体变暗（问题 56：Mixin 新增实例字段在旧 Font 实例上为 0，重启后正常） | JBR+lateAt harness 2026-11-17：reload 串行化修复后 4-jar 连加（Searchables→Controlling→Jade→JEI）无崩溃、屏幕正常恢复；原崩溃 crash-2026-11-17_20.13.47-client.txt（config translation）；owner retest 2026-11-21 Windows/PCL2：ok=true、late AT 57 rule、keyMappings 34→39，字体变暗复现（问题 56） |
 | 钠（Sodium） | sodium-neoforge-0.8.13+mc1.21.1.jar | FEI | fixing | 热加 ok=true；已有实例的 mixin 新增字段不初始化（结构边界）：Minecraft.fences NPE → 配置未初始化 → SpriteContents$Ticker.parent NPE；A 预检标注 J2，B 适配为 opt-in 实验 | 2026-11-20：标题屏热加 B 修好 fences/config/ticker.parent/BET 谓词/LevelRenderer.renderer 后不崩；进世界仍停在 BlockColors 状态（sodium$getProviders NPE） |
 
-### BLACK · 结构性不可热加（4）
+### BLACK · 结构性不可热加（5）
 
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|
@@ -116,3 +116,4 @@
 | Iris 光影 | iris-neoforge-1.8.14-beta.1+mc1.21.1.jar | FEI | fixing | 自身 2 条类级 public-f（OptionInstance、RegistryAccess$RegistryEntry 为 final，JBR 结构边界）；嵌套 AT 已支持 | pipeline iris-after-sodium-lateat 2026-11-19：嵌套 AT 通过，VALIDATE 拒绝 class-level -f |
 | 传送石碑（Waystones） | waystones-neoforge-1.21.1-21.1.47.jar | GUIFEI | verified | EVENT：post-construct 失败且注册已部分生效（+44 方块 / +55 物品），需重启 | JBR harness 2026-11-18 kind=EVENT（Balm 先热加成功）；替代：重启（注册不可回滚） |
 | 旅行地图（JourneyMap） | journeymap-neoforge-1.21.1-6.0.9.jar | FEI | verified | 类级 AT 去 final 无法在运行期完成：ComparableNativeImage extends NativeImage（NativeImage 必须非 final） | JBR 21.0.11 probe：redefine 去掉类 final 后该类的构造全部返回 null（NativeImage.read → null）；随后再次 redefine 时 JVM SIGSEGV（ConstantPoolCacheEntry::clear_entry）；late AT 现在在改任何字节前拒绝（-PverifyCompat=journeymap -PlateAt=true → stage=VALIDATE kind=ACCESS_TRANSFORMER），需放 mods/ 重启由 FML 在加载期应用 |
+| 现代化 UI（ModernUI） | [现代化 UI] ModernUI-NeoForge-1.21.1-3.13.0.1-universal.jar | GUIFEI | verified | 热加构造后失败（RuntimeException: null）；自带 UI 线程/render core，回滚后线程继续运行 → Exception on UI thread（UI recording context 未创建），游戏崩溃 | owner report 2026-11-21 Windows/PCL2：preflight 判 guifei·mixins·registry；add 后 post-construct 失败并回滚，随后 UI 线程崩（crash-2026-11-21_16.57.15-client.txt）；需重启 |

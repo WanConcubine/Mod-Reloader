@@ -2237,3 +2237,17 @@ Mekanism 10.7.19.85 在标题屏经 `/modreloader add` 加入。共跑 4 次（�
   `mezz_config [0.6.10,1.0.0)` 独立安装；拦截本身正确。产品侧改为支持“先热加前置”，并把缺依赖文案改成
   “该前置需要单独安装 / 并非所有发行包都自带”。
 - 白名单：JEI（J1）转 verified（19.71.0.475，依赖链证据）。
+
+## 2026-11-21（ModernUI 热加崩溃：自带 UI 线程，post-construct 失败不可回滚）
+
+现象：`[现代化 UI] ModernUI-NeoForge-1.21.1-3.13.0.1-universal.jar` 标题屏热加；preflight 判
+`guifei · mixins · registry`（静态扫描没看到 native/渲染线程）；add 在 post-construct 阶段失败
+（`RuntimeException: null`，消息为空），引擎回滚（Screen/KeyboardHandler/StringSplitter/Window/GameRenderer
+类、module layer、late AT 尽力还原），随后游戏崩溃：`Exception on UI thread`，
+`NullPointerException: UI recording context has not been created yet, or creation failed`
+（ModernUI 的 Looper/Choreographer 线程）。
+
+原因与边界：ModernUI 是 render-core，构造/初始化期会**启动自己的 UI 线程**；这类副作用无法回滚（问题 7），
+线程在 module/类被回滚后继续绘制 → 崩。不是单点 bug，而是结构性不可热加。
+处置：白名单新增 ModernUI（jbr）BLACK（需重启正常加载）；问题 7 补实例。静态 tier 低估“自带线程/render core”
+仍是已知局限（问题 1）。
