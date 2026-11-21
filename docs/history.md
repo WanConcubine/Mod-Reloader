@@ -2288,3 +2288,12 @@ UI 线程（Looper/Choreographer），回滚后继续绘制 → `UI recording co
     静态 `@Invoker` 在“未被 Mixin 应用”时是直接抛 `AssertionError("Mixin application failed!")` 的桩；
     热加只 transform 了目标类，**接口自身没有被 Mixin 改写**，`PonderRenderTypes.<clinit>` 首次世界渲染即断言。
     记问题 65（待解决），白名单 Create → J2（能加，进世界不可用）。
+
+### 更正：SERVER 配置不是“重启才生效”
+
+2026-11-21 复盘发现，早先 `ModConfigs` 把 SERVER 配置一律跳过并提示“重启才能应用”是错误理解：
+FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍历所有已注册配置（实测 18:33:21
+`Loading configs type SERVER`），所以**标题屏热加**的模组的 SERVER 配置会在进世界时自动加载。
+真正缺的只有“世界已经在跑、之后再热加”的场景——现在引擎在 `ModConfigs.load` 里用
+`ServerLifecycleHooks.getCurrentServer().getServerDirectory()/serverconfig` 立即加载；标题屏则只记 INFO
+（“will load when a world starts”），不再误导为需要重启。

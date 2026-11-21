@@ -64,7 +64,7 @@
 | **失败回滚** | post-ModList / post-pack 恢复 ModList/module/config/类/资源包；post-construct 监听器按实例摘除 | `-PverifyRollback` / `-PfailAfterModList` / `-PfailAfterPack` / `-PfailAfterConstruct` |
 | **工程底座** | `capabilities` 10 组全 ok；无 `libs/` 可 `clean build`；**118 个无游戏 Java 单测**；i18n 两语言**各 197 key** | `./gradlew build`/`test`；[tech-debt.md](tech-debt.md) |
 | **ModernUI 适配（opt-in 实验）** | 真机 PASS（2026-11-21）：构造前 `Core.initialize + initOpenGL`（UI 线程据此建 recording context）→ 构造后回填 `Minecraft.font`/`fontFilterFishy` 的 `modernUI_MC$textRenderer` → shader 重建后 `TextRenderType.preloadShaders()`；每 tick/每屏兜底回填。`-Dmodreloader.modernuiAdapter=true` 才启用 | `hotadd/ModernUIAdapter`；白名单 J2 |
-| **SERVER 配置（世界内热加）** | 有世界时从 `world/serverconfig` 加载 SERVER 配置（此前一律跳过 → Create `AllConfigs.server()` NPE）；标题屏仍跳过并提示重启 | `hotadd/ModConfigs`；待复验 |
+| **SERVER 配置** | 世界内热加：引擎立即从 `<world>/serverconfig` 加载（此前一律跳过 → Create `AllConfigs.server()` NPE，2026-11-21 已修待复验）；标题屏热加：FML 在**世界启动**时 `loadConfigs(SERVER)` 自动加载（实测 `Loading configs type SERVER`），不是“重启才生效” | `hotadd/ModConfigs` |
 
 ## 验证状态
 

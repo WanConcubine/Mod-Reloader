@@ -65,10 +65,12 @@ public final class ModConfigs {
                 if (config.getType() == ModConfig.Type.SERVER) {
                     serverPath = serverConfigPath();
                     if (serverPath == null) {
-                        ModReloader.LOGGER.warn(
-                                "[ModReloader] {} has a SERVER config but no world is loaded; "
-                                        + "it will stay unloaded until a restart",
-                                config.getFileName());
+                        // FML's ConfigTracker.loadConfigs(SERVER) runs when a world
+                        // starts and covers every registered config, so a title-screen
+                        // add is loaded there (measured 2026-11-21).
+                        ModReloader.LOGGER.info(
+                                "[ModReloader] {} has a SERVER config; it will load when a "
+                                        + "world starts", config.getFileName());
                         continue;
                     }
                 }
