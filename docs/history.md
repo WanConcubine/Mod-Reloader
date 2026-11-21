@@ -2363,3 +2363,15 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
 - 部署：`build/libs/modreloader-1.21.1-0.1.0.jar` 已覆盖到 PCL
   `.minecraft/versions/1.21.1-NeoForge_21.1.266/mods/`（2026-11-21 20:57），并用 `javap` 确认部署包含新方法。
 - 仍缺：Create 真机进世界复验；白名单 Create 暂留 J2。
+
+### 问题 65 后续：专用服回归 + 影响面扫描（同日）
+
+- 专用服复跑：`runServer -PserverAddCommand=[机械动力] create-1.21.1-6.0.10.jar` → `verify create: isLoaded=true`,
+  `RESULT: PASS`；6 个 mixin config 各自 `attached 4 processor listener(s) for on-load interface rewriting`，
+  说明 coprocessor listener 注册对服务端路径无副作用。
+- 只读影响面扫描（本机 34 个 jar，含 `META-INF/jarjar` 嵌套；条件：类字节含
+  `Mixin application failed!` 且含 `@Invoker`/`@Accessor`）：仅 Create→ponder 的 `RenderTypeAccessor` 命中，
+  已安装模组与 `modreloader/staging`（Mekanism/ftb-library/architectury）均无静态 invoker 桩。
+- 夹具侧只做常量提取（`INVOKER`），产品 jar 与 20:57 部署版本一致；`compileJava`/`compileDevJava` 绿。
+- 尚未覆盖：`processLoadedAccessors`（接口在 add 前已加载）没有夹具路径——夹具 jar 在 add 前不在模块路径上，
+  无法在不污染 loader 的前提下预加载；保留该分支用于“构造后失败回滚再重试”等场景。

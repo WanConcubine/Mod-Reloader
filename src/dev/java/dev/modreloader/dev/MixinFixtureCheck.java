@@ -35,6 +35,7 @@ public final class MixinFixtureCheck {
     private static final int TITLE_SETTLE_TICKS = 100;
     private static final int AFTER_ADD_TICKS = 20;
     private static final int TIMEOUT_TICKS = 20 * 180;
+    private static final String INVOKER = "mixinfixture.mixin.accessor.AccessTargetInvoker";
 
     private static Path jar;
     private static int ticks;
@@ -122,8 +123,7 @@ public final class MixinFixtureCheck {
      */
     private static void checkInvoker(List<String> problems) {
         try {
-            Class<?> invoker = Class.forName("mixinfixture.mixin.accessor.AccessTargetInvoker", true,
-                    MixinFixtureCheck.class.getClassLoader());
+            Class<?> invoker = Class.forName(INVOKER, true, MixinFixtureCheck.class.getClassLoader());
             Object result = invoker.getMethod("mixinfixture$hidden").invoke(null);
             ModReloader.LOGGER.info("[MixinFixtureCheck] AccessTargetInvoker.mixinfixture$hidden() = {}"
                     + ": expected reached-target", result);
