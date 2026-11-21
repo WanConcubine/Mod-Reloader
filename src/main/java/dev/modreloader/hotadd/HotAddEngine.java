@@ -165,6 +165,14 @@ public final class HotAddEngine {
             if ((failure = prepareModules(run)) != null) return recordFailure(run, failure);
             if ((failure = applyMixins(run)) != null) return recordFailure(run, failure);
             if ((failure = applyCoremods(run)) != null) return recordFailure(run, failure);
+            // ModernUI starts its UI thread in @Mod construct and that thread creates
+            // the recording context from the GPU device present at that moment, so its
+            // renderer init has to be replayed before the constructor runs.
+            String modernUi = ModernUIAdapter.beforeConstruct(run.ids);
+            if (modernUi != null) {
+                return fail(run.rollback, Stage.VALIDATE, FailureKind.UNKNOWN,
+                        "modernui adapter failed: " + modernUi + "; restart required");
+            }
             if ((failure = registerModList(run)) != null) return recordFailure(run, failure);
             if ((failure = construct(run)) != null) return recordFailure(run, failure);
             if ((failure = commitRegistry(run)) != null) return recordFailure(run, failure);

@@ -39,26 +39,18 @@ final class ModernUIAdapter {
     }
 
     /**
-     * Called right after the mod's {@code @Mod} constructor and before its config
-     * load. On failure neither the add nor the game can continue safely (the mod's
-     * own threads cannot be rolled back), so this restarts and then throws.
+     * Called before the mod's {@code @Mod} constructor: ModernUI starts its own UI
+     * thread there, and that thread creates the recording context from whatever GPU
+     * device exists at that moment. The immediate context therefore has to be in
+     * place first. Returns {@code null} when the adapter does not apply or succeeded;
+     * otherwise why it failed (caller: clean failure, nothing is half-initialized yet).
      */
-    static void afterConstruct(String modId) {
-        if (!MOD_ID.equals(modId) || !enabled() || !dev.modreloader.Platform.isClient()) {
-            return;
+    static String beforeConstruct(java.util.Set<String> ids) {
+        if (ids == null || !ids.contains(MOD_ID) || !enabled()
+                || !dev.modreloader.Platform.isClient()) {
+            return null;
         }
-        String error = initialize();
-        if (error == null) {
-            return;
-        }
-        ModReloader.LOGGER.error("[ModReloader] modernui adapter failed: {}; its threads cannot be "
-                + "rolled back, restarting instead of continuing", error);
-        dev.modreloader.launch.Relauncher.saveAndRestartCurrentClient(
-                        "modernui adapter failed: " + error)
-                .ifPresent(reason -> ModReloader.LOGGER.error(
-                        "[ModReloader] cannot relaunch after the modernui adapter failed: {}",
-                        reason));
-        throw new IllegalStateException("modernui adapter failed: " + error + "; restart required");
+        return initialize();
     }
 
     /**
@@ -105,30 +97,35 @@ final class ModernUIAdapter {
 
     private static void run() throws Throwable {
         Class<?> core = Class.forName(CORE);
-        Method initialize = core.getMethod("initialize");
-        initialize.invoke(null);
+        core.getMethod("initialize").invoke(null);
 
         Class<?> optionsType = Class.forName(CONTEXT_OPTIONS);
         Object options = optionsType.getConstructor().newInstance();
-        Class<?> client = Class.forName(CLIENT);
-        Method property = client.getMethod("getBootstrapProperty", String.class);
-        copyBoolean(optionsType, options, "mUseStagingBuffers", property.invoke(null,
-                "arc3d_context_useStagingBuffers"));
-        copyBoolean(optionsType, options, "mAllowGLSPIRV", property.invoke(null,
-                "arc3d_context_allowGLSPIRV"));
-        Object workarounds = client.getMethod("getGpuDriverBugWorkarounds").invoke(null);
-        Field field = optionsType.getField("mDriverBugWorkarounds");
-        field.set(options, workarounds);
+        // Bootstrap properties are optional tuning; reading them must not pull in
+        // ModernUIClient's static state before its @Mod constructor ran.
+        try {
+            Class<?> client = Class.forName(CLIENT);
+            Method property = client.getMethod("getBootstrapProperty", String.class);
+            copyBoolean(optionsType, options, "mUseStagingBuffers", property.invoke(null,
+                    "arc3d_context_useStagingBuffers"));
+            copyBoolean(optionsType, options, "mAllowGLSPIRV", property.invoke(null,
+                    "arc3d_context_allowGLSPIRV"));
+            Object workarounds = client.getMethod("getGpuDriverBugWorkarounds").invoke(null);
+            optionsType.getField("mDriverBugWorkarounds").set(options, workarounds);
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn("[ModReloader] modernui adapter: bootstrap properties "
+                    + "unavailable, using ContextOptions defaults", t);
+        }
 
         Object ok = core.getMethod("initOpenGL", optionsType).invoke(null, options);
         if (!Boolean.TRUE.equals(ok)) {
             throw new IllegalStateException("Core.initOpenGL returned false (GL caps rejected)");
         }
-        // sImmediateContext now exists; initUiThread() creates the UI handler and the
-        // sUiRecordingContext the text/GUI pipeline requires (Core.requireUiRecordingContext).
-        core.getMethod("initUiThread").invoke(null);
-        ModReloader.LOGGER.info("[ModReloader] modernui adapter: render-thread init replayed "
-                + "(Core.initialize + Core.initOpenGL + Core.initUiThread)");
+        // initUiThread() belongs to ModernUI's own UI thread (started by the @Mod
+        // constructor); calling it here would bind sUiThread to the render thread and
+        // make that thread skip creating the recording context.
+        ModReloader.LOGGER.info("[ModReloader] modernui adapter: Core.initialize + Core.initOpenGL "
+                + "replayed before the constructor (UI thread will create the recording context)");
     }
 
     private static void copyBoolean(Class<?> type, Object options, String field, Object property)
