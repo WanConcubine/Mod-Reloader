@@ -262,7 +262,8 @@
     但约 2 秒后标题屏渲染在 `ClientHooks.drawScreenInternal` 的 `Screen.renderWithTooltip` 调用点抛 NPE；
     `-Xint` 纯解释执行仍复现，`-Xlog:exceptions` 显示该帧 **BCI 为负值**且无消息（方法元数据/CP 解析已失效），
     不是业务空指针；崩溃前另有 `DirectMethodHandle$Holder` 的 `NoSuchMethodError`。对照组 architectury 13.0.12
-    （311 条 AT、**无**方法级 `-f`）同机 PASS，指向「已解析过的 final 方法被 redefine」。**需产品决策**：
+    （311 条 AT、**无**方法级 `-f`）同机 PASS（2026-11-21 复跑仍 PASS：311 rule/150 类、2 mixin config、
+    `isLoaded=true`，热加后 3 分钟无崩溃），指向「已解析过的 final 方法被 redefine」。**需产品决策**：
     按问题 44 的同类边界在 `VALIDATE` 拒绝/标 J2 并提示重启，或继续找 workaround（重定义调用方消 CP 缓存、
     换 JBR 版本）。证据：`crash-reports/crash-2026-11-21_00.13.03-client.txt`、游戏目录 `xlog-exceptions.txt`。
 

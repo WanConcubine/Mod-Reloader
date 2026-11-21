@@ -43,7 +43,7 @@ Comforts	comforts-neoforge-9.0.5+1.21.1.jar	6b0fd35a1349107e	stock	BLACK	GUIFEI	
 Moonlight Lib	moonlight-1.21.1-3.8.3-neoforge.jar	d487a1101ab90998	stock	BLACK	GUIFEI	外层 126 条 AT（嵌套 codecui 的 AT 文件是空的；空文件误判已修）	verified	stock harness 2026-11-18 kind=ACCESS_TRANSFORMER；替代：重启 / JBR（late AT 覆盖到的成员级规则可应用）	2026-11-18
 Supplementaries	supplementaries-1.21.1-4.1.1-neoforge.jar	84c06d5ab1a5dc20	stock	BLACK	GUIFEI	JiJ 已修；stock 仍缺 Moonlight 依赖，待重测	fixing	stock harness 2026-11-18 kind=JAR_IN_JAR（修复前）；JiJ 修复后未复跑 stock	2026-11-18
 Cloth Config API	cloth-config-15.0.140-neoforge.jar	65e722e0d98431a0	jbr	J1	PIN	-	candidate	JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（late AT 3 rule）	2026-11-18
-Architectury API	architectury-13.0.12-neoforge.jar	aa558d884c9d3539	jbr	J1	GUIFEI	-	candidate	JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（ShaderReplay 事件重放；late AT 311 rule）	2026-11-18
+Architectury API	architectury-13.0.12-neoforge.jar	aa558d884c9d3539	jbr	J1	GUIFEI	-	verified	JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（ShaderReplay 事件重放；late AT 311 rule）；owner retest 2026-11-21 Windows/PCL2：311 rule/150 类、2 mixin config、isLoaded=true，热加后 3 分钟无崩溃（问题 64 对照组）	2026-11-21
 GeckoLib	geckolib-neoforge-1.21.1-4.9.3.jar	20a1995e4074f387	jbr	J1	GUIFEI	-	candidate	JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（MixinAgentGuard）	2026-11-18
 饰品栏（Curios）	curios-neoforge-9.5.1+1.21.1.jar	a45df2125c262199	jbr	J1	GUIFEI	-	candidate	JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（late AT 16 rule）	2026-11-18
 帕秋莉手册（Patchouli）	Patchouli-1.21.1-93-NEOFORGE.jar	959af52ed6640c31	jbr	J1	GUIFEI	-	candidate	JBR harness 2026-11-18 ok=true isLoaded=true（无 AT；redefined SmithingTrimRecipe 等）	2026-11-18
