@@ -90,8 +90,11 @@ final class ModernUIAdapter {
         if (!Boolean.TRUE.equals(ok)) {
             throw new IllegalStateException("Core.initOpenGL returned false (GL caps rejected)");
         }
+        // sImmediateContext now exists; initUiThread() creates the UI handler and the
+        // sUiRecordingContext the text/GUI pipeline requires (Core.requireUiRecordingContext).
+        core.getMethod("initUiThread").invoke(null);
         ModReloader.LOGGER.info("[ModReloader] modernui adapter: render-thread init replayed "
-                + "(Core.initialize + Core.initOpenGL)");
+                + "(Core.initialize + Core.initOpenGL + Core.initUiThread)");
     }
 
     private static void copyBoolean(Class<?> type, Object options, String field, Object property)

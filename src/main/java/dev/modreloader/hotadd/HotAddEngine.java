@@ -167,9 +167,11 @@ public final class HotAddEngine {
             if ((failure = prepareModules(run)) != null) return recordFailure(run, failure);
             if ((failure = applyMixins(run)) != null) return recordFailure(run, failure);
             if ((failure = applyCoremods(run)) != null) return recordFailure(run, failure);
+            // Before the constructor: its config load (ModConfigs.load) runs right
+            // after @Mod construct and already touches the text/SDF pipeline.
+            if ((failure = modernUiAdapter(run)) != null) return recordFailure(run, failure);
             if ((failure = registerModList(run)) != null) return recordFailure(run, failure);
             if ((failure = construct(run)) != null) return recordFailure(run, failure);
-            if ((failure = modernUiAdapter(run)) != null) return recordFailure(run, failure);
             if ((failure = commitRegistry(run)) != null) return recordFailure(run, failure);
             if ((failure = replayCommonStartup(run)) != null) return recordFailure(run, failure);
             if ((failure = injectPacks(run)) != null) return recordFailure(run, failure);
