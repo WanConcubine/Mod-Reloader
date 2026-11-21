@@ -2251,3 +2251,21 @@ Mekanism 10.7.19.85 在标题屏经 `/modreloader add` 加入。共跑 4 次（�
 线程在 module/类被回滚后继续绘制 → 崩。不是单点 bug，而是结构性不可热加。
 处置：白名单新增 ModernUI（jbr）BLACK（需重启正常加载）；问题 7 补实例。静态 tier 低估“自带线程/render core”
 仍是已知局限（问题 1）。
+
+## 2026-11-21（ModernUI opt-in 适配：复刻渲染线程初始化）
+
+根因（字节码确认）：ModernUI 的 `Core.initOpenGL()` 只由 `MixinRenderSystem.onInitRenderer` 注入
+`RenderSystem.initRenderer`（TAIL）在**启动期**调用；热加不会重跑该点，`Core.sRenderThread` 恒为 null，
+其客户端 deferred task 抛 `The render thread has not been initialized yet`。构造期它还启动了自己的
+UI 线程（Looper/Choreographer），回滚后继续绘制 → `UI recording context has not been created yet` 崩溃。
+
+实现（opt-in，`-Dmodreloader.modernuiAdapter=true`）：
+- `hotadd/ModernUIAdapter`：反射执行 `Core.initialize()` → `new ContextOptions()`，按 mixin 同样的字段
+  （`mUseStagingBuffers`/`mAllowGLSPIRV`/`mDriverBugWorkarounds`，来自 `ModernUIClient` 的 bootstrap 属性）
+  赋值 → `Core.initOpenGL(options)`；必须在渲染线程（chat 触发时经 `Minecraft.execute` 跳线程）。
+- 在 `HotAddEngine.add()` 的 construct 之后、注册表提交之前执行（窗口尽量早，减少 UI 线程空转）。
+- fail-safe：失败不在半初始化进程里回滚继续，直接 `Relauncher.saveAndRestartCurrentClient`（托管重启）；
+  重启不可用才返回失败。
+- 顺带修引擎时序：`rebuildShaderInstances` 从“资源包注入前”移到“注入后”，修 `modernui:shaders/...`
+  在旧 manager 里找不到的 `FileNotFoundException`（提交 c2d35f3）。
+- 构建绿（118 单测、ArchitectureTest 通过），提交 6036507；待真机。

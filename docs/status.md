@@ -62,7 +62,8 @@
 | **capability 重放** | 五项全 present；`-PskipCapabilityReplay=true` 时五项 MISSING（反证） | `-PverifyCapabilities=<jar>`；[dogfood-gameplay.md](features/dogfood-gameplay.md) §1.1 |
 | **late AT（实验性）** | Jade 57/39、JEI 34/16、Controlling 1/1；Jade 回滚 39/39 ok；**类级 `public-f` 拒绝**（`stage=VALIDATE kind=ACCESS_TRANSFORMER`）；**方法级 `-f` 重定义后调用点崩（问题 64）**；**嵌套 mod AT 已接入**（2026-11-19：Create/Iris 越过嵌套 AT）；**增强 JBR 下自动启用**（`-Dmodreloader.lateAt=false` 可关） | `-PlateAt=true` 仅 dev 覆盖；[late-at.md](features/late-at.md) |
 | **失败回滚** | post-ModList / post-pack 恢复 ModList/module/config/类/资源包；post-construct 监听器按实例摘除 | `-PverifyRollback` / `-PfailAfterModList` / `-PfailAfterPack` / `-PfailAfterConstruct` |
-| **工程底座** | `capabilities` 10 组全 ok；无 `libs/` 可 `clean build`；**114 个无游戏 Java 单测**；i18n 两语言**各 197 key** | `./gradlew build`/`test`；[tech-debt.md](tech-debt.md) |
+| **工程底座** | `capabilities` 10 组全 ok；无 `libs/` 可 `clean build`；**118 个无游戏 Java 单测**；i18n 两语言**各 197 key** | `./gradlew build`/`test`；[tech-debt.md](tech-debt.md) |
+| **ModernUI 适配（opt-in 实验）** | 复刻启动期 `MixinRenderSystem.onInitRenderer`：`Core.initialize()` → `ContextOptions` → `Core.initOpenGL(...)`；失败走托管重启（其 UI 线程不可回滚）。`-Dmodreloader.modernuiAdapter=true` 才启用 | `hotadd/ModernUIAdapter`；待真机 |
 
 ## 验证状态
 
