@@ -136,15 +136,20 @@ public final class HotAddWhy {
                     + "classes, which NeoForge refuses on DEDICATED_SERVER; hot-add it on a client)");
             return false;
         }
-        if (inspection.accessTransformers() && !at.datagenOnly()) {
-            lines.add("verdict: refused (access transformers apply at class load; restart with the "
-                    + "jar in mods/) - " + at.describe());
-            return false;
-        }
-        if (inspection.accessTransformers() && at.datagenOnly()) {
-            lines.add("verdict: refused (access transformers apply at class load), but every target "
-                    + "is a datagen class: this refusal is conservative");
-            return false;
+        if (inspection.accessTransformers()) {
+            // The add path applies ATs through late AT whenever the enhanced JBR
+            // capability is present (auto-enabled, -Dmodreloader.lateAt=false turns it
+            // off). The verdict must not claim a refusal the engine would not make.
+            if (lateAtEnabled()) {
+                lines.add("  note: access transformers via late AT - " + at.describe()
+                        + (at.datagenOnly() ? " (all targets are datagen classes)" : ""));
+            } else {
+                lines.add("verdict: refused (access transformers apply at class load; restart with "
+                        + "the jar in mods/) - " + at.describe()
+                        + (at.datagenOnly() ? "; every target is a datagen class, so this refusal "
+                        + "is conservative" : ""));
+                return false;
+            }
         }
         if (audit != null && audit.fatal()) {
             lines.add("verdict: refused (registers " + audit.shortNames(RegistrationAudit.Severity.CRASH)
@@ -175,6 +180,15 @@ public final class HotAddWhy {
         }
         lines.add("verdict: hot-add (no mixins, no registry content)");
         return true;
+    }
+
+    /** Same rule as the engine: explicit property wins, otherwise enhanced JBR. */
+    private static boolean lateAtEnabled() {
+        String property = System.getProperty("modreloader.lateAt");
+        if (property != null && !property.isBlank()) {
+            return Boolean.parseBoolean(property);
+        }
+        return dev.modreloader.inspect.JbrSupport.enhancedRedefinition();
     }
 
     /** Empty when the mixin machinery is available, otherwise the reason it is not. */
