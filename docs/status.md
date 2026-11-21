@@ -414,7 +414,7 @@
 | **P1-3** | ✅ Git 收尾 | GitHub Actions 最新 `e0a0646` 为 success；需要时打 tag | Actions 绿 |
 | **P0-新** | 流水线 L2 | 标题屏热加 → 建世界 → N tick → HUD/按键/截图；先 minimap/mouse-gestures | 断言 + 截图证据 |
 | **P0-新** | 语料扩到 20–30 个常用模组 | 小地图/JEI/HUD/输入/前置库；`check` 进 PR | 报告 + 矩阵 |
-| **P0-新** | 模组白名单实测（所有者驱动） | 61 行：stock T1×7 / BLACK×23；JBR J1×25 / J2×2 / BLACK×4；candidate 由所有者复测转 verified | TSV + 视图同步 |
+| **P0-新** | 模组白名单实测（所有者驱动） | 60 行：stock T1×7 / BLACK×23；JBR J1×24 / J2×2 / BLACK×4；candidate 由所有者复测转 verified | TSV + 视图同步 |
 | **P0-新** | ✅ Xaero's World Map config channel | `XaeroLibChannels` 窗口（`ConfigChannelRegistry.frozen`），仅对引用该类的 jar 生效；World Map `ok=true isLoaded=true` | 已转 J2 |
 | **P0-新** | 服务端一次性事件（问题 52） | `ServerLifecycleReplay` 已实现（定向调用新增监听器 + integrated server 兜底），**未验证**：进入世界复跑卡在 54 | World Map J1 |
 | **P0-新** | xaerolib mixin 阶段挂起（问题 54） | 先 `jstack` 留线程栈再杀；怀疑 Mixin/transform 锁或常驻 guard | 复跑不挂 |
@@ -442,8 +442,8 @@
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近三条。
 
 - **2026-11-20（0.1.0 release notes 草案）**：`docs/releases/0.1.0.md` 按“只承诺 verified + 可选扩展 +
-  已知限制 + 存档警告”组织；支持矩阵与 `tools/whitelist.py check` 一致（61 行：stock T1=7/BLACK=23；
-  jbr J1=25/J2=2/BLACK=4）。candidate/fixing 不作为发布承诺。
+  已知限制 + 存档警告”组织；支持矩阵与 `tools/whitelist.py check` 一致（60 行：stock T1=7/BLACK=23；
+  jbr J1=24/J2=2/BLACK=4）。candidate/fixing 不作为发布承诺。
 - **2026-11-20（lateAt 随增强 JBR 自动开启）**：`LateAccessTransformers.enabled()` 在属性未显式设置时
   随增强 JBR 自动启用（`-Dmodreloader.lateAt=false` 可关）；玩家点一次「准备环境」后不再遇到 AT 开关类阻塞。
   验证：JBR 默认 Jade 57 条 AT 自动应用、`ok=true`；Temurin stock 干净 `ACCESS_TRANSFORMER` 拒绝；单测 114。

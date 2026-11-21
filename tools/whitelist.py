@@ -122,6 +122,7 @@ def render(rows) -> str:
     "换一个环境可能变成 T1/J1/J2（例：Balm 为 stock BLACK / JBR J1）。同一环境内不会重复入桶。")
     out.append("- J1/J2 里的 **AT 模组**需要 **JBR + `-XX:+AllowEnhancedClassRedefinition`**；")
     out.append("  增强 JBR 下 late AT 自 2026-11-20 起自动启用（`-Dmodreloader.lateAt=false` 可关）。")
+    out.append("- stock 已可热加（T1/T2）的模组**不单列 J1/J2**：T1/T2 是更强结论，JBR 复验写进同一行的证据。")
     out.append("- tier 是运行期**实际用到**的 tier（pin/fei/guifei/huanghou），不是预测。")
     out.append("")
     out.append("## 总览")

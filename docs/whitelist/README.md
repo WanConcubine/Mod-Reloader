@@ -18,6 +18,7 @@
 - **桶位是（JVM 环境, 模组）的组合，不是模组的全局属性**：BLACK 只表示“在**该环境**下结构性不可热加”，换一个环境可能变成 T1/J1/J2（例：Balm 为 stock BLACK / JBR J1）。同一环境内不会重复入桶。
 - J1/J2 里的 **AT 模组**需要 **JBR + `-XX:+AllowEnhancedClassRedefinition`**；
   增强 JBR 下 late AT 自 2026-11-20 起自动启用（`-Dmodreloader.lateAt=false` 可关）。
+- stock 已可热加（T1/T2）的模组**不单列 J1/J2**：T1/T2 是更强结论，JBR 复验写进同一行的证据。
 - tier 是运行期**实际用到**的 tier（pin/fei/guifei/huanghou），不是预测。
 
 ## 总览
@@ -25,7 +26,7 @@
 | 环境 | 可热加、无 bug | 可热加、有 bug | 判不可加但可救 | 结构性不可加 |
 |---|---|---|---|---|
 | stock | T1 × 7 | T2 × 0 | T3 × 0 | BLACK × 23 |
-| JBR | J1 × 25 | J2 × 2 | — | BLACK × 4 |
+| JBR | J1 × 24 | J2 × 2 | — | BLACK × 4 |
 
 ## stock JVM（不靠 JBR）
 
@@ -37,7 +38,7 @@
 | JECharacters | jecharacters-neoforge-4.5.15.jar | PIN | candidate | - | stock harness 2026-11-17 ok=true isLoaded=true（coremod 晚注入） |
 | Rhino | rhino-2101.2.7-build.81+Rhino-1.21.jar | PIN | candidate | - | stock harness 2026-11-17 ok=true isLoaded=true |
 | Searchables | Searchables-neoforge-1.21.1-1.0.2.jar | FEI | candidate | - | stock harness 2026-11-17 CompatCheck ok=true isLoaded=true (title screen) |
-| Simple Voice Chat | voicechat-neoforge-1.21.1-2.6.27.jar | HUANGHOU | candidate | - | stock harness 2026-11-18 ok=true isLoaded=true |
+| Simple Voice Chat | voicechat-neoforge-1.21.1-2.6.27.jar | HUANGHOU | candidate | - | stock harness 2026-11-18 ok=true isLoaded=true；JBR harness 2026-11-18 也 ok=true（无 AT；lateAt 批次） |
 | 众星捧月（Ex Nihilo: Satellitium） | exnihilosatellitium-1.21.1-1.5.0.jar | GUIFEI | verified | - | owner 2026-11-17：实际可用，加入一等；stock harness 2026-11-17 ok=true isLoaded=true（注册表 add-only + datapack；存档会绑定该 mod、不可回滚） |
 | 苹果皮（AppleSkin） | appleskin-neoforge-mc1.21-3.0.9.jar | PIN | candidate | - | stock harness 2026-11-17 CompatCheck ok=true isLoaded=true |
 
@@ -71,7 +72,7 @@
 
 ## JBR（enhanced redefinition）
 
-### JBR · J1 · JBR 下可热加，未发现 bug（25）
+### JBR · J1 · JBR 下可热加，未发现 bug（24）
 
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|
@@ -86,7 +87,6 @@
 | GuideME | guideme-21.1.22.jar | HUANGHOU | verified | - | pipeline ae2-lateat L1 2026-11-19（lateAt 47 条 AT，ok=true）；L2 2026-11-20：AE2 指南书 GuideScreen 正常打开（-PverifyAe2L2） |
 | ModernFix | modernfix-neoforge-5.27.27+mc1.21.1.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18：单独与批次（GeckoLib→FerriteCore→ModernFix→MouseTweaks）均 ok=true isLoaded=true；MixinAgentGuard + 新 config 隔离 |
 | Moonlight Lib | moonlight-1.21.1-3.8.3-neoforge.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18：NewRegistryEvent 重放已实现（3 个注册表创建、commit 90→92、blocks 1060→1061、items 1333→1335、stoneId 稳定），ok=true isLoaded=true；所有者实例复测后转 verified |
-| Simple Voice Chat | voicechat-neoforge-1.21.1-2.6.27.jar | HUANGHOU | candidate | - | JBR harness 2026-11-18 ok=true isLoaded=true（无 AT；lateAt 批次） |
 | Supplementaries | supplementaries-1.21.1-4.1.1-neoforge.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18：JiJ 递归 + 自定义注册表 + 模型层重放后 ok=true isLoaded=true；blocks 1061→1306、items 1335→1584、层 213→234。2026-11-19 复跑：MapRenderer$MapInstance 的两次 @WrapOperation 冲突 → 用预混字节 + 全部 configs 重组后 ok=true；所有者实例复测后转 verified |
 | Xaero 小地图（Xaero's Minimap） | xaerominimap-neoforge-1.21.1-26.6.0.jar | HUANGHOU | candidate | - | JBR harness 2026-11-17 ok=true isLoaded=true（含 JiJ xaerolib） |
 | ZeroCore2 | ZeroCore2-1.21.1-2.4.9.jar | GUIFEI | candidate | - | JBR harness 2026-11-17 ok=true isLoaded=true |

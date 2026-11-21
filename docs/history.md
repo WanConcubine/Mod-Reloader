@@ -2178,3 +2178,12 @@ clientfixture（GUI 层/物品装饰）PASS、`minimap` PASS、`moonlight-lateat
 - 数据口径以 `tools/whitelist.py check` 为唯一校验入口：61 行，stock T1=7/BLACK=23；jbr J1=25/J2=2/BLACK=4；
   verified 3 行（stock T1 的 dogfood，JBR J1 的 GuideME、AE2）。所有者决定 J2 维持成功消息标注、不硬阻断。
 - 状态源 `status.md` 的交接与最近变更同步到 2026-11-20；草案定稿仍等所有者真实复测。
+
+## 2026-11-21（白名单口径收口：stock 可热加不再单列 J1）
+
+- Simple Voice Chat 同时出现在 stock T1 与 JBR J1，属逐环境机械记录的冗余：J1 的定义是“仅 JBR 成立（stock 不成立）”，
+  而 stock 已可热加是更强结论。
+- 合并：删除 J1 行，把 JBR harness 证据并入 T1 行；TSV 61→60，J1 25→24（verified 数不变）。
+- 规则补充（mod-whitelist.md）：T1/T2 优先于 J1/J2；J1/J2 只留给 stock 不行的模组，JBR 复验写进同一行证据。
+  视图“怎么读”与 release notes 的矩阵/候选列表同步。
+- 校验：`python3 tools/whitelist.py check` → 60 行；stock T1=7/BLACK=23；jbr J1=24/J2=2/BLACK=4。
