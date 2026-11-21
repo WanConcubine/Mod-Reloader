@@ -549,7 +549,7 @@
 > 专用服 dev 跑法 `runServer -x downloadAssets -PjbrJava=...`，`build/moddev/minecraft_assets.properties` 指向
 > `.minecraft/assets`；`run/mods` 需 MixinRuntime。新增 harness：`-PverifyAddCommandPre`（AE2 需 GuideME 先加）、
 > `pauseOnLostFocus=false`（让集成服务器真的 tick）、`-PtickBarrier=true`（实验）、`-PverifyCreatePonder`（Create L2）。
-> **Git**：`main == origin/main`（见下方尖端）；SakuraCat 代理 7897 对 git TLS 失败，推送用直连多试几次。
+> **Git**：`main == origin/main`（尖端以 `git log -1` 为准）；SakuraCat 代理 7897 对 git TLS 失败，推送用直连多试几次。
 > 证据在 [history.md](history.md)；语料/夹具：`run/`、`.minecraft/.../modreloader/staging`、`corpus/j1`。
 
 | 优先 | 任务 | 关键点 / 落点 | 验收 |
