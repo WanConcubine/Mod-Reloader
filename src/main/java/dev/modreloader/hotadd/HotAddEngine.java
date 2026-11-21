@@ -845,13 +845,6 @@ public final class HotAddEngine {
         Set<String> nestedIds = run.nestedIds;
         // 5. resource packs, after the mod had a chance to register content.
         //    A dedicated server has no resource pack repository.
-        //    A mixin may have added fields to already-created ShaderInstance
-        //    objects (Sodium's uniformCache); the next thing that renders is the
-        //    reload's loading overlay, which would dereference the JVM default
-        //    (null). Rebuild them while nothing is being drawn.
-        if (run.mixinsApplied) {
-            hooks.rebuildShaderInstances();
-        }
         run.stagePlan.enter(Stage.PACK);
         // Startup-only client registrations (reload listeners among them) must be
         // in the manager before the reload starts: createReload snapshots the
@@ -876,6 +869,14 @@ public final class HotAddEngine {
             // Resources are cosmetic; never fail an otherwise good add for this.
             ModReloader.LOGGER.warn("[ModReloader] resource pack injection skipped: {}",
                     packCapability.describe());
+        }
+        // A mixin may have added fields to already-created ShaderInstance objects
+        // (Sodium's uniformCache) and the reload's loading overlay would dereference
+        // the JVM default (null). Rebuild them after the pack is live: the event
+        // runs for every container, so doing it before injection made a hot-added
+        // mod's own shader JSON unreadable (ModernUI: modernui:shaders/... not found).
+        if (run.mixinsApplied) {
+            hooks.rebuildShaderInstances();
         }
         if (Boolean.getBoolean("modreloader.failAfterPack")) {
             return fail(rollback, Stage.PACK, FailureKind.UNKNOWN, "injected failure after resource pack");
