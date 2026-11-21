@@ -441,3 +441,33 @@ P2-4 的最后一项：同一时间、同一个妃级 jar（mixin），**服务�
 
 结论：Mouse Tweaks 这类**确实需要** JBR（用户看到的提示没错），但提示现在会给出目标与具体布局变更，并在本机找得到 JBR 安装时给出路径
 （`JbrSupport.hint()`）；不需要 JBR 的 mixin 不再被误拦。**产品缺口仍是"JBR 不是默认运行时"**（managed relaunch / B fallback，见 status 下一步 P3-2）。
+
+### 10.5 accessor / `@Invoker` 接口：Mixin 在**接口 define 时**改写（问题 65，2026-11-21 已修）
+
+静态 `@Invoker` 的接口（如 ponder 的 `RenderTypeAccessor`）在磁盘上是注解处理器生成的桩：
+方法体直接 `throw new AssertionError("Mixin application failed!")`。它属于 Mixin 的 **loadable mixin**：
+
+- 接口 class 被 define 时，`MixinProcessor.applyMixins` 先跑 `MixinCoprocessors.process`；
+- `MixinCoprocessorPassthrough` 放行 loadable mixin，`MixinCoprocessorAccessor` 用
+  `MixinInfo.getClassNode(0)` 生成静态代理（`invokestatic <target>.<generated>`）并 `Bytecode.replace`；
+- 这两个 coprocessor 靠 `MixinConfig.IListener.onPrepare` 学习接口名，listener 是
+  `MixinProcessor.prepareConfigs` 在 prepare 前 `MixinConfig.addListener(...)` 挂上的。
+
+热加路径原先直接调 `MixinConfig.prepare(extensions)`，listener 为空 → `accessorMixins` 不含该接口 →
+`couldTransformClass=false` → 接口按原字节加载（不触发 IllegalClassLoadError，也不改写），
+首次调用即 `AssertionError`（Create 进世界崩在 `PonderRenderTypes.<clinit>`）。
+
+`MixinSupport.attachConfigListeners` 现在在 prepare 前挂 4 个 coprocessor + `MixinInheritanceTracker`；
+`processLoadedAccessors` 处理“add 前已经加载过”的接口（transform + redefine，带回滚）。
+
+回归（dev client，`-PnoJbr=true`）：
+
+```bash
+./gradlew runClient -PnoJbr=true -PnoFocus=true \
+  -PverifyMixinFixture=/tmp/mixinfixture/mixinfixture-1.0.0.jar
+# attached 4 processor listener(s) for on-load interface rewriting
+# AccessTargetInvoker.mixinfixture$hidden() = reached-target
+# RESULT: PASS
+```
+
+专用服同批复跑 Create `serverAddCommand` 仍 PASS。**未真机复验**：Create 客户端进世界；白名单 Create 暂留 J2。
