@@ -30,6 +30,9 @@ public final class MenuEntry {
 
     public static void install() {
         NeoForge.EVENT_BUS.addListener(ScreenEvent.Init.Post.class, MenuEntry::onScreenInit);
+        // Every screen, not only title/pause: ChatScreen's EditBox draws strings too.
+        NeoForge.EVENT_BUS.addListener(ScreenEvent.Init.Post.class,
+                event -> ModernUIAdapter.ensureFontBackfilled());
     }
 
     private static void onScreenInit(ScreenEvent.Init.Post event) {

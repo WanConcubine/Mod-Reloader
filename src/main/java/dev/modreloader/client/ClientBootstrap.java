@@ -60,6 +60,9 @@ public final class ClientBootstrap {
     }
 
     private static void tick() {
+        // Opt-in ModernUI adapter: cheap early-return when absent; repairs the live
+        // Font field if a reload or font swap dropped it.
+        dev.modreloader.hotadd.ModernUIAdapter.ensureFontBackfilled();
         if (!watcherStarted) {
             if (++watcherTicks < 80) {
                 return;

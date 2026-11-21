@@ -84,7 +84,8 @@ public final class ModernUIAdapter {
             dev.modreloader.reflect.UnsafeAccess.set(font, fontType,
                     "modernUI_MC$textRenderer", renderer);
             ModReloader.LOGGER.info("[ModReloader] modernui adapter: backfilled "
-                    + "Font.modernUI_MC$textRenderer on the live Font");
+                    + "Font.modernUI_MC$textRenderer on the live Font (id={})",
+                    System.identityHashCode(font));
             return null;
         } catch (Throwable t) {
             ModReloader.LOGGER.error("[ModReloader] modernui adapter (after construct) failed", t);
@@ -168,7 +169,7 @@ public final class ModernUIAdapter {
             dev.modreloader.reflect.UnsafeAccess.set(font, fontType,
                     "modernUI_MC$textRenderer", renderer);
             ModReloader.LOGGER.info("[ModReloader] modernui adapter: re-backfilled the live Font "
-                    + "field (was null)");
+                    + "field (was null, id={})", System.identityHashCode(font));
         } catch (Throwable t) {
             ModReloader.LOGGER.debug("[ModReloader] modernui font re-backfill failed", t);
         }
