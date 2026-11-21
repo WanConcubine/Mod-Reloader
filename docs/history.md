@@ -2226,3 +2226,14 @@ Mekanism 10.7.19.85 在标题屏经 `/modreloader add` 加入。共跑 4 次（�
 
 待真机：把 standalone 从 `mods/` 移除后启动，标题屏 `/modreloader add mezz_config-...-standalone.jar`
 应成功注册 `mezz_config`；随后 JEI 能否热加取决于其自身是否真的内嵌 mezz（jar 需放回本机核对）。
+
+## 2026-11-21（包装拆包真机 PASS；JEI 依赖链打通）
+
+- `mezz_config-...-standalone.jar`（外层 GAMELIBRARY + 无 mods.toml，内层 `META-INF/jarjar/mezz_config-....jar`
+  才是真 mod）在标题屏热加成功：日志 `wrapper mezz_config-...: hot-adding the nested mod META-INF/jarjar/...`，
+  `verify mezz_config: isLoaded=true, container=true`。
+- 紧接着 JEI 19.71.0.475 热加：`verify jei: isLoaded=true, container=true`，keyMappings 39→79，无崩溃。
+- 结论：JEI 这个 jar **不含** mezz（无 jarjar/metadata.json、无 net/mezzdev/config 类），mods.toml 要求
+  `mezz_config [0.6.10,1.0.0)` 独立安装；拦截本身正确。产品侧改为支持“先热加前置”，并把缺依赖文案改成
+  “该前置需要单独安装 / 并非所有发行包都自带”。
+- 白名单：JEI（J1）转 verified（19.71.0.475，依赖链证据）。

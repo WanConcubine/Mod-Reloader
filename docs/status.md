@@ -40,7 +40,7 @@
 | **A1.2（妃级）** | 4 mixin；`UUIDUtil`/`AbstractWidget` redefine + 首载织入；接口合并；LAN 屏 port=25565；专用服 `redefined Slot` | `-PautoAdd=<lsp> -PverifyLan=true`；[a1-mixin-hotadd.md](features/a1-mixin-hotadd.md) |
 | **兼容性流水线** | 11 pinned jar / 15 场景（3 个 `late_at`），L0 `check` 绿；L1 PASS（PASS = 复现了场景期望，含“按预期拒绝”）：minimap（JiJ XaeroLib）/ mouse-gestures / hud / input / tooltip-at / recipe-at / library / missing-dependency（拒绝）/ minimap-journeymap（拒绝）/ `mouse-gestures-nojbr`（干净 `JBR_REQUIRED`） | `python3 tools/pipeline/run.py check/run --scenario <id> --mods-dir /tmp/modreloader-corpus`；[hotadd-test-pipeline.md](features/hotadd-test-pipeline.md) |
 | **无焦点自动化** | `Window.<init>` 后插 `GLFW_FOCUS_ON_SHOW=false`；实测 `focused=false` + `hud` PASS；抢焦点时 `FOCUS_STOLEN` | `-PnoFocus=true`；`NoFocusAgentTest`；[no-focus.md](features/no-focus.md) |
-| **JiJ 嵌套 mod + 资源包** | Xaero's → `xaerolib` 有 container、依赖满足、mixin 合并、嵌套 pack 一次加入；`FMLCommonSetupEvent` 全 container 先同步；**2026-11-18 递归 3 层**（Supplementaries → `mixinsquared-forge` → `MixinSquared`，模块与 manifest mixin config 都收齐）；**包装 jar**（无 mods.toml 的 GAMELIBRARY 外形，如 MezzConfig standalone）拆到内层 mod 热加（2026-11-21，待真机复验） | `hotadd/NestedMods`、`hotadd/WrapperJar`、`inspect/WrapperJars`、`ClientResourcePacks.injectAll`；[hotadd-test-pipeline.md](features/hotadd-test-pipeline.md) |
+| **JiJ 嵌套 mod + 资源包** | Xaero's → `xaerolib` 有 container、依赖满足、mixin 合并、嵌套 pack 一次加入；`FMLCommonSetupEvent` 全 container 先同步；**2026-11-18 递归 3 层**（Supplementaries → `mixinsquared-forge` → `MixinSquared`，模块与 manifest mixin config 都收齐）；**包装 jar**（无 mods.toml 的 GAMELIBRARY 外形，如 MezzConfig standalone）拆到内层 mod 热加（2026-11-21 真机 PASS：`wrapper ... hot-adding the nested mod` → `mezz_config isLoaded=true`，随后 JEI 19.71 `isLoaded=true`、键位 39→79） | `hotadd/NestedMods`、`hotadd/WrapperJar`、`inspect/WrapperJars`、`ClientResourcePacks.injectAll`；[hotadd-test-pipeline.md](features/hotadd-test-pipeline.md) |
 | **JBR 环境（2026-11-18 收口）** | 菜单左上角三态标识（✓ 绿 / ✓ 黄「增强未启用」/ ✗ 红）；单一动作「为热加载增强环境做准备」：复用已装/运行中的 JBR，缺失才官方下载（SHA-512）→ 解压到 `gameDir/jbr-21.0.11` → 自动重启带齐 enhanced + lateAt；`/modreloader jbr` 打印诊断。**MixinRuntime (mr ≥ 1.0.2) 是可选扩展，不是前置**：不打包/不代下载；缺失时运行时照常启动，妃级/Mixin 能力不可用，菜单右上角红字、预检拦下。**Windows 真机测试中（所有者）**；参数只能启动时给，每会话最多一次自动重启（问题 55） | 单测 9；[jbr-support.md](features/jbr-support.md)、[guides/jbr.md](guides/jbr.md) |
 | **late coremod** | jecharacters 在独立 module layer 加载；变换 4 目标（含原版 `SearchTree`），80 deferred；`matches("tieding","铁锭")` false→true | `-PverifyPinyin`（JEI 需在 `run/mods`）；[matrix](features/hotadd-compatibility-matrix.md) §3.2 |
 | **JBR 边界收窄** | 只有「已加载类的布局变更」要 JBR：Mouse Tweaks JBR 下 `ok=true`；`-PnoJbr=true` 干净 `JBR_REQUIRED`；未加载目标免 JBR（fixture PASS） | `-PverifyCompat=<MouseTweaks>`；[a1-mixin-hotadd.md](features/a1-mixin-hotadd.md) §10.4 |
@@ -68,6 +68,10 @@
 
 ### 已验证
 
+- **包装 jar 热加 + JEI 依赖链（2026-11-21，Windows/PCL2 + 增强 JBR）**：`mezz_config-...-standalone.jar`
+  （外层 `FMLModType: GAMELIBRARY`、无 mods.toml，内层才是 mod）经 `WrapperJar` 拆包后热加成功
+  （日志 `wrapper mezz_config-...: hot-adding the nested mod ...`、`isLoaded=true container=true`）；
+  随后 JEI 19.71.0.475 热加 `isLoaded=true`、keyMappings 39→79，required 依赖链完整。
 - **Mekanism 热加复验（问题 58，2026-11-21，Windows/PCL2 + 增强 JBR）**：标题屏热加 Mekanism 10.7.19 成功
   （late AT 43 类、注册表 93 个、blocks→1260 / items→1714、层→224、GUI 层→29、物品装饰→14、payloads 58、
   `isLoaded=true container=true`），`robit` NPE 消失。随后在 `Screen.renderWithTooltip` 调用点出现
@@ -242,7 +246,7 @@
 
 25. **JBR 只对「已加载类的布局变更」必需**：数据/方法级 mixin 在 JBR 下可 redefine；未加载目标免 JBR；缺 JBR 时干净 `JBR_REQUIRED` 并点名目标。
 
-32. **无 `mods.toml` 的嵌套 GAMELIBRARY 没有 container 语义**（独立分发的 MezzConfig）；GAMELIBRARY manifest 现在返回 `FailureKind.LIBRARY`；带 `mods.toml` 的嵌套 GAMELIBRARY 归为库 + 收集 `MixinConfigs`。
+32. **无 `mods.toml` 的嵌套 GAMELIBRARY 没有 container 语义**（独立分发的 MezzConfig）；GAMELIBRARY manifest 现在返回 `FailureKind.LIBRARY`；带 `mods.toml` 的嵌套 GAMELIBRARY 归为库 + 收集 `MixinConfigs`。**2026-11-21 补**：**顶层发行包装**（外层无 mods.toml、jarjar 内层是真 mod）已会被拆到内层 mod 热加（`WrapperJars`/`WrapperJar`，真机 PASS：mezz standalone → `mezz_config`）；仍不支持的是“顶层就是一个纯库、没有任何 mod”。
 
 44. **类级 AT 去 final 是 JBR 结构性边界**：实例构造返回 null，后续 redefine SIGSEGV；“AT 覆盖 access/final”只指**成员级**；需启动期类变换或 JBR 修复。
 

@@ -95,7 +95,7 @@
 | 帕秋莉手册（Patchouli） | Patchouli-1.21.1-93-NEOFORGE.jar | GUIFEI | candidate | - | JBR harness 2026-11-18 ok=true isLoaded=true（无 AT；redefined SmithingTrimRecipe 等） |
 | 应用能源 2（AE2） | appliedenergistics2-19.2.20.jar | GUIFEI | verified | - | pipeline ae2-lateat L1 2026-11-19（ok=true，blocks→1162/items→1698）；L2 2026-11-20：进世界后 GuideScreen 与 MEStorageScreen 均打开、无崩溃（-PverifyAe2L2） |
 | 机械动力（Create） | create-1.21.1-6.0.10.jar | GUIFEI | candidate | - | pipeline create-lateat 2026-11-19：ok=true isLoaded=true；blocks 1060→1703、items 1333→2032（JBR+lateAt；L1，玩法未验） |
-| 物品管理器（JEI） | jei-1.21.1-neoforge-19.71.0.475.jar | GUIFEI | candidate | - | 2026-11-17 harness ok=true（19.70.0.469，hot-added [mezz_config, jei]，34 rule）；owner retest 2026-11-21：19.71.0.475 被 mezz_config 前置拦下——standalone 版无 mods.toml（GAMELIBRARY 无 container，引擎 FailureKind.LIBRARY 拒绝），需 mezz_config 启动期在 mods/ 后再复测 |
+| 物品管理器（JEI） | jei-1.21.1-neoforge-19.71.0.475.jar | GUIFEI | verified | - | 2026-11-17 harness ok=true（19.70.0.469，hot-added [mezz_config, jei]，34 rule）；owner retest 2026-11-21 Windows/PCL2：先热加 mezz_config（standalone 包装拆包，isLoaded=true）再 JEI 19.71.0.475（isLoaded=true、keyMappings 39→79），required 依赖链完整、无崩溃 |
 | 铁氧体核心（FerriteCore） | ferritecore-7.0.3-neoforge.jar | FEI | candidate | - | JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（MixinAgentGuard） |
 | 饰品栏（Curios） | curios-neoforge-9.5.1+1.21.1.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（late AT 16 rule） |
 | 鼠标手势（Mouse Tweaks） | MouseTweaks-neoforge-mc1.21-2.26.1.jar | FEI | candidate | - | JBR harness 2026-11-17 ok=true isLoaded=true（redefined AbstractContainerScreen） |
