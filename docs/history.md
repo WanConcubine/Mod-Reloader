@@ -2297,3 +2297,23 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
 真正缺的只有“世界已经在跑、之后再热加”的场景——现在引擎在 `ModConfigs.load` 里用
 `ServerLifecycleHooks.getCurrentServer().getServerDirectory()/serverconfig` 立即加载；标题屏则只记 INFO
 （“will load when a world starts”），不再误导为需要重启。
+
+## 2026-11-21（专用服一等目标：Create 在 dedicated server 热加 PASS）
+
+所有者指出“SERVER 配置跳过”是客户端中心思维后，按专属服路径做了实测与修复：
+
+- 本机 dev dedicated server（`runServer`，JBR/enhanced，`-x downloadAssets` + 手写
+  `build/moddev/minecraft_assets.properties` 指向现有 `.minecraft/assets` 绕开 PKIX 资产下载）：
+  `-PserverAddCommand=<create-6.0.10>` → **RESULT: PASS**，`verify create isLoaded=true`，
+  `flywheel/ponder/create` 均 registered；`mixin config ... side=SERVER platform=server`。
+- 修复（均为服务器侧真实缺口）：
+  1. `MixinAgentGuard`：`MixinAgent` 类存在但 transformer 未注册、且无 MixinRuntime 时，
+     旧逻辑按“不安全”拒绝所有 late AT（服务端首次实测即失败）；现视为安全，只有活跃 agent 才需要 guard。
+  2. `LateAccessTransformers`：AT 目标在本次 side 因 `RuntimeDistCleaner` 拒绝加载（客户端类）时，
+     旧逻辑让整批失败；现按 side 跳过该规则（日志 `not loadable on this side`）。
+  3. `ModConfigs`：专用服不再加载 CLIENT 配置（FML 启动期也不加载）；世界内 SERVER 配置从
+     `<world>/serverconfig` 加载，标题屏则由 FML 在世界启动时加载。实测 Create 服务端加载
+     `create-common.toml + create-server.toml`（client 已跳过）。
+- 客户端侧结论不变：标题屏 add 后进世界仍崩于 Ponder accessor 接口（问题 65），Create 保持 J2；
+  专用服结论已单独写入白名单 evidence。
+- 契约：`AGENTS.md` 12.5「专用服务器是一等目标」（提交 e9cd16c）。

@@ -64,11 +64,18 @@
 | **失败回滚** | post-ModList / post-pack 恢复 ModList/module/config/类/资源包；post-construct 监听器按实例摘除 | `-PverifyRollback` / `-PfailAfterModList` / `-PfailAfterPack` / `-PfailAfterConstruct` |
 | **工程底座** | `capabilities` 10 组全 ok；无 `libs/` 可 `clean build`；**118 个无游戏 Java 单测**；i18n 两语言**各 197 key** | `./gradlew build`/`test`；[tech-debt.md](tech-debt.md) |
 | **ModernUI 适配（opt-in 实验）** | 真机 PASS（2026-11-21）：构造前 `Core.initialize + initOpenGL`（UI 线程据此建 recording context）→ 构造后回填 `Minecraft.font`/`fontFilterFishy` 的 `modernUI_MC$textRenderer` → shader 重建后 `TextRenderType.preloadShaders()`；每 tick/每屏兜底回填。`-Dmodreloader.modernuiAdapter=true` 才启用 | `hotadd/ModernUIAdapter`；白名单 J2 |
-| **SERVER 配置** | 世界内热加：引擎立即从 `<world>/serverconfig` 加载（此前一律跳过 → Create `AllConfigs.server()` NPE，2026-11-21 已修待复验）；标题屏热加：FML 在**世界启动**时 `loadConfigs(SERVER)` 自动加载（实测 `Loading configs type SERVER`），不是“重启才生效” | `hotadd/ModConfigs` |
+| **SERVER 配置** | 世界内热加：引擎立即从 `<world>/serverconfig` 加载；标题屏热加：FML 在**世界启动**时自动加载；**专用服不加载 CLIENT 配置**。实测：Create 专用服热加 `loaded 2 config(s): create-common.toml, create-server.toml` | `hotadd/ModConfigs` |
+| **专用服热加（一等目标）** | 2026-11-21 本机 `runServer -PserverAddCommand=<Create>`：**RESULT: PASS**，`isLoaded=true`（flywheel/ponder/create），AT 客户端目标按 side 跳过、mixin side=SERVER、SERVER 配置加载。修复：MixinAgentGuard 无 transform 视为安全、AT 目标 dist 拒绝即跳过、CLIENT 配置跳过 | `runServer` harness；[mod-whitelist](features/mod-whitelist.md) |
 
 ## 验证状态
 
 ### 已验证
+
+- **专用服 Create 热加（2026-11-21，本机 dev dedicated server）**：`runServer -PserverAddCommand=<create-6.0.10>`
+  在控制台路径 `RESULT: PASS`，`verify create isLoaded=true`。过程中修掉三个**服务器侧**缺口：
+  `MixinAgentGuard` 把“agent 类存在但无 transformer”误判为不安全（无 MixinRuntime 时）、
+  `LateAccessTransformers` 对 dist 拒绝的客户端目标整批失败（改为按 side 跳过）、
+  `ModConfigs` 在服务端加载了 CLIENT 配置（改为跳过）。SERVER 配置按 `<world>/serverconfig` 正常加载。
 
 - **包装 jar 热加 + JEI 依赖链（2026-11-21，Windows/PCL2 + 增强 JBR）**：`mezz_config-...-standalone.jar`
   （外层 `FMLModType: GAMELIBRARY`、无 mods.toml，内层才是 mod）经 `WrapperJar` 拆包后热加成功
