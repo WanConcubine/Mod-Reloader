@@ -215,11 +215,26 @@
 
 ## 已知问题 / 坑
 
-> 追加式账本，**编号稳定**（引用不变）。共 66 条：待解决 1 / 验证缺口 4 / 结构性边界 18 / 历史与注记 15 / 已修 28。
-> **当前 actionable（1）**：61 Sodium 单例 mixin 字段。**64 是待拍板的结构性边界**（方法级 `-f`）。
-> **65/66 已修**（accessor 接口改写、数据包注册表重放；dev L2 与专用服回归 PASS，Create 客户端真机待复验）。
+> 追加式账本，**编号稳定**（引用不变）。共 67 条：待解决 2 / 验证缺口 4 / 结构性边界 18 / 历史与注记 15 / 已修 28。
+> **当前 actionable（2）**：61 Sodium 单例 mixin 字段、67 启动期 AT 被 redefine 覆盖（Create 方块交互崩，已定位待修）。
+> **64 是待拍板的结构性边界**（方法级 `-f`）。**65/66 已修**（accessor 接口改写、数据包注册表重放；66 真机已越过创造栏）。
 
 ### 待解决（需改代码）
+
+67. **热加后方块交互 `IllegalAccessError`：启动期 AT 在 redefine 时被原始字节覆盖（2026-11-21 真机）**：
+    Create 热加、进世界后手持/穿戴铜潜水头盔右键方块，`BlockBehaviour$BlockStateBase.useItemOn` 抛
+    `IllegalAccessError: ... tried to access protected method UseOnContext.<init>(...)`
+    （`crash-reports/crash-2026-11-21_21.57.01-client.txt`）。
+    **分析**：`UseOnContext.<init>` 的 `public` 来自 **NeoForge 启动期 AT**（
+    `META-INF/accesstransformer.cfg`：`public ... UseOnContext <init>(...)V`），不在 Create 的 AT 里，所以
+    `LateAccessTransformers` 没碰它（日志 40 规则/29 应用，无 UseOnContext）。`MixinSupport.captureOriginals`
+    从**类资源**读原始字节（protected），热加又用这份字节 transform + redefine 了 `UseOnContext`（21:55:54），
+    随后 `BlockStateBase` 也被 mixin redefine，首次执行 `useItemOn` 链接调用点时该构造器已是 protected → 访问检查失败。
+    同一机制还会让**失败回滚**把 AT 加宽还原成原始访问。
+    **修复方向**：把 live 类的访问标志（类/字段/方法，反射 `getModifiers()`）移植到 transform 后的字节上，
+    并以同样方式处理回滚字节（类似现有 `transplantAccess`，但来源是活类而不是类资源）；
+    回归断言：热加后 `UseOnContext.<init>(Level,Player,InteractionHand,ItemStack,BlockHitResult)` 仍为 public，
+    并真正走一次 `BlockStateBase.useItemOn`。**属 late AT/加载期 AT 的通用缺口，不只 Create。**
 
 61. **Sodium 热加后旧渲染对象崩溃（2026-11-19；2026-11-20 分析）**：`sodium-lateat` 中 Sodium ok=true（含 4 个
     fabric 库、约 64 类 redefine）。已修 `ShaderInstance.uniformCache` NPE（add 前重建 shader 实例）。
@@ -347,7 +362,8 @@
     证据：`-PverifyCreatePonder`（dev client + 增强 JBR）热加 Create → 建世界 →
     `create:potato_projectile/type entries=25`、`PotatoCannonItem.getAmmo() = null`（装饰器判空跳过，此前此处抛异常）、
     `PonderRenderTypes` 正常 → `RESULT: PASS`。`./gradlew build` 绿（`ReplayCatalogTest` 23 项）。
-    **仍缺**：PCL 真机再开同一个创造栏；白名单 Create 暂留 J2。
+    **真机已确认**：2026-11-21 21:55 会话中 `datapack registries registered: [create:potato_projectile/type]`，
+    再开机械动力创造栏不再出现该异常（随后暴露问题 67，见待解决）。白名单 Create 仍 J2 直到 67 修复。
 
 65. ✅ **热加 Mixin 的 accessor/`@Invoker` 接口未被改写（2026-11-21，dev 验证；Create 真机复验待做）**：Create（`ponder`）的
     `RenderTypeAccessor` 是 `@Mixin(RenderType.class)` 的接口，静态 `catnip$create` 是 Mixin 的
@@ -535,6 +551,11 @@
 ## 最近变更
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近三条。
+
+- **2026-11-21（问题 67 记录：启动期 AT 被 redefine 覆盖）**：Create 进世界后右键方块 →
+  `IllegalAccessError: BlockStateBase.useItemOn -> protected UseOnContext.<init>`。根因是 `UseOnContext.<init>`
+  的 public 来自 NeoForge 启动期 AT（不是 Create 的），热加用类资源的原始字节 redefine 它时把 AT 丢了；
+  已记录修复方向（把活类访问标志移植到 transform/回滚字节，附回归断言）。Create 白名单暂留 J2。
 
 - **2026-11-21（问题 66 修复：数据包注册表）**：热加漏发 `DataPackRegistryEvent.NewRegistry`，Create 的
   `create:potato_projectile/type` 不在 level registry access → 打开机械动力创造栏渲染马铃薯炮崩。

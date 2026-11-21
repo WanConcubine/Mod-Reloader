@@ -2404,3 +2404,20 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
 - 证据：`-PverifyCreatePonder` 升级为 L2（TestWorld 建世界）→ `entries=25`、`getAmmo()` 返回 null（装饰器判空）、
   Ponder 渲染类型正常 → `RESULT: PASS`；`./gradlew build` 绿。部署 jar sha256 `a51bacb1…6335`（21:43）。
 - 仍未验证：PCL 真机再开同一个创造栏；白名单 Create 暂留 J2。
+
+### 问题 67（记录）：启动期 AT 在热加 redefine 时被原始字节覆盖（2026-11-21 真机）
+
+- 真机：Create 热加、进世界后手持/穿戴铜潜水头盔右键方块 →
+  `IllegalAccessError: class BlockBehaviour$BlockStateBase tried to access protected method
+  UseOnContext.<init>(Level,Player,InteractionHand,ItemStack,BlockHitResult)`
+  （`crash-reports/crash-2026-11-21_21.57.01-client.txt`）。
+- 证据链：NeoForge 的 `META-INF/accesstransformer.cfg` 有
+  `public net.minecraft.world.item.context.UseOnContext <init>(...)V`（启动期 AT）；Create 的 AT 里没有这条
+  （`LateAccessTransformers` 40 规则/29 应用，列表无 UseOnContext）。21:55:54 日志显示
+  `redefined net.minecraft.world.item.context.UseOnContext with mixins`。
+  即：`captureOriginals` 从类资源拿到 protected 原始字节，transform + redefine 把它写回，启动期 AT 被抹掉；
+  随后 `BlockStateBase`（也被 mixin redefine）首次执行 `useItemOn` 的调用点时访问检查失败。
+- 影响面：所有「启动期 AT 加宽 + 该成员在热加目标类里被调用」的组合；失败回滚同样会把 AT 还原成原始访问。
+- 计划修法：`MixinSupport` 增加“从活类移植访问标志”（反射 modifiers → 类/字段/方法），
+  应用到 transform 后字节与回滚字节；回归断言 `UseOnContext.<init>` 仍 public，并真实触发 `useItemOn`。
+- 当前处理：**只记录，未改代码**（按所有者要求先记录并推送今日改动）。Create 白名单暂留 J2。
