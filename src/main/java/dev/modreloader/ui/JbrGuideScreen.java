@@ -1,6 +1,7 @@
 package dev.modreloader.ui;
 
 import dev.modreloader.inspect.JbrSupport;
+import dev.modreloader.launch.JbrProvisioner;
 import net.minecraft.Util;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -8,18 +9,18 @@ import net.minecraft.client.gui.components.MultiLineLabel;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
+import java.nio.file.Path;
 import java.util.Optional;
 
 /**
- * In-game "how do I get JBR" guide. This is a fallback, not the intended path:
- * when a JBR is installed the failure screen offers "restart on JBR" directly.
- * Always names the restart fallback so nobody is stuck.
+ * In-game manual JBR guide. Automatic provisioning failed or the player chose
+ * not to download: this page names the exact target directory, how to verify the
+ * layout, the platform URL, and how to get back to the live re-check/restart.
  */
 public final class JbrGuideScreen extends Screen {
-    static final String DOWNLOAD = "https://github.com/JetBrains/JetBrainsRuntime/releases";
-
     private final Screen parent;
     private MultiLineLabel body;
+    private String status = "";
 
     public JbrGuideScreen(Screen parent) {
         super(Component.translatable("modreloader.jbr_guide.title"));
@@ -28,17 +29,40 @@ public final class JbrGuideScreen extends Screen {
 
     @Override
     protected void init() {
-        Optional<java.nio.file.Path> install = JbrSupport.installation();
-        Component text = Component.translatable("modreloader.jbr_guide.body",
-                install.map(String::valueOf).orElse("—"));
-        body = MultiLineLabel.create(font, width - 40, text);
-        int y = height - 52;
+        Optional<Path> install = JbrSupport.installation();
+        Optional<JbrProvisioner.Asset> asset = JbrProvisioner.asset();
+        Path gameDir = minecraft == null ? Path.of(".") : minecraft.gameDirectory.toPath();
+        String target = JbrProvisioner.installDir(gameDir).toString();
+        String url = asset.map(JbrProvisioner::downloadUrl)
+                .orElse(JbrProvisioner.releasePage());
+        body = MultiLineLabel.create(font, width - 40,
+                Component.translatable("modreloader.jbr_guide.body", url, target,
+                        install.map(String::valueOf).orElse("—")));
+
+        int y = height - 56;
+        addRenderableWidget(Button.builder(Component.translatable("modreloader.jbr_guide.copy"),
+                        pressed -> copy(url))
+                .bounds(width / 2 - 155, y, 150, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("modreloader.jbr_guide.download"),
-                        pressed -> Util.getPlatform().openUri(DOWNLOAD))
-                .bounds(width / 2 - 105, y, 100, 20).build());
+                        pressed -> Util.getPlatform().openUri(JbrProvisioner.releasePage()))
+                .bounds(width / 2 + 5, y, 150, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("modreloader.jbr_guide.open_dir"),
+                        pressed -> {
+                            if (minecraft != null) {
+                                Util.getPlatform().openFile(gameDir.toFile());
+                            }
+                        })
+                .bounds(width / 2 - 155, y + 24, 150, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("modreloader.gui.close"),
                         pressed -> onClose())
-                .bounds(width / 2 + 5, y, 100, 20).build());
+                .bounds(width / 2 + 5, y + 24, 150, 20).build());
+    }
+
+    private void copy(String url) {
+        if (minecraft != null) {
+            minecraft.keyboardHandler.setClipboard(url);
+            status = Component.translatable("modreloader.jbr_guide.copied").getString();
+        }
     }
 
     @Override
@@ -47,6 +71,10 @@ public final class JbrGuideScreen extends Screen {
         super.render(guiGraphics, mouseX, mouseY, partialTick);
         guiGraphics.drawCenteredString(font, title, width / 2, 16, 0xFFFFFF);
         body.renderLeftAligned(guiGraphics, 20, 32, 10, 0xDDDDDD);
+        if (!status.isEmpty()) {
+            guiGraphics.drawCenteredString(font, Component.literal(status),
+                    width / 2, height - 72, 0x88FF88);
+        }
     }
 
     @Override

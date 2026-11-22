@@ -586,6 +586,9 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近三条。
 
+- **2026-11-22（JBR 失败恢复与实时复检）**：准备页增加「重新检测 JBR」「打开游戏目录」；
+  手动指引写明精确目标 `<gameDir>/jbr-21.0.11`、`release` + `bin/java` 结构、可复制下载地址；
+  下载失败保持游戏运行。复检调用 `JbrSupport.installation()`（每次全量扫描），找到后走同意/重启确认。
 - **2026-11-22（JBR 自动准备同意门禁，ADR-0017）**：准备页不再直接下载；先进入确认页，
   显示固定 GitHub release `jbr-release-21.0.11b1163.125`、实际 cache-redirector URL、SHA-512、
   安装目录与“保存并重启”，可复制发布页/下载地址；只有“允许并继续”才执行。无资产平台（Intel macOS）

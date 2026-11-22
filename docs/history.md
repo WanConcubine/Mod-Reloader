@@ -2557,3 +2557,13 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
 - 澄清：GitHub Release 页面没有二进制 asset，发布说明链接回 cache-redirector；用户给的
   `b1163.116` 是旧构建，项目固定 `b1163.125`，不能混用。
 - 测试：`JbrProvisionerTest` 增加 releasePage/checksumUrl 固定值断言；`./gradlew build` 绿。
+
+## 2026-11-22（JBR 失败恢复与实时复检）
+
+- 下载/解压失败：游戏保持运行并显示错误；错误文案改为引导“重试 / 手动安装 / 重新检测”，
+  不再误导向“把 jar 放进 mods/”。
+- 手动安装页：给出官方 URL（固定构建/发布页）、精确目标 `<gameDir>/jbr-21.0.11`、
+  `release` + `bin/java[.exe]` 结构、不要放进 mods/；增加复制下载地址、打开游戏目录按钮。
+- 准备页新增「重新检测 JBR」：调用 `JbrSupport.installation()`（每次重新扫描游戏目录及上层），
+  找到后打开同意/重启确认；找不到时提示按手动安装处理。
+- `./gradlew build` 绿；未做真机点击/截图验证。

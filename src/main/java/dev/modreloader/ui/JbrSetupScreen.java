@@ -5,6 +5,7 @@ import dev.modreloader.Platform;
 import dev.modreloader.launch.JbrProvisioner;
 import dev.modreloader.launch.PendingAdd;
 import dev.modreloader.launch.Relauncher;
+import net.minecraft.Util;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.MultiLineLabel;
@@ -44,14 +45,14 @@ public final class JbrSetupScreen extends Screen {
                 : JbrProvisioner.installDir(minecraft.gameDirectory.toPath()).toString();
         body = MultiLineLabel.create(font, width - 40,
                 Component.translatable("modreloader.jbr_setup.body", target));
-        int y = height - 52;
+        int y = height - 78;
         addRenderableWidget(Button.builder(Component.translatable("modreloader.jbr_setup.download"),
                         pressed -> {
                             if (minecraft != null) {
                                 minecraft.setScreen(new JbrConsentScreen(this));
                             }
                         })
-                .bounds(width / 2 - 160, y, 150, 20).build());
+                .bounds(width / 2 - 155, y, 150, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("modreloader.jbr_setup.manual"),
                         pressed -> {
                             if (minecraft != null) {
@@ -59,9 +60,19 @@ public final class JbrSetupScreen extends Screen {
                             }
                         })
                 .bounds(width / 2 + 5, y, 150, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("modreloader.jbr_setup.recheck"),
+                        pressed -> recheck())
+                .bounds(width / 2 - 155, y + 24, 150, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("modreloader.jbr_setup.open_dir"),
+                        pressed -> {
+                            if (minecraft != null) {
+                                Util.getPlatform().openFile(minecraft.gameDirectory);
+                            }
+                        })
+                .bounds(width / 2 + 5, y + 24, 150, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("modreloader.gui.close"),
                         pressed -> onClose())
-                .bounds(width / 2 - 50, height - 28, 100, 20).build());
+                .bounds(width / 2 - 50, height - 24, 100, 20).build());
     }
 
     /** Called only after {@link JbrConsentScreen} showed the exact URL and the player allowed it. */
@@ -114,6 +125,30 @@ public final class JbrSetupScreen extends Screen {
         worker.start();
     }
 
+    /**
+     * Re-runs the JBR scan against the current filesystem. The scan is not cached,
+     * so a runtime unpacked while this screen is open is found immediately; when
+     * found we still go through the consent/restart screen.
+     */
+    private void recheck() {
+        if (minecraft == null) {
+            return;
+        }
+        Optional<Path> existing = dev.modreloader.inspect.JbrSupport.installation();
+        if (existing.isPresent()) {
+            Path java = existing.get().resolve("bin").resolve(
+                    Relauncher.isWindows() ? "java.exe" : "java");
+            if (Relauncher.isRunnable(java)) {
+                error = null;
+                status = Component.translatable("modreloader.jbr_setup.recheck_found",
+                        existing.get().toString()).getString();
+                minecraft.setScreen(new JbrConsentScreen(this));
+                return;
+            }
+        }
+        error = Component.translatable("modreloader.jbr_setup.recheck_missing").getString();
+    }
+
     private void relaunch(Path java) {
         MinecraftAccess minecraft = new MinecraftAccess();
         if (closed || minecraft.get() == null) {
@@ -146,12 +181,13 @@ public final class JbrSetupScreen extends Screen {
         guiGraphics.drawCenteredString(font, title, width / 2, 24, 0xFFFFFF);
         body.renderCentered(guiGraphics, width / 2, 54, 10, 0xDDDDDD);
         int y = height - 76;
+        int statusY = height - 104;
         if (error != null) {
             guiGraphics.drawWordWrap(font,
                     Component.translatable("modreloader.jbr_setup.failed", error),
-                    20, y, width - 40, 0xFF8888);
+                    20, statusY, width - 40, 0xFF8888);
         } else {
-            guiGraphics.drawCenteredString(font, Component.literal(status), width / 2, y, 0xAAAAAA);
+            guiGraphics.drawCenteredString(font, Component.literal(status), width / 2, statusY, 0xAAAAAA);
         }
         if (!dev.modreloader.inspect.MixinRuntimeSupport.available()) {
             guiGraphics.drawCenteredString(font,
