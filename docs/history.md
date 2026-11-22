@@ -2523,3 +2523,15 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
   `server hot-add ok=true`、`client placed ... (server block state confirmed)`、`RESULT: PASS`，
   20s 后自动停、exit 0。
 - 与 late join L2 的区别：本节客户端是**连接后热加**，不是重启加载。
+
+## 2026-11-22（真实内容模组 MP L2：众星捧月 1.5.0）
+
+- 用 dogfood `exnihilosatellitium-1.21.1-1.5.0.jar` 跑客户端热加后的 L2 变体
+  （`-PmpRegistryPlace="exnihilosatellitium|iron_ore_gravel"`），不是 `t4fixture`。
+- 双方初始都没有 jar；客户端连接后热加（blocks=1140/items=1514），服务端 ready 后热加并写
+  29,472 行 dump；客户端应用快照，id 全量一致。
+- 服务端准备平台并给 `exnihilosatellitium:iron_ore_gravel`；客户端 `useItemOn=SUCCESS`，
+  双端确认 `(1,121,0)` 的 block state；客户端保持 10s、`RESULT: PASS`；服务端 `RESULT: PASS`，
+  20s 后自动停、exit 0。
+- 结论：真实内容模组（80 方块/181 物品 + datapack）在“客户端连接后热加 + 服务端后热加 + 快照同步”
+  路径上可以正常加入并完成真实放置。

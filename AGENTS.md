@@ -155,6 +155,7 @@ cp /tmp/t4fixture/t4fixture-1.0.0.jar run/mods/
 
 # 客户端热加后 L2 放置：双方初始都没有 jar；客户端连接后热加，服务端再热加并推快照，然后客户端放置
 # （默认 -PverifyMpRegistry 不带 mpRegistryPlace 时仍是纯 id 同步）
+# 真实模组示例：dogfood 用 -PmpRegistryPlace="exnihilosatellitium|iron_ore_gravel"
 ./gradlew runServer -PmpRegistryServer=/tmp/t4fixture/t4fixture-1.0.0.jar -PmpRegistryPlace="t4fixture|test_block"
 ./gradlew runClient -PverifyMpRegistry=/tmp/t4fixture/t4fixture-1.0.0.jar -PmpRegistryPlace="t4fixture|test_block" -PnoFocus=true
 

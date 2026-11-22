@@ -433,3 +433,29 @@ id 对齐后，服务端准备平台并给方块，客户端执行真实 `useIte
 - §13 是客户端**重启加载**（jar 在 `run/mods`），服务端先热加；
 - §14 是客户端**连接后热加**，服务端后热加；两边都初始没有该 jar，走运行时快照同步后再放置。
 - 默认 `-PverifyMpRegistry`（不带 `mpRegistryPlace`）行为不变，仍是纯 id 同步。
+
+### 14.1 真实内容模组：众星捧月 1.5.0（2026-11-22 PASS）
+
+同一命令换成 dogfood jar 与真实方块：
+
+```bash
+JAR=/Users/kaifengcrt/Projects/Ex-Nihilo-Satellitium/build/libs/exnihilosatellitium-1.21.1-1.5.0.jar
+./gradlew runServer -PmpRegistryServer="$JAR" \
+  -PmpRegistryPlace="exnihilosatellitium|iron_ore_gravel"
+./gradlew runClient -PverifyMpRegistry="$JAR" \
+  -PmpRegistryPlace="exnihilosatellitium|iron_ore_gravel" -PnoFocus=true
+```
+
+证据（专用服 + 独立客户端，双方初始都没有该 jar）：
+
+- 客户端：`client hot-add exnihilosatellitium: ok=true`（blocks=1140/items=1514）；
+  `ids match the server exactly (29472 lines)`；
+  `useItemOn(...) = SUCCESS`；
+  `client hot-add placed exnihilosatellitium:iron_ore_gravel ... (local block state confirmed)`；
+  `still connected=true ... after 10s`；`RESULT: PASS`。
+- 服务端：`server hot-add exnihilosatellitium: ok=true`；写 29,472 行 dump；
+  `client placed exnihilosatellitium:iron_ore_gravel ... (server block state confirmed)`；
+  `RESULT: PASS`；20s 后自动停，`runServer` exit 0。
+
+说明：这是真实内容模组（80 方块/181 物品 + datapack），不是 `t4fixture`；
+客户端走的是**连接后热加**路径，服务端后热加并推快照，然后客户端放置真实方块。
