@@ -1,9 +1,11 @@
 package dev.modreloader.hotadd;
 
+import com.google.common.base.CaseFormat;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.mojang.datafixers.util.Pair;
 import dev.modreloader.ModReloader;
 import dev.modreloader.reflect.UnsafeAccess;
 
@@ -15,7 +17,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -78,6 +82,48 @@ public final class EnumExtensions {
             ModReloader.LOGGER.warn(
                     "[ModReloader] enum extensions for {}: {} could not be applied {}; the mod may "
                             + "misbehave until restart (J2)", ids, failed.size(), failed);
+        }
+        refreshRecipeBookTagFields();
+    }
+
+    /**
+     * RecipeBookSettings froze its type-to-NBT-tag map while only the vanilla
+     * types existed, because it looks at {@code RecipeBookType.getExtensionInfo()}
+     * (which a runtime extension does not rewrite). Loading an old player then
+     * leaves the map short of the new type and {@code replaceFrom} NPEs with
+     * "invalid player data". Rebuild the map for every type now present.
+     */
+    private static void refreshRecipeBookTagFields() {
+        try {
+            Class<?> settings = Class.forName("net.minecraft.stats.RecipeBookSettings");
+            Class<?> type = Class.forName("net.minecraft.world.inventory.RecipeBookType");
+            Object[] types = type.getEnumConstants();
+            if (types == null) {
+                return;
+            }
+            Map<Object, Object> tags = UnsafeAccess.getStatic(settings, "TAG_FIELDS");
+            if (tags == null) {
+                return;
+            }
+            Map<Object, Object> extended = new HashMap<>(tags);
+            for (Object constant : types) {
+                if (extended.containsKey(constant)) {
+                    continue;
+                }
+                String camel = CaseFormat.UPPER_UNDERSCORE.to(CaseFormat.UPPER_CAMEL,
+                        ((Enum<?>) constant).name());
+                extended.put(constant, Pair.of("is" + camel + "GuiOpen",
+                        "is" + camel + "FilteringCraftable"));
+            }
+            if (extended.size() > tags.size()) {
+                UnsafeAccess.setStatic(settings, "TAG_FIELDS", Map.copyOf(extended));
+                ModReloader.LOGGER.info(
+                        "[ModReloader] RecipeBookSettings tags extended: {} -> {} type(s)",
+                        tags.size(), extended.size());
+            }
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn("[ModReloader] cannot extend RecipeBookSettings tags; loading "
+                    + "an old player may fail with invalid player data", t);
         }
     }
 

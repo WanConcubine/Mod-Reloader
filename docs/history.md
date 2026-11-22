@@ -2617,3 +2617,7 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
 - 2026-11-22（枚举扩展修正）：`Class.enumConstants`/`enumConstantDirectory` 是 **java.lang.Class 实例字段**，首次实现误用
   `staticFieldBase` → `IllegalArgumentException`；结果 `$VALUES` 已扩到 5、Class 缓存仍是 4，登录时 `EnumMap.put`
   索引 4 越界 → “无效的玩家数据”。改为实例访问，并对 `$VALUES` 失败做回滚。jar sha `ab3ff70d…`，已部署待复测。
+- 2026-11-22（RecipeBookSettings 标签补全）：6/6 枚举扩展已生效后，旧玩家数据仍失败——`RecipeBookSettings.TAG_FIELDS`
+  在类初始化时按 `RecipeBookType.getExtensionInfo()`（仍是 nonExtended）只建了 4 个原版类型；读档得到 4 项 map，
+  `replaceFrom` 遍历 5 个类型 → 第 5 项 null → NPE（“无效的玩家数据”）。枚举扩展后重建 TAG_FIELDS
+  （按 `is<UpperCamel>GuiOpen/FilteringCraftable` 命名），旧 NBT 缺字段按 false 处理。sha `48326e7b…`，待复测。
