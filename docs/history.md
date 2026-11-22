@@ -2535,3 +2535,14 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
   20s 后自动停、exit 0。
 - 结论：真实内容模组（80 方块/181 物品 + datapack）在“客户端连接后热加 + 服务端后热加 + 快照同步”
   路径上可以正常加入并完成真实放置。
+
+## 2026-11-22（真实 JBR MP L2：AE2 PASS、Create J2）
+
+- AE2 + GuideME（J1，需 JBR/late AT）走客户端连接后热加 → 服务端后热加 → 快照：
+  客户端 `client hot-add guideme/ae2 ok=true`（redefined 12 类，blocks=1162/items=1698）；
+  34,809 行 id 全量一致；客户端真实放置 `ae2:quartz_block`，双端 block state 确认；
+  客户端 10s 存活、PASS；服务端 PASS 后 20s 自动停、exit 0。
+- Create 6.0.10（J2）同一流程：客户端 `ok=true`（blocks=1703/items=2032，含 JiJ flywheel/ponder），
+  随后在 `Player.aiStep` 读 Ponder 配置崩溃：`Cannot get config value before config is loaded`
+  （`ConfigBase$CValue.get`）。客户端未写 ready、未进入放置；确认是 J2 配置边界，不是 harness 问题。
+- 白名单证据同步：AE2 J1 与 Create J2 行更新到 2026-11-22。

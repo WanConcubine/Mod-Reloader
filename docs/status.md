@@ -54,7 +54,7 @@
 | **数据包注册表** | `DataPackRegistryEvent.NewRegistry` 重放（只对新容器）→ 下一个世界/连接可见；Create 建世界后 `create:potato_projectile/type entries=25`、`PotatoCannonItem.getAmmo()` 不抛 | `-PverifyCreatePonder=<create>`；[status 问题 66](status.md) |
 | **datapack 热加载** | dogfood recipes 0→164 / loot 0→75、真实合成与掉落；标题屏 + 新世界可用维度；**删除/更新实测不可行** | [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) §9/§10；`-PverifyDatapack`、`-PverifyWorldgen` |
 | **dogfood 玩法** | 七表非空；锤/筛/合成命中；`beRenderers 6/6`、图标 `181/181`；创造栏第 2/2 页、182 项 | [dogfood-gameplay.md](features/dogfood-gameplay.md) |
-| **多人** | 相反顺序热加 → `ids match ... (29475 lines)`；未装 jar 的客户端先收通知再被 datapack 同步踢；ack 落日志；**late join（服务端无玩家先热加 → 客户端重启加载后加入）PASS**：29,080 行 id 一致、**L2 真实放置方块**、10s 存活；**客户端热加后 L2 放置 PASS**（两端初始无 jar → 客户端先热加 → 服务端后热加 → 快照对齐 → 客户端 `useItemOn`，双端确认 block state）；**真实内容模组 dogfood 1.5.0 也 PASS**（29,472 行 id、`exnihilosatellitium:iron_ore_gravel` 放置） | [t4-registry-hotadd.md](features/t4-registry-hotadd.md) §9/§10/§13/§14 |
+| **多人** | 相反顺序热加 → `ids match ... (29475 lines)`；未装 jar 的客户端先收通知再被 datapack 同步踢；ack 落日志；**late join（服务端无玩家先热加 → 客户端重启加载后加入）PASS**：29,080 行 id 一致、**L2 真实放置方块**、10s 存活；**客户端热加后 L2 放置 PASS**（两端初始无 jar → 客户端先热加 → 服务端后热加 → 快照对齐 → 客户端 `useItemOn`，双端确认 block state）；**真实内容模组 dogfood 1.5.0 也 PASS**（29,472 行 id、`exnihilosatellitium:iron_ore_gravel` 放置）；**真实 JBR 档 AE2+GuideME 也 PASS**（34,809 行 id、`ae2:quartz_block` 放置）；**Create 6.0.10 客户端热加仍卡 J2 Ponder 配置未加载** | [t4-registry-hotadd.md](features/t4-registry-hotadd.md) §9/§10/§13/§14 |
 | **注册审计**（[ADR-0012](decisions/0012-registration-audit-severity.md)） | 16 jar / 129 引用：71 covered / 24 recurring / 6 datagen / 16 silent / 10 behavior / **1 crash**（Mekanism shader）/ 1 base；crash 在 module 注入前拒绝。**2026-11-19 起 `covered` 由 `inspect/ReplayCatalog` 单一维护**（层定义由 behavior 纠正为 covered；数字待下次审计刷新） | `-PverifyRegAudit=<jars>`；[client-registration-audit.md](features/client-registration-audit.md) §5 |
 | **tier 注册信号** | 按「注册调用 / `*DeferredRegister` 引用」：Jade 贵妃→妃、mekanismgenerators 嫔→贵妃；与 analyzer 一致 | `RegistrySignalTest`（5 单测） |
 | **托管重启（A′/B）** | 「保存并重启」与「用 JBR 重启」：`ProcessBuilder` 直接起 JVM（Windows `javaw`）、子进程标记、argv 用 ProcessHandle/PowerShell；**Windows/PCL2 未验证** | `RelaunchScriptsTest`、`JbrProvisionerTest` |
@@ -586,6 +586,10 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近三条。
 
+- **2026-11-22（真实 JBR MP L2：AE2 PASS / Create J2）**：AE2+GuideME 客户端连接后热加、服务端后热加，
+  34,809 行 id 一致，真实放置 `ae2:quartz_block`（双端 block state 确认）→ PASS。Create 6.0.10 同一流程
+  客户端 `ok=true` 后在 `Player.aiStep` 读 Ponder 配置崩溃（`Cannot get config value before config is loaded`），
+  未进入放置，确认是 J2 配置边界而非 harness 问题。
 - **2026-11-22（客户端热加后 L2 放置）**：`mpRegistry` 增加可选 `-PmpRegistryPlace="<modId>|<block>"`。
   双方初始都没有 jar；客户端连接后先热加，服务端 ready 后再热加并推快照；29,080 行 id 一致后，
   客户端真实 `useItemOn` 放置热加方块，双端确认 block state；服务端自动停。

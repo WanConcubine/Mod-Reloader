@@ -459,3 +459,47 @@ JAR=/Users/kaifengcrt/Projects/Ex-Nihilo-Satellitium/build/libs/exnihilosatellit
 
 说明：这是真实内容模组（80 方块/181 物品 + datapack），不是 `t4fixture`；
 客户端走的是**连接后热加**路径，服务端后热加并推快照，然后客户端放置真实方块。
+
+### 14.2 真实 JBR 模组：AE2 + GuideME（2026-11-22 PASS）
+
+AE2 是 J1（需要 JBR/late AT）的真实内容模组，依赖 GuideME；两者都走客户端连接后热加：
+
+```bash
+JARS=/tmp/modreloader-corpus/guideme-21.1.22.jar,/tmp/modreloader-corpus/appliedenergistics2-19.2.20.jar
+./gradlew runServer -PmpRegistryServer="$JARS" \
+  -PmpRegistryPlace="ae2|quartz_block"
+./gradlew runClient -PverifyMpRegistry="$JARS" \
+  -PmpRegistryPlace="ae2|quartz_block" -PnoFocus=true
+```
+
+证据（2026-11-22 10:25–10:27）：
+
+- 客户端：`client hot-add guideme: ok=true`、`client hot-add ae2: ok=true`
+  （redefined 12 个客户端/服务端类，blocks=1162/items=1698）；
+  `ids match the server exactly (34809 lines, blocks=1162, items=1698)`；
+  `useItemOn(...) = SUCCESS`；
+  `client hot-add placed ae2:quartz_block ... (local block state confirmed)`；
+  `still connected=true ... after 10s`；`RESULT: PASS`。
+- 服务端：`server hot-add guideme/ae2: ok=true`；写 34,809 行 dump；
+  `client placed ae2:quartz_block ... (server block state confirmed)`；`RESULT: PASS`；
+  20s 后自动停，`runServer` exit 0。
+
+结论：真实 JBR 档（AE2 + GuideME）在“客户端连接后热加 → 服务端后热加 → 快照对齐 →
+客户端真实放置”路径上 PASS。
+
+### 14.3 Create 6.0.10：J2 边界（未通过放置）
+
+同一命令把 AE2 换成 Create（`-PmpRegistryPlace="create|andesite_casing"`）：
+客户端 `client hot-add create: ok=true`（blocks=1703/items=2032，含 JiJ flywheel/ponder），
+但随后 tick 崩溃：
+
+```text
+java.lang.IllegalStateException: Cannot get config value before config is loaded.
+  at net.neoforged.neoforge.common.ModConfigSpec$ConfigValue.get
+  at net.createmod.catnip.config.ConfigBase$CValue.get
+  at net.minecraft.world.entity.player.Player.modifyExpressionValue$zzm000$create$pretendNotPassenger
+  ...
+```
+
+这是 Create 的已知 J2 配置问题（Ponder 配置在客户端 tick 读取时尚未加载），
+不是 late-join/L2 harness 的问题；客户端未写 ready，服务端未进入放置，测试按失败收尾。
