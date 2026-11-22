@@ -2575,3 +2575,16 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
   （503,798 B，sha256 `51fb4eb042a204bd82297014ca9161185fc0e634ea3950c83488a3379607b06d`）。
 - 该产物包含 JBR 同意门禁（`JbrConsentScreen`）、失败手动指引/实时复检、GPL-3.0-only 与 `META-INF/LICENSE`。
 - 旧 `v0.1.0-beta` tag 保持不动，作为历史；新 tag 为 `v0.1.0-beta.1`。
+
+## 2026-11-22（问题 69：mixin 插件按 LoadingModList 判自身 → Embeddium 全部 mixin 被跳过）
+
+- 真机：标题屏热加 Embeddium 1.0.15 报 `hot-added`/`isLoaded=true`，但「视频设置」仍打开原版界面；
+  模组菜单里的 Embeddium「配置」按钮能打开它自己的界面（配置注册不走 mixin）。
+- 日志证据：`[Embeddium/]: Could not find embeddium mod, ... Skipping mixin application.`（12:42:49.288）→
+  `mixin setup: targets=[]`、`redefined=[]`。拆 jar：`embeddium.mixins.json` 的 `client` 列表为空，
+  mixin 由 `MixinPlugin.getMixins()` 动态枚举；`shouldApplyMixin` 查
+  `LoadingModList.getModFileById("embeddium")`。
+- 修复：`HotAddEngine.publishModFile` 在 mixin 前把 ModFileInfo/ModInfo 发布到 LoadingModList
+  （`ModListInjector.publishLoadingList`），与启动期顺序一致；MODLIST 仍建 container，发布带回滚。
+- `./gradlew build` 绿；jar 504,373 B sha256 `90f71bf6aa43a2f92ef90942b1cb3b1bdff84834950672b786cadc05d95638a9`；
+  已部署到 PCL，待真机复测「视频设置」。

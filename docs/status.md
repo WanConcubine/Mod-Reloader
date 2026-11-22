@@ -220,11 +220,26 @@
 
 ## 已知问题 / 坑
 
-> 追加式账本，**编号稳定**（引用不变）。共 68 条：待解决 2 / 验证缺口 4 / 结构性边界 18 / 历史与注记 15 / 已修 29。
-> **当前 actionable（2）**：61 Sodium 单例 mixin 字段、68 in-world add 的 mixin→construct 竞态（AE2 崩，待方案）。
+> 追加式账本，**编号稳定**（引用不变）。共 69 条：待解决 3 / 验证缺口 4 / 结构性边界 18 / 历史与注记 15 / 已修 29。
+> **当前 actionable（3）**：61 Sodium 单例 mixin 字段、68 in-world add 的 mixin→construct 竞态（AE2 崩，待方案）、
+> 69 Embeddium 的 mixin 插件按 LoadingModList 判自身（已修待真机复测）。
 > **64 是待拍板的结构性边界**（方法级 `-f`）。**65/66 已修**（accessor 接口改写、数据包注册表重放；66 真机已越过创造栏）。
 
 ### 待解决（需改代码）
+
+69. **mixin 配置插件看不到热加 mod：全部 mixin 被跳过（2026-11-22 真机，Embeddium）**：
+    标题屏热加 Embeddium 1.0.15 后 `ok=true`/`isLoaded=true`，但「视频设置」仍是原版界面；
+    只有模组菜单里 Embeddium 的「配置」按钮能打开它自己的界面。日志：
+    `[Embeddium/]: Could not find embeddium mod, ... Skipping mixin application.`（12:42:49.288），
+    随后 `mixin setup: targets=[]`、`redefined=[]`。
+    根因：`embeddium.mixins.json` 的 `client` 列表为空，mixin 由 `MixinPlugin.getMixins()` 动态枚举；
+    `shouldApplyMixin` 用 `FMLLoader.getLoadingModList().getModFileById("embeddium")` 判断自身是否存在。
+    引擎原先在 MODLIST（applyMixins 之后）才更新 LoadingModList，插件返回 false → 全部跳过；
+    启动期顺序相反（mod 发现先于 mixin 准备）。
+    修复：`HotAddEngine.publishModFile` 在 `applyMixins` 前把 `ModFileInfo`/`ModInfo` 写进 LoadingModList
+    （`ModListInjector.publishLoadingList`，幂等，带回滚快照）；MODLIST 仍负责建 container。
+    已构建部署（sha256 `90f71bf6…38a9`），**待真机复测**：日志应出现 `published [embeddium] to LoadingModList`
+    且 `targets` 非空、视频设置进入 Embeddium 界面。
 
 68. **in-world add 的 mixin→construct 竞态：注入代码先于模块初始化运行（2026-11-21 真机；方案 A 实验失败）**：
     单人世界内热加 AE2 时集成服务器崩：`crash-reports/crash-2026-11-21_23.17.58-server.txt`，

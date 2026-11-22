@@ -135,6 +135,11 @@ public final class ModListInjector {
         return new ArrayList<>(containers.subList(oldContainers.size(), containers.size()));
     }
 
+    public static void publishLoadingList(List<ModFileInfo> newFiles,
+                                          List<ModInfo> newInfos) throws Throwable {
+        updateLoadingModList(newFiles, newInfos);
+    }
+
     private static void updateLoadingModList(List<ModFileInfo> newFiles,
                                              List<ModInfo> newInfos) throws Throwable {
         LoadingModList loading = FMLLoader.getLoadingModList();
