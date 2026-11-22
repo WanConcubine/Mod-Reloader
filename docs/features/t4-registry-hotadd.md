@@ -400,3 +400,36 @@ cp /tmp/t4fixture/t4fixture-1.0.0.jar run/mods/
 - **没装 jar 的 late joiner 仍会在登录期被 `server-with-unknown-keys` 拒绝**，且收到不到友好通知
   （§10 的 notice 只覆盖在线客户端）。这是已知 UX 缺口，本次 harness 未覆盖。
 - 客户端后来放进 `run/mods` 的同一 jar 会被 watcher 按“已加载 modId”跳过，不会重复热加。
+
+## 14. 客户端热加后的 L2 放置（2026-11-22 PASS）
+
+复用 §9 的 `MpRegistryServerCheck` / `MpRegistryCheck`，加一个可选的 `-PmpRegistryPlace="<modId>|<blockPath>"`：
+双方初始都没有该 jar；客户端连接后**先热加**，服务端等客户端 ready 后**再热加**并推快照；
+id 对齐后，服务端准备平台并给方块，客户端执行真实 `useItemOn`，服务端确认权威 block state。
+
+```bash
+# 终端 1：服务端初始没有 t4fixture
+./gradlew runServer -PmpRegistryServer=/tmp/t4fixture/t4fixture-1.0.0.jar \
+  -PmpRegistryPlace="t4fixture|test_block"
+
+# 终端 2：客户端也初始没有 t4fixture，连接后热加并放置
+./gradlew runClient -PverifyMpRegistry=/tmp/t4fixture/t4fixture-1.0.0.jar \
+  -PmpRegistryPlace="t4fixture|test_block" -PnoFocus=true
+```
+
+证据（2026-11-22 10:06–10:07，专用服 + 独立客户端）：
+
+- 客户端：`client hot-add t4fixture: ok=true`（blocks=1061/items=1334）；写 ready；
+  `ids match the server exactly (29080 lines)`；`useItemOn(...) = SUCCESS`；
+  `client hot-add placed t4fixture:test_block ... (local block state confirmed)`；
+  `still connected=true ... after 10s`；`RESULT: PASS`。
+- 服务端：客户端 ready 后 `server hot-add t4fixture: ok=true`；写 29,080 行 dump；
+  `placed the player ... and gave t4fixture:test_block`；
+  `client placed t4fixture:test_block ... (server block state confirmed)`；`RESULT: PASS`；
+  20s 后自动停，`runServer` exit 0。
+
+与 §13 的区别：
+
+- §13 是客户端**重启加载**（jar 在 `run/mods`），服务端先热加；
+- §14 是客户端**连接后热加**，服务端后热加；两边都初始没有该 jar，走运行时快照同步后再放置。
+- 默认 `-PverifyMpRegistry`（不带 `mpRegistryPlace`）行为不变，仍是纯 id 同步。

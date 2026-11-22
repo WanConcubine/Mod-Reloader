@@ -391,6 +391,12 @@ neoForge {
                 systemProperty 'modreloader.mpRegistryAddress',
                         providers.gradleProperty('mpRegistryAddress').get()
             }
+            if (providers.gradleProperty('mpRegistryPlace').orNull) {
+                // Optional L2 tail for the client-hot-add registry test:
+                // "<modId>[|<blockPath>]"; the client places the hot-added block.
+                systemProperty 'modreloader.mpRegistryPlace',
+                        providers.gradleProperty('mpRegistryPlace').get()
+            }
             if (providers.gradleProperty('verifyMpLateJoin').orNull) {
                 // Late join: the jar is loaded at client startup, while the server
                 // hot-added it before this client connected.
@@ -524,6 +530,11 @@ neoForge {
                 // client says it is ready, then publish the authoritative ids.
                 systemProperty 'modreloader.mpRegistryServer',
                         providers.gradleProperty('mpRegistryServer').get()
+            }
+            if (providers.gradleProperty('mpRegistryPlace').orNull) {
+                // Optional L2 tail: prepare a platform and give the hot-added block.
+                systemProperty 'modreloader.mpRegistryPlace',
+                        providers.gradleProperty('mpRegistryPlace').get()
             }
             if (providers.gradleProperty('mpLateJoinServer').orNull) {
                 // Server half of the late-join check: hot-add before any client

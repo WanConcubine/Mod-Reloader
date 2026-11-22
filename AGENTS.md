@@ -153,6 +153,11 @@ cp /tmp/t4fixture/t4fixture-1.0.0.jar run/mods/
 ./gradlew runClient -PverifyMpLateJoin="/tmp/t4fixture/t4fixture-1.0.0.jar|t4fixture" -PnoFocus=true
 # 服务端在放置成功后 20s 自动停；跑完删除 run/mods 里的夹具
 
+# 客户端热加后 L2 放置：双方初始都没有 jar；客户端连接后热加，服务端再热加并推快照，然后客户端放置
+# （默认 -PverifyMpRegistry 不带 mpRegistryPlace 时仍是纯 id 同步）
+./gradlew runServer -PmpRegistryServer=/tmp/t4fixture/t4fixture-1.0.0.jar -PmpRegistryPlace="t4fixture|test_block"
+./gradlew runClient -PverifyMpRegistry=/tmp/t4fixture/t4fixture-1.0.0.jar -PmpRegistryPlace="t4fixture|test_block" -PnoFocus=true
+
 # 贵妃级注册表热加：热加夹具 → 放置/存盘 → 放进 run/mods → 重启读档（详见 experiments/t4-fixture/README.md）
 ./gradlew runServer -PautoAdd=/tmp/t4fixture/t4fixture-1.0.0.jar -Pt4fixtureSelftest=true
 

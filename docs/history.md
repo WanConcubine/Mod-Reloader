@@ -2511,3 +2511,15 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
   服务端 `client placed ... (server block state confirmed)`、`RESULT: PASS`；
   20s 后自动停，`runServer` exit 0。
 - 夹具仍先由服务端无玩家热加；客户端 jar 在 `run/mods` 启动加载，登录同步 29,080 行 id 一致。
+
+## 2026-11-22（客户端热加后 L2 放置）
+
+- `MpRegistryServerCheck` / `MpRegistryCheck` 增加可选 `-PmpRegistryPlace="<modId>|<blockPath>"`
+  （默认不开启，纯 id 同步行为不变）。
+- 流程：双方初始都没有 jar → 客户端连接后热加并写 ready → 服务端后热加并写 29,080 行 dump
+  → 客户端应用快照、id 全量一致 → 服务端准备平台/给方块 → 客户端 `useItemOn` 放置 → 双端确认 block state。
+- 证据（2026-11-22 10:06–10:07）：客户端 `client hot-add ... ok=true`、`ids match ... 29080 lines`、
+  `useItemOn(...) = SUCCESS`、本地 block state 确认、10s 存活、`RESULT: PASS`；服务端
+  `server hot-add ok=true`、`client placed ... (server block state confirmed)`、`RESULT: PASS`，
+  20s 后自动停、exit 0。
+- 与 late join L2 的区别：本节客户端是**连接后热加**，不是重启加载。
