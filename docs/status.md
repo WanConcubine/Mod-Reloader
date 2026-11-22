@@ -41,7 +41,7 @@
 | **兼容性流水线** | 11 pinned jar / 15 场景（3 个 `late_at`），L0 `check` 绿；L1 PASS（PASS = 复现了场景期望，含“按预期拒绝”）：minimap（JiJ XaeroLib）/ mouse-gestures / hud / input / tooltip-at / recipe-at / library / missing-dependency（拒绝）/ minimap-journeymap（拒绝）/ `mouse-gestures-nojbr`（干净 `JBR_REQUIRED`） | `python3 tools/pipeline/run.py check/run --scenario <id> --mods-dir /tmp/modreloader-corpus`；[hotadd-test-pipeline.md](features/hotadd-test-pipeline.md) |
 | **无焦点自动化** | `Window.<init>` 后插 `GLFW_FOCUS_ON_SHOW=false`；实测 `focused=false` + `hud` PASS；抢焦点时 `FOCUS_STOLEN` | `-PnoFocus=true`；`NoFocusAgentTest`；[no-focus.md](features/no-focus.md) |
 | **JiJ 嵌套 mod + 资源包** | Xaero's → `xaerolib` 有 container、依赖满足、mixin 合并、嵌套 pack 一次加入；`FMLCommonSetupEvent` 全 container 先同步；**2026-11-18 递归 3 层**（Supplementaries → `mixinsquared-forge` → `MixinSquared`，模块与 manifest mixin config 都收齐）；**包装 jar**（无 mods.toml 的 GAMELIBRARY 外形，如 MezzConfig standalone）拆到内层 mod 热加（2026-11-21 真机 PASS：`wrapper ... hot-adding the nested mod` → `mezz_config isLoaded=true`，随后 JEI 19.71 `isLoaded=true`、键位 39→79） | `hotadd/NestedMods`、`hotadd/WrapperJar`、`inspect/WrapperJars`、`ClientResourcePacks.injectAll`；[hotadd-test-pipeline.md](features/hotadd-test-pipeline.md) |
-| **JBR 环境（2026-11-18 收口）** | 菜单左上角三态标识（✓ 绿 / ✓ 黄「增强未启用」/ ✗ 红）；单一动作「为热加载增强环境做准备」：复用已装/运行中的 JBR，缺失才官方下载（SHA-512）→ 解压到 `gameDir/jbr-21.0.11` → 自动重启带齐 enhanced + lateAt；`/modreloader jbr` 打印诊断。**MixinRuntime (mr ≥ 1.0.2) 是可选扩展，不是前置**：不打包/不代下载；缺失时运行时照常启动，妃级/Mixin 能力不可用，菜单右上角红字、预检拦下。**Windows 真机测试中（所有者）**；参数只能启动时给，每会话最多一次自动重启（问题 55） | 单测 9；[jbr-support.md](features/jbr-support.md)、[guides/jbr.md](guides/jbr.md) |
+| **JBR 环境（2026-11-18 收口）** | 菜单左上角三态标识（✓ 绿 / ✓ 黄「增强未启用」/ ✗ 红）；单一动作「为热加载增强环境做准备」：复用已装/运行中的 JBR，缺失才官方下载（SHA-512）→ 解压到 `gameDir/jbr-21.0.11` → 自动重启带齐 enhanced + lateAt；`/modreloader jbr` 打印诊断。**MixinRuntime (mr ≥ 1.0.2) 是可选扩展，不是前置**：不打包/不代下载；缺失时运行时照常启动，妃级/Mixin 能力不可用，菜单右上角红字、预检拦下。**自动准备不是静默的（ADR-0017）**：先显示固定 GitHub 发布页、实际 cache-redirector URL、SHA-512 和安装目录，玩家点“允许并继续”后才下载/解压/重启；无资产平台禁用允许。**Windows 真机测试中（所有者）**；参数只能启动时给，每会话最多一次自动重启（问题 55） | 单测 9；[jbr-support.md](features/jbr-support.md)、[guides/jbr.md](guides/jbr.md) |
 | **late coremod** | jecharacters 在独立 module layer 加载；变换 4 目标（含原版 `SearchTree`），80 deferred；`matches("tieding","铁锭")` false→true | `-PverifyPinyin`（JEI 需在 `run/mods`）；[matrix](features/hotadd-compatibility-matrix.md) §3.2 |
 | **JBR 边界收窄** | 只有「已加载类的布局变更」要 JBR：Mouse Tweaks JBR 下 `ok=true`；`-PnoJbr=true` 干净 `JBR_REQUIRED`；未加载目标免 JBR（fixture PASS） | `-PverifyCompat=<MouseTweaks>`；[a1-mixin-hotadd.md](features/a1-mixin-hotadd.md) §10.4 |
 | **A1 产品化四项** | 第二个妃级模组同会话 PASS；构造后监听器回滚 38→38（2 removed）；服务端+客户端同时妃级连接存活；专用服存档回读 | `-PverifyAddCommand2` / `-PfailAfterConstruct` / `-PmpFeiServer`；[a1](features/a1-mixin-hotadd.md) §10 |
@@ -586,6 +586,10 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近三条。
 
+- **2026-11-22（JBR 自动准备同意门禁，ADR-0017）**：准备页不再直接下载；先进入确认页，
+  显示固定 GitHub release `jbr-release-21.0.11b1163.125`、实际 cache-redirector URL、SHA-512、
+  安装目录与“保存并重启”，可复制发布页/下载地址；只有“允许并继续”才执行。无资产平台（Intel macOS）
+  禁用允许，只能手动安装。GitHub Release 页无二进制资产，实际下载仍走 cache-redirector。
 - **2026-11-22（真实 JBR MP L2：AE2 PASS / Create J2）**：AE2+GuideME 客户端连接后热加、服务端后热加，
   34,809 行 id 一致，真实放置 `ae2:quartz_block`（双端 block state 确认）→ PASS。Create 6.0.10 同一流程
   客户端 `ok=true` 后在 `Player.aiStep` 读 Ponder 配置崩溃（`Cannot get config value before config is loaded`），

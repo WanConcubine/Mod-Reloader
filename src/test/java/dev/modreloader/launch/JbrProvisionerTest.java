@@ -31,6 +31,20 @@ class JbrProvisionerTest {
     }
 
     @Test
+    void releasePageIsThePinnedGitHubTag() {
+        assertEquals("https://github.com/JetBrains/JetBrainsRuntime/releases/tag/"
+                        + "jbr-release-21.0.11b1163.125",
+                JbrProvisioner.releasePage());
+    }
+
+    @Test
+    void checksumUrlSitsNextToTheAsset() {
+        JbrProvisioner.Asset asset = new JbrProvisioner.Asset("jbr-test.zip", "0".repeat(128), true);
+        assertEquals(JbrProvisioner.downloadUrl(asset) + ".checksum",
+                JbrProvisioner.checksumUrl(asset));
+    }
+
+    @Test
     void installDirIsADirectChildOfTheGameDir() {
         assertEquals(Path.of("/tmp/game/jbr-21.0.11"),
                 JbrProvisioner.installDir(Path.of("/tmp/game")));

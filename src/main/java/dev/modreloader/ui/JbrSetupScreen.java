@@ -46,7 +46,11 @@ public final class JbrSetupScreen extends Screen {
                 Component.translatable("modreloader.jbr_setup.body", target));
         int y = height - 52;
         addRenderableWidget(Button.builder(Component.translatable("modreloader.jbr_setup.download"),
-                        pressed -> start())
+                        pressed -> {
+                            if (minecraft != null) {
+                                minecraft.setScreen(new JbrConsentScreen(this));
+                            }
+                        })
                 .bounds(width / 2 - 160, y, 150, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("modreloader.jbr_setup.manual"),
                         pressed -> {
@@ -58,6 +62,14 @@ public final class JbrSetupScreen extends Screen {
         addRenderableWidget(Button.builder(Component.translatable("modreloader.gui.close"),
                         pressed -> onClose())
                 .bounds(width / 2 - 50, height - 28, 100, 20).build());
+    }
+
+    /** Called only after {@link JbrConsentScreen} showed the exact URL and the player allowed it. */
+    void startAfterConsent() {
+        if (minecraft != null) {
+            minecraft.setScreen(this);
+        }
+        start();
     }
 
     private void start() {

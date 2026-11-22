@@ -2546,3 +2546,14 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
   随后在 `Player.aiStep` 读 Ponder 配置崩溃：`Cannot get config value before config is loaded`
   （`ConfigBase$CValue.get`）。客户端未写 ready、未进入放置；确认是 J2 配置边界，不是 harness 问题。
 - 白名单证据同步：AE2 J1 与 Create J2 行更新到 2026-11-22。
+
+## 2026-11-22（JBR 自动准备同意门禁，ADR-0017）
+
+- 发布前风险：自动下载/解压/自重启在 CurseForge/杀软眼里高度可疑；原 `JbrSetupScreen` 点击即下载。
+- 新增 `JbrConsentScreen`：显示固定 GitHub release（`jbr-release-21.0.11b1163.125`）、实际
+  cache-redirector 下载 URL、固定 SHA-512、安装目录与重启动作；提供复制发布页/复制下载地址/打开
+  发布页/允许并继续/取消。只有允许后才调用 `JbrProvisioner.install` 和 `Relauncher`。
+- 无固定资产平台（Intel macOS）禁用允许按钮，只保留手动安装/官方发布页。
+- 澄清：GitHub Release 页面没有二进制 asset，发布说明链接回 cache-redirector；用户给的
+  `b1163.116` 是旧构建，项目固定 `b1163.125`，不能混用。
+- 测试：`JbrProvisionerTest` 增加 releasePage/checksumUrl 固定值断言；`./gradlew build` 绿。

@@ -21,6 +21,7 @@
 | [0014](0014-no-caller-rewrite-for-at.md) | 不改写调用方来“模拟 AT”（Stage-0 否决） | Accepted（所有者 2026-11-17） |
 | [0015](0015-player-side-zero-tinkering.md) | 玩家侧零手工：能力由运行时自动准备，不删能力 | Accepted（所有者 2026-11-18 修正） |
 | [0016](0016-gplv3-license.md) | 许可证改为 GPL-3.0-only（0.1.0-beta 起） | Accepted（所有者 2026-11-22） |
+| [0017](0017-jbr-provision-consent.md) | JBR 自动准备必须先显式同意并展示官方链接/哈希 | Accepted（所有者 2026-11-22） |
 
 ## 模板
 

@@ -70,6 +70,22 @@ public final class JbrProvisioner {
         return BASE + asset.name();
     }
 
+    /**
+     * Official human-verification page for the pinned build. The GitHub release
+     * itself has no binary assets; its notes link back to the same
+     * cache-redirector URLs, so this is a verification/index page, not a second
+     * binary mirror.
+     */
+    public static String releasePage() {
+        return "https://github.com/JetBrains/JetBrainsRuntime/releases/tag/"
+                + "jbr-release-" + VERSION + BUILD;
+    }
+
+    /** Official checksum file next to the pinned asset (for humans and audits). */
+    public static String checksumUrl(Asset asset) {
+        return downloadUrl(asset) + ".checksum";
+    }
+
     /** Directory under the game dir; JbrSupport scans direct children for release+bin. */
     public static Path installDir(Path gameDir) {
         return gameDir.resolve("jbr-" + VERSION);

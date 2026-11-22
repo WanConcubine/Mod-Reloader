@@ -98,7 +98,12 @@ Mixin/妃级热加可选启用 **MixinRuntime（modId `mr`，版本 >= 1.0.2）*
 
 - 官方来源：**JetBrains/JetBrainsRuntime 的 GitHub Releases**
   <https://github.com/JetBrains/JetBrainsRuntime/releases>
+- **注意**：GitHub Release 页面本身不托管二进制资产；发布说明里的下载链接指向
+  `cache-redirector.jetbrains.com/intellij-jbr/`（项目固定的是
+  `jbr-release-21.0.11b1163.125`）。GitHub 页面用于人工核验版本/链接，不是第二个镜像。
 - 选 **21.0.x** 的最新 release；不要选 17 或 11。
+- 运行时自动准备**不会静默下载**：先显示官方发布页、实际下载 URL、固定 SHA-512 和安装目录，
+  玩家点“允许并继续”后才下载、解压、重启；无固定资产的平台（Intel macOS）只能手动安装。
 - 资源名一般长这样（以 release 页为准）：
   - macOS Apple Silicon：`jbrsdk-21.0.x-osx-aarch64-b....tar.gz`
   - macOS Intel：`jbrsdk-21.0.x-osx-x64-b....tar.gz`
