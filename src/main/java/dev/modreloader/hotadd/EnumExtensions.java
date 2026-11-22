@@ -7,9 +7,11 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.datafixers.util.Pair;
 import dev.modreloader.ModReloader;
+import dev.modreloader.reflect.JvmAccess;
 import dev.modreloader.reflect.UnsafeAccess;
 
 import java.io.InputStream;
+import java.lang.instrument.Instrumentation;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodType;
 import java.nio.charset.StandardCharsets;
@@ -58,6 +60,7 @@ public final class EnumExtensions {
         ClassLoader loader = EnumExtensions.class.getClassLoader();
         List<String> applied = new ArrayList<>();
         List<String> failed = new ArrayList<>();
+        Set<Class<?>> extendedEnums = new java.util.LinkedHashSet<>();
         for (JsonElement element : entries) {
             if (!element.isJsonObject()) {
                 continue;
@@ -67,6 +70,10 @@ public final class EnumExtensions {
             try {
                 String constant = addConstant(entry, loader);
                 applied.add(constant);
+                if (entry.has("enum")) {
+                    extendedEnums.add(Class.forName(
+                            entry.get("enum").getAsString().replace('/', '.'), false, loader));
+                }
             } catch (Throwable t) {
                 failed.add(name);
                 ModReloader.LOGGER.warn(
@@ -83,8 +90,55 @@ public final class EnumExtensions {
                     "[ModReloader] enum extensions for {}: {} could not be applied {}; the mod may "
                             + "misbehave until restart (J2)", ids, failed.size(), failed);
         }
+        for (Class<?> extended : extendedEnums) {
+            refreshSwitchMaps(extended);
+        }
         refreshRecipeBookTagFields();
         refreshClientRecipeBookTypes();
+    }
+
+    /**
+     * A class that uses a classic {@code switch} over the enum keeps a
+     * {@code $SwitchMap$<enum>} int[] sized from the constants present when it
+     * first ran; a new ordinal past its end throws AIOOBE. Grow any such map of
+     * an already-loaded class (new entries stay 0, i.e. the switch default).
+     */
+    private static void refreshSwitchMaps(Class<?> enumClass) {
+        String fieldName = "$SwitchMap$" + enumClass.getName().replace('.', '$');
+        Object[] constants = enumClass.getEnumConstants();
+        if (constants == null) {
+            return;
+        }
+        Instrumentation instrumentation;
+        try {
+            instrumentation = JvmAccess.get();
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn("[ModReloader] cannot inspect classes for {} switch maps",
+                    enumClass.getSimpleName(), t);
+            return;
+        }
+        int refreshed = 0;
+        for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
+            try {
+                for (java.lang.reflect.Field field : loaded.getDeclaredFields()) {
+                    if (!fieldName.equals(field.getName()) || field.getType() != int[].class) {
+                        continue;
+                    }
+                    int[] map = UnsafeAccess.getStatic(loaded, field.getName());
+                    if (map != null && map.length < constants.length) {
+                        UnsafeAccess.setStatic(loaded, field.getName(),
+                                Arrays.copyOf(map, constants.length));
+                        refreshed++;
+                    }
+                }
+            } catch (Throwable ignored) {
+                // synthetic/hidden classes: nothing to refresh for them
+            }
+        }
+        if (refreshed > 0) {
+            ModReloader.LOGGER.info("[ModReloader] {} switch map(s) extended for {}",
+                    refreshed, enumClass.getSimpleName());
+        }
     }
 
     /**

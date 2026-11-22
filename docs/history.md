@@ -2625,3 +2625,7 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
   I expected”（多 2762 字节）——`ClientHooks.RECIPE_BOOK_TYPES` 在启动期缓存了 4 个 RecipeBookType，服务端已写 5 组
   布尔，客户端只读 4 组导致错位。枚举扩展后同步刷新 `RECIPE_BOOK_TYPES` 并清空 `cachedFilteredTypes`。
   sha `104e41ed…`，已部署待复测。
+- 2026-11-22（switch map 补全；全量审计）：审计 6320 个 MC/NeoForge 源码后确认，RecipeBookType 的启动期派生结构只有
+  `RecipeBookSettings.TAG_FIELDS`、`ClientHooks.RECIPE_BOOK_TYPES`，以及 `RecipeBookCategories` 的
+  `$SwitchMap$...RecipeBookType`；`HumanoidModel` 的 ArmPose switch 编译为 ordinal tableswitch（新值走 default），无需处理。
+  枚举扩展后扫描已加载类，把 `$SwitchMap$<enum>` int[] 扩到新长度（新增项为 0=default）。sha `8590bb48…`，已部署待复测。
