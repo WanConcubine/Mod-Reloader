@@ -163,7 +163,6 @@ public final class HotAddEngine {
             Result failure;
             if ((failure = readModFile(run)) != null) return recordFailure(run, failure);
             if ((failure = prepareModules(run)) != null) return recordFailure(run, failure);
-            if ((failure = publishModFile(run)) != null) return recordFailure(run, failure);
             if ((failure = applyMixins(run)) != null) return recordFailure(run, failure);
             if ((failure = applyCoremods(run)) != null) return recordFailure(run, failure);
             // ModernUI starts its UI thread in @Mod construct and that thread creates
@@ -584,39 +583,6 @@ public final class HotAddEngine {
     }
 
     /** MIXIN: register configs, then redefine already-loaded targets. */
-    /**
-     * PUBLISH: a mixin config plugin can gate its mixins on the mod being present
-     * in FML's loading list (Embeddium asks FMLLoader.getLoadingModList() for its
-     * own mod file and skips everything when it is absent). At startup that list
-     * is complete before mixins are prepared, so publish the same entries here
-     * before MixinStage runs; MODLIST still builds the containers afterwards.
-     */
-    private static Result publishModFile(Run run) throws Throwable {
-        if (run.mixinConfigs.isEmpty()) {
-            return null;
-        }
-        // Opt-in: publishing makes mixin config plugins see the mod (Embeddium),
-        // but applying those mixins can then hit a live-instance layout change
-        // (Minecraft.fences) and crash. Until that policy is decided, the safe
-        // default keeps the plugin-gated mixins skipped and lets the client
-        // config-screen fallback cover the options UI.
-        if (!Boolean.getBoolean("modreloader.publishModFile")) {
-            return null;
-        }
-        List<ModFileInfo> files = new ArrayList<>(NestedMods.fileInfos(run.nestedMods));
-        List<ModInfo> infos = new ArrayList<>(NestedMods.modInfos(run.nestedMods));
-        if (run.primaryNested == null) {
-            files.add(run.newFileInfo);
-        }
-        infos.addAll(run.newInfos);
-        ModListInjector.Snapshot snapshot = ModListInjector.snapshot();
-        run.rollback.add("loading mod list", () -> ModListInjector.restore(snapshot));
-        ModListInjector.publishLoadingList(files, infos);
-        ModReloader.LOGGER.info(
-                "[ModReloader] published {} to LoadingModList before mixin setup", run.ids);
-        return null;
-    }
-
     private static Result applyMixins(Run run) throws Throwable {
         Rollback rollback = run.rollback;
         Set<String> ids = run.ids;

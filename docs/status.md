@@ -220,7 +220,7 @@
 
 ## 已知问题 / 坑
 
-> 追加式账本，**编号稳定**（引用不变）。共 69 条：待解决 2 / 验证缺口 4 / 结构性边界 18 / 历史与注记 15 / 已修 30。
+> 追加式账本，**编号稳定**（引用不变）。共 69 条：待解决 2 / 验证缺口 4 / 结构性边界 18 / 历史与注记 16 / 已修 29。
 > **当前 actionable（2）**：61 Sodium 单例 mixin 字段、68 in-world add 的 mixin→construct 竞态（AE2 崩，待方案）。
 > **64 是待拍板的结构性边界**（方法级 `-f`）。**65/66 已修**（accessor 接口改写、数据包注册表重放；66 真机已越过创造栏）。
 
@@ -328,6 +328,17 @@
 
 ### 历史与注记（分析器/环境/过期）
 
+69. ⛔ **已回退：mixin 插件按 LoadingModList 判自身 → Embeddium 全部 mixin 被跳过（2026-11-22 尝试后放弃）**：
+    现象：标题屏热加 Embeddium 1.0.15 后 `ok=true`，但原版「视频设置」仍是原版（模组菜单的「配置」可开它自己的界面）。
+    根因：`embeddium.mixins.json` 的列表为空，mixin 由 `MixinPlugin.getMixins()` 动态枚举；
+    `shouldApplyMixin` 查 `FMLLoader.getLoadingModList().getModFileById("embeddium")`，而引擎在 `applyMixins`
+    之后才更新 LoadingModList → 插件返回 false、`targets=[]`。
+    尝试过的修法：在 mixin 前把 ModFileInfo/ModInfo 发布到 LoadingModList。真机结果：`published`、`targets=80`，
+    随后 `Minecraft.fences` 活实例为 null，`handler$embeddium$preRender` tick NPE 崩
+    （`crash-2026-11-22_12.52.54-client.txt`，问题 61 同族）。
+    **结论（所有者 2026-11-22）**：不启用该修法——修完反而让热加 Embeddium 直接崩。代码已回退，默认保持
+    “插件自跳过 mixin → 不崩”，并用 `client/VideoSettingsRedirect` 把原版「视频设置」指向其配置屏（J2）。
+
 1. **静态分析仍会漏/误判**：反射/跨模组代理注册抓不到；注册轴已按「注册调用 / `*DeferredRegister` 引用」对齐（`RegistrySignalTest`）。
 
 3. **Fabric 生产 jar 是 intermediary 名**（`class_310`），核心类识别退化。
@@ -359,23 +370,6 @@
 55. **「已选 JBR 仍要重启」是产品失败（2026-11-18 所有者）**：玩家已在启动器选了 JBR，却因缺 `-XX:+AllowEnhancedClassRedefinition` 被要求再重启——把实现细节转嫁给玩家，不可接受。**2026-11-18 收口为单一动作「为热加载增强环境做准备」**：菜单（未就绪时常驻）与失败屏都指向同一入口；已安装/正在运行的 JBR 直接复用；缺失时官方下载 → SHA-512 → 解压到 `gameDir/jbr-21.0.11`；随后自动重启并带齐 `-XX:+AllowEnhancedClassRedefinition` + `-Dmodreloader.lateAt=true`。**仍余缺口**：参数只能启动时给，启动器每次不带参数则每会话最多一次自动重启；跨会话永久生效需要启动器/整合包预设或 classloader 隔离/软重启。**2026-11-20 补**：lateAt 不再依赖第二个属性——检测到增强 JBR 即自动启用（显式 `-Dmodreloader.lateAt=false` 可关），玩家点一次准备环境后不再遇到 AT 开关类阻塞。
 
 ### 已修
-
-69. ✅ **mixin 配置插件看不到热加 mod：全部 mixin 被跳过（2026-11-22 真机验证已修）**：
-    Embeddium 1.0.15 标题屏热加后 `ok=true`/`isLoaded=true`，但「视频设置」仍是原版界面（只有模组菜单的
-    Embeddium「配置」能开它自己的界面）。日志 `[Embeddium/]: Could not find embeddium mod ... Skipping mixin
-    application.` → `targets=[]`。根因：`embeddium.mixins.json` 的 `client` 为空，mixin 由
-    `MixinPlugin.getMixins()` 动态枚举；`shouldApplyMixin` 查
-    `FMLLoader.getLoadingModList().getModFileById("embeddium")`，而引擎原先在 MODLIST（applyMixins 之后）
-    才更新 LoadingModList；启动期顺序相反。
-    **修法**：`HotAddEngine.publishModFile` 在 `applyMixins` 前发布 `ModFileInfo`/`ModInfo` 到 LoadingModList
-    （`ModListInjector.publishLoadingList`，幂等，带回滚快照）；MODLIST 仍负责建 container。
-    **默认关闭**（`-Dmodreloader.publishModFile=true` 开启）：开启后 Embeddium 的 mixin 会真正应用，
-    随即撞活实例字段边界（`Minecraft.fences` null，问题 61 同族）而崩，所以默认保留“插件自跳过 + 配置屏可用”的 J2 路径。
-    **配套**：`client/VideoSettingsRedirect`——对“声明了指向 `OptionsScreen`/`VideoSettingsScreen` 的 mixin
-    且注册了 `IConfigScreenFactory`”的热加模组，把原版「视频设置」入口指向其配置屏（`ScreenEvent.Opening`）。
-    **真机证据（2026-11-22 12:52，PCL2+JBR，开启发布）**：`published [embeddium] to LoadingModList`、`targets` 80 个、
-    `redefined` 大量（含 `OptionsScreen`/`Minecraft`/`LevelRenderer`）。Embeddium 随后因
-    `Minecraft.fences` 为 null 崩（问题 61 同族），白名单转 **J2**；引擎修复本身通过。
 
 67. ✅ **热加后方块交互 `IllegalAccessError`：启动期 AT 在 redefine 时被原始字节覆盖（2026-11-21 真机确认已修）**：
     Create 热加、进世界后手持/穿戴铜潜水头盔右键方块，`BlockBehaviour$BlockStateBase.useItemOn` 抛
@@ -603,6 +597,11 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近三条。
 
+- **2026-11-22（回退 LoadingModList 发布；视频设置重定向）**：Embeddium 热加的“发布 mod 文件给 mixin 插件”尝试
+  会让其 mixin 全部应用并撞 `Minecraft.fences` 活实例 NPE（`crash-2026-11-22_12.52.54-client.txt`），
+  按所有者决定**回退**，默认保留“插件自跳过、不崩”的路径；新增 `client/VideoSettingsRedirect`：
+  对声明了 OptionsScreen/VideoSettingsScreen mixin 且注册配置屏的热加模组，把原版「视频设置」指向其配置屏。
+  Embeddium 白名单 J2（需从配置界面使用）。
 - **2026-11-22（0.1.0-beta.1 发布）**：重建产物包含 JBR 同意门禁、失败手动指引/复检、GPLv3；
   `build/libs/modreloader-1.21.1-0.1.0-beta.1.jar`（503,798 B，sha256 `51fb4eb0…`），tag `v0.1.0-beta.1`；
   旧 `v0.1.0-beta` 保留作历史。120/120 单测；英文 changelog 同步。

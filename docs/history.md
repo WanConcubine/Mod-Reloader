@@ -2598,3 +2598,8 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
   `IConfigScreenFactory`，则用 `ScreenEvent.Opening` 把原版「视频设置」改指向该配置屏。
   问题 69 的“mixin 前发布 LoadingModList”改为 `-Dmodreloader.publishModFile=true` opt-in：
   默认保留 mixin 插件自跳过（avoid 活实例字段崩溃），配置屏重定向补入口。
+- 2026-11-22（回退 LoadingModList 发布）：所有者决定不保留“mixin 前发布 mod 文件”的修法——它让 Embeddium
+  的 gated mixin 真正应用，随即在 `Minecraft.fences`（活实例）上 tick NPE 崩溃（crash-2026-11-22_12.52.54-client.txt）。
+  已删除 `HotAddEngine.publishModFile` / `ModListInjector.publishLoadingList`，默认恢复“插件自跳过 mixin、不崩”。
+  保留并新增 `client/VideoSettingsRedirect`（通用门槛：声明 OptionsScreen/VideoSettingsScreen mixin + 注册配置屏），
+  把原版「视频设置」入口指向该模组的配置屏；Embeddium 记为 J2（从配置界面使用）。
