@@ -220,26 +220,11 @@
 
 ## 已知问题 / 坑
 
-> 追加式账本，**编号稳定**（引用不变）。共 69 条：待解决 3 / 验证缺口 4 / 结构性边界 18 / 历史与注记 15 / 已修 29。
-> **当前 actionable（3）**：61 Sodium 单例 mixin 字段、68 in-world add 的 mixin→construct 竞态（AE2 崩，待方案）、
-> 69 Embeddium 的 mixin 插件按 LoadingModList 判自身（已修待真机复测）。
+> 追加式账本，**编号稳定**（引用不变）。共 69 条：待解决 2 / 验证缺口 4 / 结构性边界 18 / 历史与注记 15 / 已修 30。
+> **当前 actionable（2）**：61 Sodium 单例 mixin 字段、68 in-world add 的 mixin→construct 竞态（AE2 崩，待方案）。
 > **64 是待拍板的结构性边界**（方法级 `-f`）。**65/66 已修**（accessor 接口改写、数据包注册表重放；66 真机已越过创造栏）。
 
 ### 待解决（需改代码）
-
-69. **mixin 配置插件看不到热加 mod：全部 mixin 被跳过（2026-11-22 真机，Embeddium）**：
-    标题屏热加 Embeddium 1.0.15 后 `ok=true`/`isLoaded=true`，但「视频设置」仍是原版界面；
-    只有模组菜单里 Embeddium 的「配置」按钮能打开它自己的界面。日志：
-    `[Embeddium/]: Could not find embeddium mod, ... Skipping mixin application.`（12:42:49.288），
-    随后 `mixin setup: targets=[]`、`redefined=[]`。
-    根因：`embeddium.mixins.json` 的 `client` 列表为空，mixin 由 `MixinPlugin.getMixins()` 动态枚举；
-    `shouldApplyMixin` 用 `FMLLoader.getLoadingModList().getModFileById("embeddium")` 判断自身是否存在。
-    引擎原先在 MODLIST（applyMixins 之后）才更新 LoadingModList，插件返回 false → 全部跳过；
-    启动期顺序相反（mod 发现先于 mixin 准备）。
-    修复：`HotAddEngine.publishModFile` 在 `applyMixins` 前把 `ModFileInfo`/`ModInfo` 写进 LoadingModList
-    （`ModListInjector.publishLoadingList`，幂等，带回滚快照）；MODLIST 仍负责建 container。
-    已构建部署（sha256 `90f71bf6…38a9`），**待真机复测**：日志应出现 `published [embeddium] to LoadingModList`
-    且 `targets` 非空、视频设置进入 Embeddium 界面。
 
 68. **in-world add 的 mixin→construct 竞态：注入代码先于模块初始化运行（2026-11-21 真机；方案 A 实验失败）**：
     单人世界内热加 AE2 时集成服务器崩：`crash-reports/crash-2026-11-21_23.17.58-server.txt`，
@@ -374,6 +359,19 @@
 55. **「已选 JBR 仍要重启」是产品失败（2026-11-18 所有者）**：玩家已在启动器选了 JBR，却因缺 `-XX:+AllowEnhancedClassRedefinition` 被要求再重启——把实现细节转嫁给玩家，不可接受。**2026-11-18 收口为单一动作「为热加载增强环境做准备」**：菜单（未就绪时常驻）与失败屏都指向同一入口；已安装/正在运行的 JBR 直接复用；缺失时官方下载 → SHA-512 → 解压到 `gameDir/jbr-21.0.11`；随后自动重启并带齐 `-XX:+AllowEnhancedClassRedefinition` + `-Dmodreloader.lateAt=true`。**仍余缺口**：参数只能启动时给，启动器每次不带参数则每会话最多一次自动重启；跨会话永久生效需要启动器/整合包预设或 classloader 隔离/软重启。**2026-11-20 补**：lateAt 不再依赖第二个属性——检测到增强 JBR 即自动启用（显式 `-Dmodreloader.lateAt=false` 可关），玩家点一次准备环境后不再遇到 AT 开关类阻塞。
 
 ### 已修
+
+69. ✅ **mixin 配置插件看不到热加 mod：全部 mixin 被跳过（2026-11-22 真机验证已修）**：
+    Embeddium 1.0.15 标题屏热加后 `ok=true`/`isLoaded=true`，但「视频设置」仍是原版界面（只有模组菜单的
+    Embeddium「配置」能开它自己的界面）。日志 `[Embeddium/]: Could not find embeddium mod ... Skipping mixin
+    application.` → `targets=[]`。根因：`embeddium.mixins.json` 的 `client` 为空，mixin 由
+    `MixinPlugin.getMixins()` 动态枚举；`shouldApplyMixin` 查
+    `FMLLoader.getLoadingModList().getModFileById("embeddium")`，而引擎原先在 MODLIST（applyMixins 之后）
+    才更新 LoadingModList；启动期顺序相反。
+    **修法**：`HotAddEngine.publishModFile` 在 `applyMixins` 前发布 `ModFileInfo`/`ModInfo` 到 LoadingModList
+    （`ModListInjector.publishLoadingList`，幂等，带回滚快照）；MODLIST 仍负责建 container。
+    **真机证据（2026-11-22 12:52，PCL2+JBR）**：`published [embeddium] to LoadingModList`、`targets` 80 个、
+    `redefined` 大量（含 `OptionsScreen`/`Minecraft`/`LevelRenderer`）。Embeddium 随后因
+    `Minecraft.fences` 为 null 崩（问题 61 同族），白名单转 **J2**；引擎修复本身通过。
 
 67. ✅ **热加后方块交互 `IllegalAccessError`：启动期 AT 在 redefine 时被原始字节覆盖（2026-11-21 真机确认已修）**：
     Create 热加、进世界后手持/穿戴铜潜水头盔右键方块，`BlockBehaviour$BlockStateBase.useItemOn` 抛

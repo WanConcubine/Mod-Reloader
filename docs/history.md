@@ -2588,3 +2588,8 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
   （`ModListInjector.publishLoadingList`），与启动期顺序一致；MODLIST 仍建 container，发布带回滚。
 - `./gradlew build` 绿；jar 504,373 B sha256 `90f71bf6aa43a2f92ef90942b1cb3b1bdff84834950672b786cadc05d95638a9`；
   已部署到 PCL，待真机复测「视频设置」。
+- 2026-11-22 12:52 真机复测（PCL2+JBR，问题 69 修复后）：`published [embeddium] to LoadingModList before mixin setup`，
+  `mixin setup targets=80`，`OptionsScreen`/`Minecraft`/`LevelRenderer` 等被 redefine。随后 12:52:54 崩溃：
+  `Minecraft.handler$zcc000$embeddium$preRender` 读 `fences` 为 null（`crash-2026-11-22_12.52.54-client.txt`），
+  引擎在 add 时已标 J2（`Minecraft gains instance field(s) while a live instance exists`）。
+  结论：问题 69 引擎修复通过；Embeddium 转入 J2（与问题 61 同族的活实例字段边界，需重启或后续 opt-in 适配）。
