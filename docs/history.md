@@ -2621,3 +2621,7 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
   在类初始化时按 `RecipeBookType.getExtensionInfo()`（仍是 nonExtended）只建了 4 个原版类型；读档得到 4 项 map，
   `replaceFrom` 遍历 5 个类型 → 第 5 项 null → NPE（“无效的玩家数据”）。枚举扩展后重建 TAG_FIELDS
   （按 `is<UpperCamel>GuiOpen/FilteringCraftable` 命名），旧 NBT 缺字段按 false 处理。sha `48326e7b…`，待复测。
+- 2026-11-22（ClientHooks 类型缓存补全）：进世界时 `ClientboundRecipePacket` 解码报 “packet was larger than
+  I expected”（多 2762 字节）——`ClientHooks.RECIPE_BOOK_TYPES` 在启动期缓存了 4 个 RecipeBookType，服务端已写 5 组
+  布尔，客户端只读 4 组导致错位。枚举扩展后同步刷新 `RECIPE_BOOK_TYPES` 并清空 `cachedFilteredTypes`。
+  sha `104e41ed…`，已部署待复测。

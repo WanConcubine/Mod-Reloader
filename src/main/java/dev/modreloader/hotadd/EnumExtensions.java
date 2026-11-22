@@ -84,6 +84,40 @@ public final class EnumExtensions {
                             + "misbehave until restart (J2)", ids, failed.size(), failed);
         }
         refreshRecipeBookTagFields();
+        refreshClientRecipeBookTypes();
+    }
+
+    /**
+     * ClientHooks captured {@code RecipeBookType.values()} when it initialized
+     * (vanilla 4). The server now writes five book settings into
+     * {@code ClientboundRecipePacket}; without refreshing this array the client
+     * reads four groups of booleans and the packet desyncs ("packet was larger
+     * than I expected").
+     */
+    private static void refreshClientRecipeBookTypes() {
+        try {
+            Class<?> hooks = Class.forName("net.neoforged.neoforge.client.ClientHooks");
+            Class<?> type = Class.forName("net.minecraft.world.inventory.RecipeBookType");
+            Object[] values = (Object[]) type.getEnumConstants();
+            Object current = UnsafeAccess.getStatic(hooks, "RECIPE_BOOK_TYPES");
+            if (values == null || current == null) {
+                return;
+            }
+            int length = java.lang.reflect.Array.getLength(current);
+            if (values.length <= length) {
+                return;
+            }
+            Object array = java.lang.reflect.Array.newInstance(type, values.length);
+            System.arraycopy(values, 0, array, 0, values.length);
+            UnsafeAccess.setStatic(hooks, "RECIPE_BOOK_TYPES", array);
+            UnsafeAccess.setStatic(hooks, "cachedFilteredTypes", null);
+            ModReloader.LOGGER.info(
+                    "[ModReloader] ClientHooks recipe book types extended: {} -> {} type(s)",
+                    length, values.length);
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn("[ModReloader] cannot extend ClientHooks recipe book types; "
+                    + "joining a world may fail with a packet decode error", t);
+        }
     }
 
     /**
