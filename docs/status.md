@@ -220,7 +220,7 @@
 
 ## 已知问题 / 坑
 
-> 追加式账本，**编号稳定**（引用不变）。共 70 条：待解决 2 / 验证缺口 4 / 结构性边界 19 / 历史与注记 16 / 已修 29。
+> 追加式账本，**编号稳定**（引用不变）。共 71 条：待解决 2 / 验证缺口 4 / 结构性边界 20 / 历史与注记 16 / 已修 29。
 > **当前 actionable（2）**：61 Sodium 单例 mixin 字段、68 in-world add 的 mixin→construct 竞态（AE2 崩，待方案）。
 > **64 是待拍板的结构性边界**（方法级 `-f`）。**65/66 已修**（accessor 接口改写、数据包注册表重放；66 真机已越过创造栏）。
 
@@ -272,13 +272,22 @@
 
 ### 结构性边界（长期限制，不是待修 bug）
 
-70. **NeoForge EnumProxy 枚举扩展不支持热加（2026-11-22 真机，Farmer's Delight）**：FD 通过
-    `EnumProxy<RecipeBookType>` 在启动期给原版枚举加 `FARMERSDELIGHT_COOKING`；FML 的 `RuntimeEnumExtender`
-    只在目标枚举类加载时改写。热加时 `RecipeBookType` 已加载，扩展不执行，
-    `CookingPotMenu.getRecipeBookType` 的 `RecipeBookType.valueOf("FARMERSDELIGHT_COOKING")` 抛
-    `IllegalArgumentException: No enum constant`；NeoForge `ClientPayloadHandler` 捕获后把客户端从内置服务器
-    断连并停服，客户端本身存活（不是 FD 自己的崩溃处理）。JBR redefine 无法重跑枚举 `<clinit>`/重建 `$VALUES`，
-    只能重启。改进方向：VALIDATE 扫描 `enumextension/EnumProxy` 引用，提前提示“枚举扩展需重启/热加不完整”。
+71. **热加给已加载的 `StateHolder` 换字段布局 = 世界无法加载（2026-11-23 真机，FerriteCore）**：FerriteCore 的
+    fastmap mixin 给 `StateHolder` 新增 `ferritecore_globalTable`/`values`（并移除原 `values` 字段）；已有 BlockState
+    实例保持 JVM 默认（null）。随后加载世界时解析 `worldgen/configured_feature/*` 调 `StateHolder.setValue` →
+    `getNeighborFromFastMap` NPE，注册表加载失败，UI 显示“数据包错误”；存档本身未损坏，移出 mods 重启即恢复。
+    与问题 61 同族（活实例字段），但这里还**移除/改变字段类型**，重定义后旧实例布局不再可信。改进方向：对
+    “已加载类 + remove field/字段类型变更”的 mixin 在 redefine 前拒绝并提示重启（目前只 warn）。
+
+70. **EnumProxy 枚举扩展：标题屏已适配，in-world 会崩（2026-11-22，Farmer's Delight）**：FD 通过
+    `EnumProxy` 加 `RecipeBookType.FARMERSDELIGHT_COOKING` 等 6 个常量；FML 的 `RuntimeEnumExtender` 只在目标
+    枚举加载时改写，热加后常量缺失（`valueOf` 抛 `IllegalArgumentException`，客户端被 NeoForge 断连）。
+    **已实现**：`hotadd/EnumExtensions` 解析 `META-INF/enumextensions.json`，用私有构造器造常量、追加 `$VALUES`、
+    刷新 `Class` 实例缓存，并补齐三处启动期派生结构（`RecipeBookSettings.TAG_FIELDS`、`ClientHooks.RECIPE_BOOK_TYPES`、
+    已加载类的 `$SwitchMap$…`）。**标题屏 add 真机 6/6 生效**（`enum extensions`/`tags extended`/`recipe book types
+    extended` 日志齐全）。**in-world add 是 J2**：活玩家的 `RecipeBookSettings.states` 仍是 4 键 EnumMap，
+    自动保存 `copy()` 时索引 4 越界崩服（`crash-2026-11-22_23.55.01-server.txt`）；需要重建活实例才可 in-world。
+    限制：常量只能经 `valueOf`/`values()` 访问，字段直引不支持；回滚不能移除常量。
 
 29. **资源重载与 chunk 重镶并发（保留为边界，2026-11-19）**：无 assets 时跳过整次重载；重载链已串行化 +
     链期间隐藏 Screen。chunk 重镶由原版在重载完成后的 `allChanged()` 调度，引擎从不直接碰 chunk；串行化后那次

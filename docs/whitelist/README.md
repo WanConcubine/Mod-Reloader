@@ -26,7 +26,7 @@
 | 环境 | 可热加、无 bug | 可热加、有 bug | 判不可加但可救 | 结构性不可加 |
 |---|---|---|---|---|
 | stock | T1 × 7 | T2 × 0 | T3 × 0 | BLACK × 23 |
-| JBR | J1 × 20 | J2 × 7 | — | BLACK × 4 |
+| JBR | J1 × 19 | J2 × 8 | — | BLACK × 4 |
 
 ## stock JVM（不靠 JBR）
 
@@ -72,7 +72,7 @@
 
 ## JBR（enhanced redefinition）
 
-### JBR · J1 · JBR 下可热加，未发现 bug（20）
+### JBR · J1 · JBR 下可热加，未发现 bug（19）
 
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|
@@ -93,11 +93,10 @@
 | 帕秋莉手册（Patchouli） | Patchouli-1.21.1-93-NEOFORGE.jar | GUIFEI | candidate | - | JBR harness 2026-11-18 ok=true isLoaded=true（无 AT；redefined SmithingTrimRecipe 等） |
 | 应用能源 2（AE2） | appliedenergistics2-19.2.20.jar | GUIFEI | verified | - | pipeline ae2-lateat L1 2026-11-19（ok=true，blocks→1162/items→1698）；L2 2026-11-20：进世界后 GuideScreen 与 MEStorageScreen 均打开、无崩溃（-PverifyAe2L2）；MP 2026-11-22：客户端连接后热加 GuideME+AE2、服务端后热加，34809 行 id 一致，真实放置 ae2:quartz_block（双端 block state 确认） |
 | 物品管理器（JEI） | jei-1.21.1-neoforge-19.71.0.475.jar | GUIFEI | verified | - | 2026-11-17 harness ok=true（19.70.0.469，hot-added [mezz_config, jei]，34 rule）；owner retest 2026-11-21 Windows/PCL2：先热加 mezz_config（standalone 包装拆包，isLoaded=true）再 JEI 19.71.0.475（isLoaded=true、keyMappings 39→79），required 依赖链完整、无崩溃 |
-| 铁氧体核心（FerriteCore） | ferritecore-7.0.3-neoforge.jar | FEI | candidate | - | JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（MixinAgentGuard） |
 | 饰品栏（Curios） | curios-neoforge-9.5.1+1.21.1.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（late AT 16 rule） |
 | 鼠标手势（Mouse Tweaks） | MouseTweaks-neoforge-mc1.21-2.26.1.jar | FEI | candidate | - | JBR harness 2026-11-17 ok=true isLoaded=true（redefined AbstractContainerScreen） |
 
-### JBR · J2 · JBR 下可热加，但有 bug（7）
+### JBR · J2 · JBR 下可热加，但有 bug（8）
 
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|
@@ -108,6 +107,7 @@
 | 玉（Jade） | Jade-1.21.1-NeoForge-15.10.6.jar | FEI | verified | 热加后字体变暗（问题 56：Mixin 新增实例字段在旧 Font 实例上为 0，重启后正常） | JBR+lateAt harness 2026-11-17：reload 串行化修复后 4-jar 连加（Searchables→Controlling→Jade→JEI）无崩溃、屏幕正常恢复；原崩溃 crash-2026-11-17_20.13.47-client.txt（config translation）；owner retest 2026-11-21 Windows/PCL2：ok=true、late AT 57 rule、keyMappings 34→39，字体变暗复现（问题 56） |
 | 现代化 UI（ModernUI） | [现代化 UI] ModernUI-NeoForge-1.21.1-3.13.0.1-universal.jar | GUIFEI | verified | 需 -Dmodreloader.modernuiAdapter=true（实验适配）；未启用时热加会崩（UI thread/recording context、Font/fontFilterFishy 字段） | owner report 2026-11-21 Windows/PCL2：opt-in 适配 PASS——Core.initialize+initOpenGL、Font 与 fontFilterFishy 回填、TextRenderType.preloadShaders；hot-added + 打开聊天框无崩溃（未启用时 crash-2026-11-21_16.57.15-client.txt） |
 | 钠（Sodium） | sodium-neoforge-0.8.13+mc1.21.1.jar | FEI | fixing | 热加 ok=true；已有实例的 mixin 新增字段不初始化（结构边界）：Minecraft.fences NPE → 配置未初始化 → SpriteContents$Ticker.parent NPE；A 预检标注 J2，B 适配为 opt-in 实验 | 2026-11-20：标题屏热加 B 修好 fences/config/ticker.parent/BET 谓词/LevelRenderer.renderer 后不崩；进世界仍停在 BlockColors 状态（sodium$getProviders NPE） |
+| 铁氧体核心（FerriteCore） | ferritecore-7.0.3-neoforge.jar | FEI | verified | 热加不可用：mixin 给已加载 StateHolder 新增 ferritecore_globalTable 等字段并移除原 values 字段，旧实例为 null；加载世界时 worldgen/数据包解析 NPE（ferritecore_globalTable is null），世界无法加载，需重启 | owner retest 2026-11-23 Windows/PCL2：hot-added ok，加载世界报“数据包错误”，latest.log 00:01:45 Failed to load registries；堆栈 StateHolder.redirect$ferritecore$getNeighborFromFastMap；移出 mods 重启可恢复（存档未损坏） |
 
 ### JBR · BLACK · 结构性不可热加（4）
 

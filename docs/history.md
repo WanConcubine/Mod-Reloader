@@ -2629,3 +2629,7 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
   `RecipeBookSettings.TAG_FIELDS`、`ClientHooks.RECIPE_BOOK_TYPES`，以及 `RecipeBookCategories` 的
   `$SwitchMap$...RecipeBookType`；`HumanoidModel` 的 ArmPose switch 编译为 ordinal tableswitch（新值走 default），无需处理。
   枚举扩展后扫描已加载类，把 `$SwitchMap$<enum>` int[] 扩到新长度（新增项为 0=default）。sha `8590bb48…`，已部署待复测。
+- 2026-11-23（FerriteCore J2）：热加后加载世界报“数据包错误”——FerriteCore 的 fastmap mixin 给已加载的
+  `StateHolder` 新增 `ferritecore_globalTable`/`values` 并移除原 `values` 字段，旧 BlockState 实例为 null；
+  解析 `worldgen/configured_feature/*` 时 `getNeighborFromFastMap` NPE，注册表加载失败（latest.log 00:01:45）。
+  存档未损坏，移出 mods 重启恢复。白名单 FerriteCore 转 J2；新增问题 71（活实例布局/删字段，建议 redefine 前拒绝）。
