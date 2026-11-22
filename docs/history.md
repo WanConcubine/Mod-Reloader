@@ -2614,3 +2614,6 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
   RecipeBookType.FARMERSDELIGHT_COOKING（无参）、RecipeBookCategories ×4（Supplier proxy）、
   HumanoidModel$ArmPose（Boolean+transformer）。限制：只能经 valueOf/values() 访问，直接字段引用仍失败；
   失败回滚不能移除常量。`./gradlew build` 绿；真机 FD 热加待验证。
+- 2026-11-22（枚举扩展修正）：`Class.enumConstants`/`enumConstantDirectory` 是 **java.lang.Class 实例字段**，首次实现误用
+  `staticFieldBase` → `IllegalArgumentException`；结果 `$VALUES` 已扩到 5、Class 缓存仍是 4，登录时 `EnumMap.put`
+  索引 4 越界 → “无效的玩家数据”。改为实例访问，并对 `$VALUES` 失败做回滚。jar sha `ab3ff70d…`，已部署待复测。

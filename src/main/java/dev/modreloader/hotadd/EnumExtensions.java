@@ -144,8 +144,13 @@ public final class EnumExtensions {
         Object constant = constructor.invokeWithArguments(arguments);
         Object[] extended = Arrays.copyOf(current, current.length + 1);
         extended[current.length] = constant;
-        UnsafeAccess.setStatic(enumClass, "$VALUES", extended);
-        refreshClassCaches(enumClass, extended);
+        try {
+            UnsafeAccess.setStatic(enumClass, "$VALUES", extended);
+            refreshClassCaches(enumClass, extended);
+        } catch (Throwable t) {
+            UnsafeAccess.setStatic(enumClass, "$VALUES", current);
+            throw t;
+        }
         if (proxy != null) {
             setProxyValue(proxy, constant);
         }
@@ -171,15 +176,16 @@ public final class EnumExtensions {
     }
 
     /**
-     * {@code Enum.valueOf} reads the enum universe from Class caches that were
-     * built when the class initialized. Refresh both so the appended constant is
-     * visible; the directory is rebuilt lazily when cleared.
+     * {@code Enum.valueOf} and {@code EnumMap} read the enum universe from the
+     * {@code java.lang.Class} instance's caches, built when the class
+     * initialized. Refresh both so the appended constant is visible; the
+     * directory is rebuilt lazily when cleared.
      */
     private static void refreshClassCaches(Class<?> enumClass, Object[] constants) throws Throwable {
-        Object cached = UnsafeAccess.getStatic(Class.class, "enumConstants");
+        Object cached = UnsafeAccess.get(enumClass, Class.class, "enumConstants");
         if (cached != null) {
-            UnsafeAccess.setStatic(Class.class, "enumConstants", constants);
+            UnsafeAccess.set(enumClass, Class.class, "enumConstants", constants);
         }
-        UnsafeAccess.setStatic(Class.class, "enumConstantDirectory", null);
+        UnsafeAccess.set(enumClass, Class.class, "enumConstantDirectory", null);
     }
 }
