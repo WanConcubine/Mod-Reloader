@@ -54,7 +54,7 @@
 | **数据包注册表** | `DataPackRegistryEvent.NewRegistry` 重放（只对新容器）→ 下一个世界/连接可见；Create 建世界后 `create:potato_projectile/type entries=25`、`PotatoCannonItem.getAmmo()` 不抛 | `-PverifyCreatePonder=<create>`；[status 问题 66](status.md) |
 | **datapack 热加载** | dogfood recipes 0→164 / loot 0→75、真实合成与掉落；标题屏 + 新世界可用维度；**删除/更新实测不可行** | [t4-datapack-hotadd.md](features/t4-datapack-hotadd.md) §9/§10；`-PverifyDatapack`、`-PverifyWorldgen` |
 | **dogfood 玩法** | 七表非空；锤/筛/合成命中；`beRenderers 6/6`、图标 `181/181`；创造栏第 2/2 页、182 项 | [dogfood-gameplay.md](features/dogfood-gameplay.md) |
-| **多人** | 相反顺序热加 → `ids match ... (29475 lines)`；未装 jar 的客户端先收通知再被 datapack 同步踢；ack 落日志；**late join（服务端无玩家先热加 → 客户端重启加载后加入）PASS**：29,080 行 id 一致、10s 存活、客户端无通知；服务端自动停 | [t4-registry-hotadd.md](features/t4-registry-hotadd.md) §9/§10/§13 |
+| **多人** | 相反顺序热加 → `ids match ... (29475 lines)`；未装 jar 的客户端先收通知再被 datapack 同步踢；ack 落日志；**late join（服务端无玩家先热加 → 客户端重启加载后加入）PASS**：29,080 行 id 一致、**L2 真实放置方块**（客户端 `useItemOn=SUCCESS`、服务端确认 block state）、10s 存活、客户端无通知；服务端自动停 | [t4-registry-hotadd.md](features/t4-registry-hotadd.md) §9/§10/§13 |
 | **注册审计**（[ADR-0012](decisions/0012-registration-audit-severity.md)） | 16 jar / 129 引用：71 covered / 24 recurring / 6 datagen / 16 silent / 10 behavior / **1 crash**（Mekanism shader）/ 1 base；crash 在 module 注入前拒绝。**2026-11-19 起 `covered` 由 `inspect/ReplayCatalog` 单一维护**（层定义由 behavior 纠正为 covered；数字待下次审计刷新） | `-PverifyRegAudit=<jars>`；[client-registration-audit.md](features/client-registration-audit.md) §5 |
 | **tier 注册信号** | 按「注册调用 / `*DeferredRegister` 引用」：Jade 贵妃→妃、mekanismgenerators 嫔→贵妃；与 analyzer 一致 | `RegistrySignalTest`（5 单测） |
 | **托管重启（A′/B）** | 「保存并重启」与「用 JBR 重启」：`ProcessBuilder` 直接起 JVM（Windows `javaw`）、子进程标记、argv 用 ProcessHandle/PowerShell；**Windows/PCL2 未验证** | `RelaunchScriptsTest`、`JbrProvisionerTest` |
@@ -586,9 +586,10 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近三条。
 
-- **2026-11-22（late join 专用服自动化）**：新增 `MpLateJoinServerCheck` / `MpLateJoinClientCheck`
+- **2026-11-22（late join 专用服自动化 + L2 动作）**：新增 `MpLateJoinServerCheck` / `MpLateJoinClientCheck`
   （`-PmpLateJoinServer` / `-PverifyMpLateJoin`）。服务端**无玩家先热加**，客户端把同一 jar 放进 `run/mods`
-  重启加载后加入：29,080 行 id 一致、10s 存活、客户端 notice=0；服务端结果后 30s 自动停。
+  重启加载后加入：29,080 行 id 一致；随后服务端准备平台并给方块，客户端真实 `useItemOn` 放置，
+  **服务端确认 block state PASS**、10s 存活、客户端 notice=0；服务端自动停。
   未装 jar 的 late joiner 仍会在登录期被 `server-with-unknown-keys` 拒绝，且没有友好通知（UX 缺口，未覆盖）。
 - **2026-11-22（0.1.0-beta 发布：GPLv3）**：许可证 MIT → **GPL-3.0-only**（ADR-0016）；
   版本 `0.1.0-beta`，jar `build/libs/modreloader-1.21.1-0.1.0-beta.jar`（497,608 B，sha256 `5ba576ca…`），

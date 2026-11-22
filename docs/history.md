@@ -2500,3 +2500,14 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
   `still connected=true ... after 10s`、`RESULT: PASS`；服务端 `RESULT: PASS` 后自动停，`runServer` exit 0。
 - 结论：已装 jar 的 late joiner 由 NeoForge 登录同步带新注册表，无需额外步骤；未装 jar 的 late joiner
   仍会在登录期被 unknown-keys 拒绝且没有友好通知（已知 UX 缺口）。
+
+## 2026-11-22（late join 加 L2 动作断言）
+
+- `MpLateJoinServerCheck` 在客户端加入后准备 (0,120,0) 平台、把玩家传送到 (0.5,121,0.5)、
+  给 `t4fixture:test_block`；客户端对 (1,120,0) 顶面执行 `useItemOn`，放置到 (1,121,0)。
+- 服务端轮询权威 block state，客户端轮询本地 block state；两边都确认后才 PASS。
+- 证据（2026-11-22 09:59–10:01）：客户端 `prepared to place ...`、
+  `useItemOn(...) = SUCCESS`、`client placed ... (local block state confirmed)`；
+  服务端 `client placed ... (server block state confirmed)`、`RESULT: PASS`；
+  20s 后自动停，`runServer` exit 0。
+- 夹具仍先由服务端无玩家热加；客户端 jar 在 `run/mods` 启动加载，登录同步 29,080 行 id 一致。

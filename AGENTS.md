@@ -146,12 +146,12 @@ JAVA_HOME=~/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x/jdk-21.0.12.1+1/Conten
 ./gradlew runClient -PverifyMpFei="/abs/ZeroCore2-1.21.1-2.4.9.jar|zerocore"
 
 # late join：服务端**无玩家时**先热加；看到 run/mp-latejoin-ready.txt 后，
-# 把同一 jar 放进 run/mods，再启动客户端（重启加载路径；详见 t4-registry-hotadd.md §13）
+# 把同一 jar 放进 run/mods，再启动客户端（重启加载 + L2 真实放置方块；详见 t4-registry-hotadd.md §13）
 ./gradlew runServer -PmpLateJoinServer="/tmp/t4fixture/t4fixture-1.0.0.jar|t4fixture"
 # 终端 2：
 cp /tmp/t4fixture/t4fixture-1.0.0.jar run/mods/
 ./gradlew runClient -PverifyMpLateJoin="/tmp/t4fixture/t4fixture-1.0.0.jar|t4fixture" -PnoFocus=true
-# 服务端在结果后 30s 自动停；跑完删除 run/mods 里的夹具
+# 服务端在放置成功后 20s 自动停；跑完删除 run/mods 里的夹具
 
 # 贵妃级注册表热加：热加夹具 → 放置/存盘 → 放进 run/mods → 重启读档（详见 experiments/t4-fixture/README.md）
 ./gradlew runServer -PautoAdd=/tmp/t4fixture/t4fixture-1.0.0.jar -Pt4fixtureSelftest=true

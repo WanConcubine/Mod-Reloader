@@ -361,7 +361,11 @@ capability 五项 present、每次 `registry commit … stoneId 1 -> 1 (stable)`
 1. 服务端启动，harness 在 `ServerStartedEvent` 后约 1s 热加 jar；写
    `run/mp-latejoin-server.txt`（全量 id dump）与 `run/mp-latejoin-ready.txt`。
 2. 看到 ready 后，把同一 jar 放进 `run/mods`，启动客户端；客户端启动时正常加载该 jar。
-3. 客户端加入后等 8s 让登录同步完成，比较 29,080 行 id；再保持 10s；服务端在结果后 30s 自动停。
+3. 客户端加入后等 8s 让登录同步完成，比较 29,080 行 id。
+4. **L2 动作**：服务端把玩家传送到 (0.5, 121, 0.5) 的测试平台并给 `t4fixture:test_block`；
+   客户端对 (1, 120, 0) 的顶面执行 `useItemOn`，把方块放到 (1, 121, 0)；
+   服务端确认权威 block state，客户端确认本地 block state。
+5. 再保持 10s；服务端在放置成功后 20s 自动停。
 
 ```bash
 # 终端 1：服务端先热加（无玩家）
@@ -373,20 +377,26 @@ cp /tmp/t4fixture/t4fixture-1.0.0.jar run/mods/
 # 跑完删除 run/mods 里的夹具
 ```
 
-证据（2026-11-22 09:49–09:50，专用服 + 独立客户端）：
+证据（2026-11-22 09:59–10:01，专用服 + 独立客户端；L2 版本）：
 
 - 服务端：`no players online; hot-adding ... isLoaded=true`；`blocks 1060 -> 1061, items 1333 -> 1334`；
   `no players online; the next join gets the mod through the normal login path`（`ModNotice` 没有在线目标）。
 - 客户端：`joined; isLoaded=true, noticeCount=0`（late join 不收到在线通知）；
   `ids match the server exactly (29080 lines, blocks=1061, items=1334)`；
+  `prepared to place t4fixture:test_block at BlockPos{x=1, y=121, z=0}`；
+  `useItemOn(BlockPos{x=1, y=120, z=0}, up) = SUCCESS`；
+  `client placed t4fixture:test_block ... (local block state confirmed)`；
   `still connected=true, playerAlive=true ... after 10s`；`RESULT: PASS`。
-- 服务端：`late client joined; players=1, isLoaded=true`；`RESULT: PASS`；30s 后
-  `stopping the server`，`runServer` 以 0 退出。
+- 服务端：`placed the player at (0.5, 121.0, 0.5) and gave t4fixture:test_block`；
+  `client placed t4fixture:test_block at BlockPos{x=1, y=121, z=0} (server block state confirmed)`；
+  `RESULT: PASS`；放置成功后 20s `stopping the server`，`runServer` 以 0 退出。
 
 结论：
 
 - 服务端热加时**没有在线玩家** → 不会发 `server_mod_notice`；late joiner 只要本地有同一个 jar，
   NeoForge 登录同步会带上注册表，无需额外步骤（验证了 §9 的推断）。
+- **L2 不只是 id/连接**：客户端真实放置热加方块，服务端与客户端都确认了 `(1,121,0)` 的 block state
+  （测试平台/传送/创造模式仅用于 harness）。
 - **没装 jar 的 late joiner 仍会在登录期被 `server-with-unknown-keys` 拒绝**，且收到不到友好通知
   （§10 的 notice 只覆盖在线客户端）。这是已知 UX 缺口，本次 harness 未覆盖。
 - 客户端后来放进 `run/mods` 的同一 jar 会被 watcher 按“已加载 modId”跳过，不会重复热加。
