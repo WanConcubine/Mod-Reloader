@@ -190,6 +190,9 @@ public final class HotAddEngine {
                         "modernui adapter failed: " + modernUiFont + "; restart required");
             }
             if ((failure = commitRegistry(run)) != null) return recordFailure(run, failure);
+            // Enum constants must exist before the mod's static initializers run
+            // from the event replay (Farmer's Delight's RecipeCategories.<clinit>).
+            EnumExtensions.apply(run.primaryJar, run.ids);
             if ((failure = replayCommonStartup(run)) != null) return recordFailure(run, failure);
             if ((failure = injectPacks(run)) != null) return recordFailure(run, failure);
             if ((failure = runSidedStartup(run)) != null) return recordFailure(run, failure);

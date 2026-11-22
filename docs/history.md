@@ -2608,3 +2608,9 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
   `IllegalArgumentException: No enum constant`（latest.log 22:34:56）；NeoForge `ClientPayloadHandler` 捕获后断连并停
   内置服务器，客户端存活。根因：FML `RuntimeEnumExtender` 只在枚举类加载时加常量，热加时不重跑；JBR 无法重跑
   枚举 `<clinit>`。白名单 FD 转 J2（需重启）；后续可在 VALIDATE 扫描 EnumProxy 引用提前提示。
+- 2026-11-22（实现运行时枚举扩展，待真机）：新增 `hotadd/EnumExtensions`，在 `commitRegistry` 后、事件重放前解析
+  `META-INF/enumextensions.json`：用 trusted lookup 调枚举私有构造器造常量、追加 `$VALUES`、刷新
+  `Class.enumConstants`/`enumConstantDirectory`，并回填 `EnumProxy.setValue`。覆盖 FD 的
+  RecipeBookType.FARMERSDELIGHT_COOKING（无参）、RecipeBookCategories ×4（Supplier proxy）、
+  HumanoidModel$ArmPose（Boolean+transformer）。限制：只能经 valueOf/values() 访问，直接字段引用仍失败；
+  失败回滚不能移除常量。`./gradlew build` 绿；真机 FD 热加待验证。
