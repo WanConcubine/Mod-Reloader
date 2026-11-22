@@ -586,6 +586,9 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近三条。
 
+- **2026-11-22（0.1.0-beta.1 发布）**：重建产物包含 JBR 同意门禁、失败手动指引/复检、GPLv3；
+  `build/libs/modreloader-1.21.1-0.1.0-beta.1.jar`（503,798 B，sha256 `51fb4eb0…`），tag `v0.1.0-beta.1`；
+  旧 `v0.1.0-beta` 保留作历史。120/120 单测；英文 changelog 同步。
 - **2026-11-22（JBR 失败恢复与实时复检）**：准备页增加「重新检测 JBR」「打开游戏目录」；
   手动指引写明精确目标 `<gameDir>/jbr-21.0.11`、`release` + `bin/java` 结构、可复制下载地址；
   下载失败保持游戏运行。复检调用 `JbrSupport.installation()`（每次全量扫描），找到后走同意/重启确认。

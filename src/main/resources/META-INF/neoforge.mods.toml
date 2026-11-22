@@ -4,7 +4,7 @@ license = "GPL-3.0-only"
 
 [[mods]]
 modId = "modreloader"
-version = "0.1.0-beta"
+version = "0.1.0-beta.1"
 displayName = "Mod Reloader"
 description = '''
 Runtime hot-add of NeoForge client mods.

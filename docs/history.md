@@ -2567,3 +2567,11 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
 - 准备页新增「重新检测 JBR」：调用 `JbrSupport.installation()`（每次重新扫描游戏目录及上层），
   找到后打开同意/重启确认；找不到时提示按手动安装处理。
 - `./gradlew build` 绿；未做真机点击/截图验证。
+
+## 2026-11-22（0.1.0-beta.1 发布）
+
+- 版本 `0.1.0-beta` → `0.1.0-beta.1`（gradle.properties / neoforge.mods.toml / README / release notes）。
+- `./gradlew clean build`：120/120 单测；jar `build/libs/modreloader-1.21.1-0.1.0-beta.1.jar`
+  （503,798 B，sha256 `51fb4eb042a204bd82297014ca9161185fc0e634ea3950c83488a3379607b06d`）。
+- 该产物包含 JBR 同意门禁（`JbrConsentScreen`）、失败手动指引/实时复检、GPL-3.0-only 与 `META-INF/LICENSE`。
+- 旧 `v0.1.0-beta` tag 保持不动，作为历史；新 tag 为 `v0.1.0-beta.1`。
