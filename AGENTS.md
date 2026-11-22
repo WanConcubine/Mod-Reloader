@@ -58,7 +58,7 @@ python3 tools/pipeline/run.py report
 **产品不变量（ADR-0015）**：安装/解压是玩家动作的上限；JBR 重启统一带两个开关，玩家只感知“用 JBR 重启后模组可热加”，不感知 per-mod 参数。
 **重启 = 产品失败（切到 JBR 本身除外）**：JBR 就位后仍要求重启才能加载的模组，是缺口而不是正常路径。
 
-### Mod Reloader（NeoForge 1.21.1 / Java 21）
+### NoRestart（NeoForge 1.21.1 / Java 21；仓库名 Mod-Reloader，modId modreloader）
 
 ```bash
 # 编译 + Java 单测（i18n/占位符、FailureKind 文案、JiJ 路径）+ 编译 dev harness；不需要 libs/

@@ -222,7 +222,7 @@ play 阶段没有对应的 payload，所以本运行时自己开了一条通道�
 
 - **客户端必须也有同一批模组**（同一批 jar，各自热加或启动时就装好都可以）。不一致时客户端拒绝应用并提示；
   没有「客户端只拿 id、不装 jar」这种模式——registry 的值是客户端本地注册的对象，快照只重排 id。
-- 这是**运行时自有通道**，所以两端都必须装 Mod Reloader；热加的那个 mod 不需要知道。
+- 这是**运行时自有通道**，所以两端都必须装 NoRestart；热加的那个 mod 不需要知道。
 - 只覆盖 `doesSync = true` 的 built-in 注册表（和登录同步同一个集合）。
 - 专用服上的 **mixin（妃级）热加需要 JBR**：`runServer` 目前不带 `-XX:+AllowEnhancedClassRedefinition`，
   实测 ZeroCore2 在专用服上 redefine `Slot` 会失败（客户端同样的操作成功）。与 id 同步无关，但会让「服务端热加一个有 mixin 的内容 mod」失败。

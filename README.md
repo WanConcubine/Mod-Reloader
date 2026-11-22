@@ -1,4 +1,6 @@
-# Mod-Reloader
+# NoRestart
+
+（仓库名 `Mod-Reloader`、modId `modreloader` 保持不变。）
 
 让 Minecraft 模组在游戏运行时**安全地增删 / 更新 / 热重载**。
 

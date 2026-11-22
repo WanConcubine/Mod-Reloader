@@ -21,7 +21,7 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * Mod Reloader — runtime hot-add for NeoForge mods, on both sides.
+ * NoRestart — runtime hot-add for NeoForge mods, on both sides.
  *
  * <p>This class and the hot-add engine reference no client types, so a dedicated
  * server can load them. Client-only behavior (UI, toasts, resource packs, key

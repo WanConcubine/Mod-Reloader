@@ -53,7 +53,7 @@ Mixin/妃级热加可选启用 **MixinRuntime（modId `mr`，版本 >= 1.0.2）*
 > 参数只有 JBR 认识；加到普通 JDK 上，游戏会以
 > `Unrecognized VM option 'AllowEnhancedClassRedefinition'` 直接起不来。
 
-## 1.2 把 JBR 放在哪（让 Mod Reloader 能找到）
+## 1.2 把 JBR 放在哪（让 NoRestart 能找到）
 
 判断标准只有一条：**看 `mods/` 在哪**。有 `mods/` 的那个文件夹就是“游戏目录 / 实例目录”。
 

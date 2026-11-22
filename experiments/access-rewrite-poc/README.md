@@ -76,7 +76,7 @@ RESULT: PASS
 JourneyMap 7、JEI 2+1 构造器）——只要有一条，整个 jar 在 stock JVM 上仍然没戏。
 所以这个子集的真实形态是“**AT 只放宽字段/方法**的模组”，不是“大部分 AT 模组”。
 
-## 对 Mod Reloader 意味着什么
+## 对 NoRestart 意味着什么
 
 1. 这可以做成 **stock JVM 的第三条路**：`VALIDATE` 时把 AT 规则分类——
    - 只有字段/方法/构造器 → 走“改写调用方”，不要求 JBR、不要求重启；
