@@ -19,6 +19,11 @@ public final class ServerDev {
             MpRegistryServerCheck.start(mpRegistryServer);
             ModReloader.LOGGER.info("[ServerDev] mpRegistryServer harness installed");
         }
+        String mpLateJoinServer = System.getProperty("modreloader.mpLateJoinServer", "").trim();
+        if (!mpLateJoinServer.isEmpty()) {
+            MpLateJoinServerCheck.start(mpLateJoinServer);
+            ModReloader.LOGGER.info("[ServerDev] mpLateJoinServer harness installed");
+        }
         String mpNoticeServer = System.getProperty("modreloader.mpNoticeServer", "").trim();
         if (!mpNoticeServer.isEmpty()) {
             MpNoticeServerCheck.start(mpNoticeServer);

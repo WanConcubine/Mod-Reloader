@@ -350,3 +350,43 @@ capability 五项 present、每次 `registry commit … stoneId 1 -> 1 (stable)`
 证据（dev client + 增强 JBR，`-PverifyCreatePonder=<create>`）：热加 Create → 建世界 →
 `create:potato_projectile/type entries=25`、`PotatoCannonItem.getAmmo()` 不再抛（返回 null，装饰器判空跳过）、
 `PonderRenderTypes` 正常 → `RESULT: PASS`。
+
+## 13. 服务端先热加、客户端重启加载后加入（late join，2026-11-22 PASS）
+
+`dev/MpLateJoinServerCheck` + `dev/MpLateJoinClientCheck`。与 §9 的区别：服务端**没有在线玩家时**先热加，
+客户端随后把同一 jar 放进 `run/mods` 启动并加入（不是连接后再热加）。
+
+流程：
+
+1. 服务端启动，harness 在 `ServerStartedEvent` 后约 1s 热加 jar；写
+   `run/mp-latejoin-server.txt`（全量 id dump）与 `run/mp-latejoin-ready.txt`。
+2. 看到 ready 后，把同一 jar 放进 `run/mods`，启动客户端；客户端启动时正常加载该 jar。
+3. 客户端加入后等 8s 让登录同步完成，比较 29,080 行 id；再保持 10s；服务端在结果后 30s 自动停。
+
+```bash
+# 终端 1：服务端先热加（无玩家）
+./gradlew runServer -PmpLateJoinServer="/tmp/t4fixture/t4fixture-1.0.0.jar|t4fixture"
+
+# 等 run/mp-latejoin-ready.txt 出现后，终端 2：
+cp /tmp/t4fixture/t4fixture-1.0.0.jar run/mods/
+./gradlew runClient -PverifyMpLateJoin="/tmp/t4fixture/t4fixture-1.0.0.jar|t4fixture" -PnoFocus=true
+# 跑完删除 run/mods 里的夹具
+```
+
+证据（2026-11-22 09:49–09:50，专用服 + 独立客户端）：
+
+- 服务端：`no players online; hot-adding ... isLoaded=true`；`blocks 1060 -> 1061, items 1333 -> 1334`；
+  `no players online; the next join gets the mod through the normal login path`（`ModNotice` 没有在线目标）。
+- 客户端：`joined; isLoaded=true, noticeCount=0`（late join 不收到在线通知）；
+  `ids match the server exactly (29080 lines, blocks=1061, items=1334)`；
+  `still connected=true, playerAlive=true ... after 10s`；`RESULT: PASS`。
+- 服务端：`late client joined; players=1, isLoaded=true`；`RESULT: PASS`；30s 后
+  `stopping the server`，`runServer` 以 0 退出。
+
+结论：
+
+- 服务端热加时**没有在线玩家** → 不会发 `server_mod_notice`；late joiner 只要本地有同一个 jar，
+  NeoForge 登录同步会带上注册表，无需额外步骤（验证了 §9 的推断）。
+- **没装 jar 的 late joiner 仍会在登录期被 `server-with-unknown-keys` 拒绝**，且收到不到友好通知
+  （§10 的 notice 只覆盖在线客户端）。这是已知 UX 缺口，本次 harness 未覆盖。
+- 客户端后来放进 `run/mods` 的同一 jar 会被 watcher 按“已加载 modId”跳过，不会重复热加。

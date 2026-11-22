@@ -391,6 +391,16 @@ neoForge {
                 systemProperty 'modreloader.mpRegistryAddress',
                         providers.gradleProperty('mpRegistryAddress').get()
             }
+            if (providers.gradleProperty('verifyMpLateJoin').orNull) {
+                // Late join: the jar is loaded at client startup, while the server
+                // hot-added it before this client connected.
+                systemProperty 'modreloader.verifyMpLateJoin',
+                        providers.gradleProperty('verifyMpLateJoin').get()
+            }
+            if (providers.gradleProperty('mpLateJoinAddress').orNull) {
+                systemProperty 'modreloader.mpLateJoinAddress',
+                        providers.gradleProperty('mpLateJoinAddress').get()
+            }
             if (providers.gradleProperty('verifyCapabilities').orNull) {
                 // Capability replay check: title-screen add -> create world -> place
                 // barrel/crucible/machine -> look the capabilities up.
@@ -514,6 +524,12 @@ neoForge {
                 // client says it is ready, then publish the authoritative ids.
                 systemProperty 'modreloader.mpRegistryServer',
                         providers.gradleProperty('mpRegistryServer').get()
+            }
+            if (providers.gradleProperty('mpLateJoinServer').orNull) {
+                // Server half of the late-join check: hot-add before any client
+                // connects, publish ids, then wait for a restart-loaded client.
+                systemProperty 'modreloader.mpLateJoinServer',
+                        providers.gradleProperty('mpLateJoinServer').get()
             }
         }
     }

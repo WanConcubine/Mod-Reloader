@@ -2488,3 +2488,15 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
 - 版本 `0.1.0-beta`；发布 jar 内含 `META-INF/LICENSE`；`./gradlew build` 成功，118 单测。
 - 产物：`build/libs/modreloader-1.21.1-0.1.0-beta.jar`，497,608 B，sha256
   `5ba576ca75be5a8e3065e58f428458417344eca2f12b415e6f38cf64a00434fd`；tag `v0.1.0-beta`。
+
+## 2026-11-22（late join 专用服自动化：服务端先热加 → 客户端重启后加入）
+
+- 新增 `dev/MpLateJoinServerCheck` + `dev/MpLateJoinClientCheck`，Gradle 开关
+  `-PmpLateJoinServer="<jar>|<modId>"` / `-PverifyMpLateJoin="<jar>|<modId>"`。
+- 服务端在 `ServerStartedEvent` 后无玩家时热加，写 `run/mp-latejoin-server.txt` 与 ready marker；
+  客户端把同一 jar 放进 `run/mods` 启动，加入后比较全量 id 并保持 10s；服务端结果后 30s 自动停。
+- 证据（t4fixture，2026-11-22 09:49–09:50）：服务端 `ok=true`、blocks 1060→1061/items 1333→1334；
+  客户端 `isLoaded=true`、`noticeCount=0`、`ids match ... (29080 lines, blocks=1061, items=1334)`、
+  `still connected=true ... after 10s`、`RESULT: PASS`；服务端 `RESULT: PASS` 后自动停，`runServer` exit 0。
+- 结论：已装 jar 的 late joiner 由 NeoForge 登录同步带新注册表，无需额外步骤；未装 jar 的 late joiner
+  仍会在登录期被 unknown-keys 拒绝且没有友好通知（已知 UX 缺口）。

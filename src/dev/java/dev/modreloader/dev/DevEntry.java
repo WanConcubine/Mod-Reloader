@@ -156,6 +156,10 @@ public final class DevEntry {
         if (!verifyMpRegistry.isEmpty()) {
             MpRegistryCheck.start(verifyMpRegistry);
         }
+        String verifyMpLateJoin = System.getProperty("modreloader.verifyMpLateJoin", "").trim();
+        if (!verifyMpLateJoin.isEmpty()) {
+            MpLateJoinClientCheck.start(verifyMpLateJoin);
+        }
         String watchJar = System.getProperty("modreloader.watchJar", "").trim();
         if (Boolean.getBoolean("modreloader.verifyWatch")) {
             if (watchJar.isEmpty()) {
