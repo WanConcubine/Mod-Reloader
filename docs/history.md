@@ -2593,3 +2593,8 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
   `Minecraft.handler$zcc000$embeddium$preRender` 读 `fences` 为 null（`crash-2026-11-22_12.52.54-client.txt`），
   引擎在 add 时已标 J2（`Minecraft gains instance field(s) while a live instance exists`）。
   结论：问题 69 引擎修复通过；Embeddium 转入 J2（与问题 61 同族的活实例字段边界，需重启或后续 opt-in 适配）。
+- 2026-11-22（视频设置重定向 + 发布 opt-in）：新增 `client/VideoSettingsRedirect`——若热加 jar 声明了
+  指向 `OptionsScreen`/`VideoSettingsScreen` 的 mixin（含 plugin 动态枚举的包扫描）且容器注册了
+  `IConfigScreenFactory`，则用 `ScreenEvent.Opening` 把原版「视频设置」改指向该配置屏。
+  问题 69 的“mixin 前发布 LoadingModList”改为 `-Dmodreloader.publishModFile=true` opt-in：
+  默认保留 mixin 插件自跳过（avoid 活实例字段崩溃），配置屏重定向补入口。

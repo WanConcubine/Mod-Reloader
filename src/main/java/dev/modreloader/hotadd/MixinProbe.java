@@ -216,6 +216,83 @@ public final class MixinProbe {
         return lines;
     }
 
+    /**
+     * Read-only check used by the client config-screen fallback: does the jar
+     * declare a mixin that replaces the vanilla options screen? Configs with a
+     * {@code plugin} may enumerate their mixins dynamically (Embeddium returns
+     * them from {@code getMixins()}, its JSON lists are empty), so those configs
+     * are scanned by package.
+     */
+    public static boolean declaresOptionsScreenTarget(Path rawJar) {
+        Set<String> wanted = Set.of(
+                "net/minecraft/client/gui/screens/options/OptionsScreen",
+                "net/minecraft/client/gui/screens/options/VideoSettingsScreen");
+        Path jar = rawJar.toAbsolutePath().normalize();
+        if (!Files.isRegularFile(jar)) {
+            return false;
+        }
+        try (ZipFile zip = new ZipFile(jar.toFile())) {
+            for (String configName : findMixinConfigs(zip)) {
+                JsonObject json = readJson(zip, configName);
+                if (json == null) {
+                    continue;
+                }
+                String pkg = json.has("package") ? json.get("package").getAsString() : "";
+                Set<String> mixinClasses = new LinkedHashSet<>();
+                for (String key : List.of("mixins", "client", "server")) {
+                    if (!json.has(key) || !json.get(key).isJsonArray()) {
+                        continue;
+                    }
+                    for (JsonElement element : json.getAsJsonArray(key)) {
+                        if (element.isJsonPrimitive()) {
+                            String entry = element.getAsString();
+                            mixinClasses.add(entry.contains(".") || pkg.isEmpty()
+                                    ? entry : pkg + "." + entry);
+                        }
+                    }
+                }
+                if (json.has("plugin") && !pkg.isEmpty()) {
+                    String prefix = pkg.replace('.', '/') + "/";
+                    var entries = zip.entries();
+                    while (entries.hasMoreElements()) {
+                        String name = entries.nextElement().getName();
+                        if (name.startsWith(prefix) && name.endsWith(".class")
+                                && !name.contains("$")) {
+                            mixinClasses.add(name.substring(0, name.length() - 6)
+                                    .replace('/', '.'));
+                        }
+                    }
+                }
+                for (String mixinClass : mixinClasses) {
+                    byte[] bytes = readEntry(zip, mixinClass.replace('.', '/') + ".class");
+                    if (bytes == null) {
+                        continue;
+                    }
+                    ClassNode node = readNode(bytes);
+                    if (node == null) {
+                        continue;
+                    }
+                    AnnotationNode mixin = findAnnotation(node.visibleAnnotations, MIXIN_DESC);
+                    if (mixin == null) {
+                        mixin = findAnnotation(node.invisibleAnnotations, MIXIN_DESC);
+                    }
+                    if (mixin == null) {
+                        continue;
+                    }
+                    for (String target : targetsOf(mixin)) {
+                        if (wanted.contains(target)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            ModReloader.LOGGER.warn(
+                    "[MixinProbe] cannot check options-screen mixins of {}", jar, t);
+        }
+        return false;
+    }
+
     private static List<String> findMixinConfigs(ZipFile zip) {
         List<String> configs = new ArrayList<>();
         var entries = zip.entries();

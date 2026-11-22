@@ -81,6 +81,15 @@ public interface PlatformHooks {
     }
 
     /**
+     * Client: when the hot-added jar declares a mixin that would replace the
+     * vanilla options screen but that mixin was not applied, make the vanilla
+     * "Video Settings" button open the mod's registered config screen instead.
+     * Server: no-op.
+     */
+    default void afterHotAddConfigScreen(java.nio.file.Path jar, List<ModContainer> containers) {
+    }
+
+    /**
      * Client: recreates the live shader instances. A mixin that adds a field to
      * an already-loaded {@code ShaderInstance} leaves existing instances at JVM
      * defaults (Sodium's {@code uniformCache} becomes null), and the loading

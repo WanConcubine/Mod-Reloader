@@ -195,6 +195,7 @@ public final class HotAddEngine {
             if ((failure = injectPacks(run)) != null) return recordFailure(run, failure);
             if ((failure = runSidedStartup(run)) != null) return recordFailure(run, failure);
             if ((failure = reloadData(run)) != null) return recordFailure(run, failure);
+            run.hooks.afterHotAddConfigScreen(run.primaryJar, run.containers);
             return succeed(run);
         } catch (Throwable t) {
             return recordFailure(run, unexpected(run, t));
@@ -592,6 +593,14 @@ public final class HotAddEngine {
      */
     private static Result publishModFile(Run run) throws Throwable {
         if (run.mixinConfigs.isEmpty()) {
+            return null;
+        }
+        // Opt-in: publishing makes mixin config plugins see the mod (Embeddium),
+        // but applying those mixins can then hit a live-instance layout change
+        // (Minecraft.fences) and crash. Until that policy is decided, the safe
+        // default keeps the plugin-gated mixins skipped and lets the client
+        // config-screen fallback cover the options UI.
+        if (!Boolean.getBoolean("modreloader.publishModFile")) {
             return null;
         }
         List<ModFileInfo> files = new ArrayList<>(NestedMods.fileInfos(run.nestedMods));

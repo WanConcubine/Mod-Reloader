@@ -163,6 +163,11 @@ public final class ClientPlatformHooks implements PlatformHooks {
     }
 
     @Override
+    public void afterHotAddConfigScreen(java.nio.file.Path jar, List<ModContainer> containers) {
+        VideoSettingsRedirect.consider(jar, containers);
+    }
+
+    @Override
     public boolean injectResourcePacks(java.util.List<ModFileInfo> fileInfos, Set<String> modIds,
                                        Rollback rollback) {
         lastReloadRequested = ClientResourcePacks.injectAll(

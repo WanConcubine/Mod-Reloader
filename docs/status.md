@@ -369,7 +369,11 @@
     才更新 LoadingModList；启动期顺序相反。
     **修法**：`HotAddEngine.publishModFile` 在 `applyMixins` 前发布 `ModFileInfo`/`ModInfo` 到 LoadingModList
     （`ModListInjector.publishLoadingList`，幂等，带回滚快照）；MODLIST 仍负责建 container。
-    **真机证据（2026-11-22 12:52，PCL2+JBR）**：`published [embeddium] to LoadingModList`、`targets` 80 个、
+    **默认关闭**（`-Dmodreloader.publishModFile=true` 开启）：开启后 Embeddium 的 mixin 会真正应用，
+    随即撞活实例字段边界（`Minecraft.fences` null，问题 61 同族）而崩，所以默认保留“插件自跳过 + 配置屏可用”的 J2 路径。
+    **配套**：`client/VideoSettingsRedirect`——对“声明了指向 `OptionsScreen`/`VideoSettingsScreen` 的 mixin
+    且注册了 `IConfigScreenFactory`”的热加模组，把原版「视频设置」入口指向其配置屏（`ScreenEvent.Opening`）。
+    **真机证据（2026-11-22 12:52，PCL2+JBR，开启发布）**：`published [embeddium] to LoadingModList`、`targets` 80 个、
     `redefined` 大量（含 `OptionsScreen`/`Minecraft`/`LevelRenderer`）。Embeddium 随后因
     `Minecraft.fences` 为 null 崩（问题 61 同族），白名单转 **J2**；引擎修复本身通过。
 
