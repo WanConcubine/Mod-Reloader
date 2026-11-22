@@ -220,7 +220,7 @@
 
 ## 已知问题 / 坑
 
-> 追加式账本，**编号稳定**（引用不变）。共 69 条：待解决 2 / 验证缺口 4 / 结构性边界 18 / 历史与注记 16 / 已修 29。
+> 追加式账本，**编号稳定**（引用不变）。共 70 条：待解决 2 / 验证缺口 4 / 结构性边界 19 / 历史与注记 16 / 已修 29。
 > **当前 actionable（2）**：61 Sodium 单例 mixin 字段、68 in-world add 的 mixin→construct 竞态（AE2 崩，待方案）。
 > **64 是待拍板的结构性边界**（方法级 `-f`）。**65/66 已修**（accessor 接口改写、数据包注册表重放；66 真机已越过创造栏）。
 
@@ -271,6 +271,15 @@
 52. **服务端一次性事件定向重放：已实现，未验证（2026-11-18）**：新增 `hotadd/ServerLifecycleReplay`，用 `EventBusSnapshot.addedSince` 取出本次 add 新增的 game-bus 监听器，只对这些监听器调用 `ServerStartingEvent`/`ServerStartedEvent`（`ListenerList` 不保证与 owner map 同一实例，故有“逐个试调用、类型不符即跳过”的兜底）；服务端实例先取 `ServerLifecycleHooks.getCurrentServer()`，为空再反射 `Minecraft#getSingleplayerServer`。**未验证**：进入世界复跑时，客户端两次卡在 xaerolib mixin 阶段（见 54），没走到重放日志。
 
 ### 结构性边界（长期限制，不是待修 bug）
+
+70. **NeoForge EnumProxy 枚举扩展不支持热加（2026-11-22 真机，Farmer's Delight）**：FD 通过
+    `EnumProxy<RecipeBookType>` 在启动期给原版枚举加 `FARMERSDELIGHT_COOKING`；FML 的 `RuntimeEnumExtender`
+    只在目标枚举类加载时改写。热加时 `RecipeBookType` 已加载，扩展不执行，
+    `CookingPotMenu.getRecipeBookType` 的 `RecipeBookType.valueOf("FARMERSDELIGHT_COOKING")` 抛
+    `IllegalArgumentException: No enum constant`；NeoForge `ClientPayloadHandler` 捕获后把客户端从内置服务器
+    断连并停服，客户端本身存活（不是 FD 自己的崩溃处理）。JBR redefine 无法重跑枚举 `<clinit>`/重建 `$VALUES`，
+    只能重启。改进方向：VALIDATE 扫描 `enumextension/EnumProxy` 引用，提前提示“枚举扩展需重启/热加不完整”。
+
 29. **资源重载与 chunk 重镶并发（保留为边界，2026-11-19）**：无 assets 时跳过整次重载；重载链已串行化 +
     链期间隐藏 Screen。chunk 重镶由原版在重载完成后的 `allChanged()` 调度，引擎从不直接碰 chunk；串行化后那次
     `FluidSpriteCache` NPE 未再复现。线程/锁序规则见 [design.md](design.md)「线程、锁序与阶段契约」。

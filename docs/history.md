@@ -2603,3 +2603,8 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
   已删除 `HotAddEngine.publishModFile` / `ModListInjector.publishLoadingList`，默认恢复“插件自跳过 mixin、不崩”。
   保留并新增 `client/VideoSettingsRedirect`（通用门槛：声明 OptionsScreen/VideoSettingsScreen mixin + 注册配置屏），
   把原版「视频设置」入口指向该模组的配置屏；Embeddium 记为 J2（从配置界面使用）。
+- 2026-11-22（问题 70：EnumProxy 枚举扩展热加不支持）：农夫乐事 1.3.4 标题屏热加 ok（16 AT、datapack 预注册），
+  放置并打开厨锅时 `CookingPotMenu.getRecipeBookType` 的 `RecipeBookType.valueOf("FARMERSDELIGHT_COOKING")` 抛
+  `IllegalArgumentException: No enum constant`（latest.log 22:34:56）；NeoForge `ClientPayloadHandler` 捕获后断连并停
+  内置服务器，客户端存活。根因：FML `RuntimeEnumExtender` 只在枚举类加载时加常量，热加时不重跑；JBR 无法重跑
+  枚举 `<clinit>`。白名单 FD 转 J2（需重启）；后续可在 VALIDATE 扫描 EnumProxy 引用提前提示。

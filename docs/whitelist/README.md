@@ -26,7 +26,7 @@
 | 环境 | 可热加、无 bug | 可热加、有 bug | 判不可加但可救 | 结构性不可加 |
 |---|---|---|---|---|
 | stock | T1 × 7 | T2 × 0 | T3 × 0 | BLACK × 23 |
-| JBR | J1 × 21 | J2 × 6 | — | BLACK × 4 |
+| JBR | J1 × 20 | J2 × 7 | — | BLACK × 4 |
 
 ## stock JVM（不靠 JBR）
 
@@ -72,7 +72,7 @@
 
 ## JBR（enhanced redefinition）
 
-### JBR · J1 · JBR 下可热加，未发现 bug（21）
+### JBR · J1 · JBR 下可热加，未发现 bug（20）
 
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|
@@ -89,7 +89,6 @@
 | Supplementaries | supplementaries-1.21.1-4.1.1-neoforge.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18：JiJ 递归 + 自定义注册表 + 模型层重放后 ok=true isLoaded=true；blocks 1061→1306、items 1335→1584、层 213→234。2026-11-19 复跑：MapRenderer$MapInstance 的两次 @WrapOperation 冲突 → 用预混字节 + 全部 configs 重组后 ok=true；所有者实例复测后转 verified |
 | Xaero 小地图（Xaero's Minimap） | xaerominimap-neoforge-1.21.1-26.6.0.jar | HUANGHOU | candidate | - | JBR harness 2026-11-17 ok=true isLoaded=true（含 JiJ xaerolib） |
 | ZeroCore2 | ZeroCore2-1.21.1-2.4.9.jar | GUIFEI | candidate | - | JBR harness 2026-11-17 ok=true isLoaded=true |
-| 农夫乐事（Farmer's Delight） | FarmersDelight-1.21.1-1.3.4.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（MixinAgentGuard；blocks 1060→1192 items 1333→1518） |
 | 局域网即插即用（LAN World Plug-n-Play） | mcwifipnp-1.9.0-1.21-neoforge.jar | FEI | candidate | - | pipeline lan-mcwifipnp 2026-11-19：ok=true isLoaded=true（redefine PauseScreen/MinecraftServer/UUIDUtil/PlayerList） |
 | 帕秋莉手册（Patchouli） | Patchouli-1.21.1-93-NEOFORGE.jar | GUIFEI | candidate | - | JBR harness 2026-11-18 ok=true isLoaded=true（无 AT；redefined SmithingTrimRecipe 等） |
 | 应用能源 2（AE2） | appliedenergistics2-19.2.20.jar | GUIFEI | verified | - | pipeline ae2-lateat L1 2026-11-19（ok=true，blocks→1162/items→1698）；L2 2026-11-20：进世界后 GuideScreen 与 MEStorageScreen 均打开、无崩溃（-PverifyAe2L2）；MP 2026-11-22：客户端连接后热加 GuideME+AE2、服务端后热加，34809 行 id 一致，真实放置 ae2:quartz_block（双端 block state 确认） |
@@ -98,12 +97,13 @@
 | 饰品栏（Curios） | curios-neoforge-9.5.1+1.21.1.jar | GUIFEI | candidate | - | JBR+lateAt harness 2026-11-18 ok=true isLoaded=true（late AT 16 rule） |
 | 鼠标手势（Mouse Tweaks） | MouseTweaks-neoforge-mc1.21-2.26.1.jar | FEI | candidate | - | JBR harness 2026-11-17 ok=true isLoaded=true（redefined AbstractContainerScreen） |
 
-### JBR · J2 · JBR 下可热加，但有 bug（6）
+### JBR · J2 · JBR 下可热加，但有 bug（7）
 
 | 模组 | jar | tier | state | bug | 证据 |
 |---|---|---|---|---|---|
 | Embeddium | embeddium-1.0.15+mc1.21.1.jar | GUIFEI | verified | 热加可用但原版「视频设置」不跳转，必须从模组菜单「配置」进入 Embeddium Options（OptionsScreen mixin 被跳过）；强开 mixin 会因 Minecraft.fences 活实例为 null 崩（问题 61 同族），需重启 | owner retest 2026-11-22 Windows/PCL2：13:01 旧 jar 热加 targets=[]、无崩溃，配置屏可开且原版选项生效；12:52 的 targets=80 崩溃来自已回退的 LoadingModList 发布尝试（crash-2026-11-22_12.52.54-client.txt，Minecraft.handler$embeddium$preRender 读 fences null）；问题 69 已回退，见 status |
 | Xaero 世界地图（Xaero's World Map） | xaeroworldmap-neoforge-1.21.1-1.47.0.jar | HUANGHOU | candidate | 热加成功；进世界后服务端初始化缺失（ServerStartedEvent 未重放，serverPlayerTickHandler null）；标题屏 loadLater 崩（需已有世界） | JBR harness 2026-11-18：ConfigChannelRegistry frozen 窗口生效，CompatCheck ok=true isLoaded=true；标题屏 tick 抛 NoSuchElementException（模组自身 loadLater）；世界内 add 返回 1 后 integrated server 玩家 tick NPE（WorldMap.serverPlayerTickHandler null）。需重放 ServerStartedEvent / 用已有存档复测；2026-11-18 晚：`ServerStarting/Started` 定向重放已实现但未验证（进入世界复跑卡在 xaerolib mixin 阶段，需 jstack） |
+| 农夫乐事（Farmer's Delight） | FarmersDelight-1.21.1-1.3.4.jar | GUIFEI | verified | NeoForge 枚举扩展无法热加：用 EnumProxy 给 RecipeBookType 加 FARMERSDELIGHT_COOKING，热加不重跑枚举扩展；打开厨锅时 RecipeBookComponent 取该常量抛 IllegalArgumentException，客户端被 NeoForge 断连（内置服停、客户端存活），需重启 | owner retest 2026-11-22 Windows/PCL2：热加 ok（16 AT、datapack 预注册、1594 recipes），打开厨锅触发 latest.log 22:34:56 IllegalArgumentException: No enum constant ...FARMERSDELIGHT_COOKING（CookingPotMenu.getRecipeBookType）；无 crash-report，NeoForge ClientPayloadHandler 断连 |
 | 机械动力（Create） | create-1.21.1-6.0.10.jar | GUIFEI | verified | 进世界渲染崩溃：Ponder 静态 @Invoker accessor 接口未被 Mixin 改写（AssertionError: Mixin application failed!）；客户端连接后热加还会在 Player.aiStep 读 Ponder 配置时崩（Cannot get config value before config is loaded） | pipeline create-lateat 2026-11-19：ok=true isLoaded=true（L1）；owner retest 2026-11-21 Windows/PCL2：标题屏 add ok=true，进世界崩（crash-2026-11-21_18.33.26-client.txt）；**专用服 2026-11-21 runServer -PserverAddCommand PASS**（isLoaded=true，config common+server，AT/mixin 按 SERVER side 处理）；MP 2026-11-22：客户端连接后热加 ok=true（blocks=1703/items=2032），随后 Ponder 配置未加载崩，未进入 L2 放置 |
 | 玉（Jade） | Jade-1.21.1-NeoForge-15.10.6.jar | FEI | verified | 热加后字体变暗（问题 56：Mixin 新增实例字段在旧 Font 实例上为 0，重启后正常） | JBR+lateAt harness 2026-11-17：reload 串行化修复后 4-jar 连加（Searchables→Controlling→Jade→JEI）无崩溃、屏幕正常恢复；原崩溃 crash-2026-11-17_20.13.47-client.txt（config translation）；owner retest 2026-11-21 Windows/PCL2：ok=true、late AT 57 rule、keyMappings 34→39，字体变暗复现（问题 56） |
 | 现代化 UI（ModernUI） | [现代化 UI] ModernUI-NeoForge-1.21.1-3.13.0.1-universal.jar | GUIFEI | verified | 需 -Dmodreloader.modernuiAdapter=true（实验适配）；未启用时热加会崩（UI thread/recording context、Font/fontFilterFishy 字段） | owner report 2026-11-21 Windows/PCL2：opt-in 适配 PASS——Core.initialize+initOpenGL、Font 与 fontFilterFishy 回填、TextRenderType.preloadShaders；hot-added + 打开聊天框无崩溃（未启用时 crash-2026-11-21_16.57.15-client.txt） |
