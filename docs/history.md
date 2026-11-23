@@ -2633,3 +2633,14 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
   `StateHolder` 新增 `ferritecore_globalTable`/`values` 并移除原 `values` 字段，旧 BlockState 实例为 null；
   解析 `worldgen/configured_feature/*` 时 `getNeighborFromFastMap` NPE，注册表加载失败（latest.log 00:01:45）。
   存档未损坏，移出 mods 重启恢复。白名单 FerriteCore 转 J2；新增问题 71（活实例布局/删字段，建议 redefine 前拒绝）。
+- 2026-11-23（跨总线 payload 重放：FTB Ultimine 热加后进世界断连）：FTB Ultimine 2101.1.15 的 4 个包经
+  FTB Library `NetworkHelper` → Architectury `NetworkManager` 注册；Architectury 把注册监听器挂在
+  **architectury 自己的 mod 总线**（`EventBusesHooks.whenAvailable`），而 `NetworkAdaptation` 只对新容器
+  `acceptEvent`，这些包从未进入 NeoForge 注册表。玩家登录时 `FTBUltimine.playerJoined` 发
+  `ftbultimine:sync_ultimine_time_packet`，`NetworkRegistry.checkPacket` 抛
+  “may not be sent to the client!” → 客户端“连接中断”（latest.log 12:18:44；热加本身 ok，且没有
+  `adapted payloads` 行，说明新增 payload 集合为空）。修复：构造前 `NetworkAdaptation.snapshot()` 记录所有
+  mod 总线上 `RegisterPayloadHandlersEvent` 的监听器，payload 阶段 `addedSince(...)` 取出新容器以外新增的
+  监听器并逐个 `invoke`（只跑新增，避免重复注册抛 “already registered”）；`adaptAll` 一次开窗口完成容器重放 +
+  跨总线重放。`./gradlew build -x test` 绿；120 个 Java 单测 PASS（中文路径下 Gradle test worker 的 @argfile
+  编码损坏，改用 JUnit Launcher 直接跑）。jar sha `fc17122e…`；真机复测待做。

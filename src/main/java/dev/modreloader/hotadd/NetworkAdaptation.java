@@ -5,16 +5,27 @@ import net.minecraft.network.Connection;
 import net.minecraft.network.ConnectionProtocol;
 import net.minecraft.resources.ResourceLocation;
 import dev.modreloader.inspect.ReplayCatalog;
+import net.neoforged.bus.EventBus;
+import net.neoforged.bus.ListenerList;
+import net.neoforged.bus.api.EventListener;
+import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.ChannelAttributes;
 import net.neoforged.neoforge.network.registration.NetworkChannel;
 import net.neoforged.neoforge.network.registration.NetworkPayloadSetup;
 import net.neoforged.neoforge.network.registration.NetworkRegistry;
 import net.neoforged.neoforge.network.registration.PayloadRegistration;
+import net.neoforged.neoforgespi.language.IModInfo;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import dev.modreloader.reflect.UnsafeAccess;
@@ -28,8 +39,17 @@ import dev.modreloader.reflect.UnsafeAccess;
  * registry maps are mutable, so this class flips the flag back, replays
  * {@link RegisterPayloadHandlersEvent} for the new mod only, and re-arms it.
  *
- * <p>This is deliberate framework bending, so it is defensive: any failure is
- * reported and the caller rolls back.
+ * <p>Some libraries do not listen on the mod's own bus: Architectury's
+ * {@code NetworkManager} attaches the registration listener to the
+ * <em>architectury</em> mod bus through {@code EventBusesHooks.whenAvailable}.
+ * At startup that bus gets the event, but a hot-added mod registers the listener
+ * after the event already fired, so only replaying the new container's bus
+ * misses the payload entirely. Measured 2026-11-23 with FTB Ultimine 2101.1.15:
+ * the add "succeeded", then the login handler sent
+ * {@code ftbultimine:sync_ultimine_time_packet} and NeoForge refused it
+ * ("may not be sent to the client") because the id was never registered. The
+ * listeners that appeared on other mod buses during the construct are therefore
+ * replayed too (see {@link #snapshot()} / {@link #addedSince}).
  *
  * <p>Connections that already exist keep the {@code PayloadSetup} negotiated at
  * login, so a newly registered payload would be refused by
@@ -44,10 +64,67 @@ public final class NetworkAdaptation {
         }
     }
 
+    /** Per-container copy of the payload-registration listeners on that mod bus. */
+    public record Snapshot(Map<ModContainer, EventListener[]> byContainer) {
+    }
+
+    private static final EventListener[] NONE = new EventListener[0];
+
+    private static boolean warned;
+
     private NetworkAdaptation() {
     }
 
-    public static Result adapt(ModContainer container) {
+    /**
+     * Records the {@link RegisterPayloadHandlersEvent} listeners every loaded mod
+     * bus holds, before the hot-added mod is constructed. Listeners added to
+     * another mod's bus afterwards are the deferred registrations the container
+     * replay cannot reach.
+     */
+    public static Snapshot snapshot() {
+        Map<ModContainer, EventListener[]> copy = new IdentityHashMap<>();
+        for (ModContainer container : loadedContainers()) {
+            copy.put(container, payloadListeners(container));
+        }
+        return new Snapshot(copy);
+    }
+
+    /**
+     * Listeners registered for {@link RegisterPayloadHandlersEvent} on any
+     * <em>other</em> mod bus since {@code snapshot} was taken, in bus order.
+     * Excluded containers are the ones being hot-added: their own bus is already
+     * replayed through {@link ModContainer#acceptEvent}.
+     */
+    public static List<EventListener> addedSince(Snapshot snapshot, Collection<ModContainer> exclude) {
+        if (snapshot == null) {
+            return List.of();
+        }
+        Set<ModContainer> skip = Collections.newSetFromMap(new IdentityHashMap<>());
+        skip.addAll(exclude);
+        Set<EventListener> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (EventListener[] listeners : snapshot.byContainer().values()) {
+            Collections.addAll(seen, listeners);
+        }
+        List<EventListener> added = new ArrayList<>();
+        for (ModContainer container : loadedContainers()) {
+            if (skip.contains(container)) {
+                continue;
+            }
+            for (EventListener listener : payloadListeners(container)) {
+                if (seen.add(listener)) {
+                    added.add(listener);
+                }
+            }
+        }
+        return List.copyOf(added);
+    }
+
+    /**
+     * @param containers          every container of the jar being added
+     * @param deferredListeners   payload listeners that were registered on other
+     *                            mod buses during the construct (see {@link #addedSince})
+     */
+    public static Result adaptAll(List<ModContainer> containers, List<EventListener> deferredListeners) {
         Set<ResourceLocation> before;
         try {
             before = payloadIds();
@@ -62,8 +139,16 @@ public final class NetworkAdaptation {
         }
 
         try {
-            OneShotReplay.fire(container, ReplayCatalog.REGISTER_PAYLOAD_HANDLERS,
-                    new RegisterPayloadHandlersEvent());
+            for (ModContainer container : containers) {
+                OneShotReplay.fire(container, ReplayCatalog.REGISTER_PAYLOAD_HANDLERS,
+                        new RegisterPayloadHandlersEvent());
+            }
+            if (!deferredListeners.isEmpty()) {
+                RegisterPayloadHandlersEvent event = new RegisterPayloadHandlersEvent();
+                for (EventListener listener : deferredListeners) {
+                    listener.invoke(event);
+                }
+            }
         } catch (Throwable t) {
             return new Result(Set.of(), "payload registration failed: " + rootCause(t));
         } finally {
@@ -101,6 +186,55 @@ public final class NetworkAdaptation {
             }
         }
         return ids;
+    }
+
+    private static List<ModContainer> loadedContainers() {
+        List<ModContainer> result = new ArrayList<>();
+        ModList list = ModList.get();
+        if (list == null) {
+            return result;
+        }
+        for (IModInfo info : list.getMods()) {
+            ModContainer container = list.getModContainerById(info.getModId()).orElse(null);
+            if (container != null) {
+                result.add(container);
+            }
+        }
+        return result;
+    }
+
+    /** The listeners a mod bus dispatches for the payload event, in bus order. */
+    private static EventListener[] payloadListeners(ModContainer container) {
+        IEventBus bus;
+        try {
+            bus = container.getEventBus();
+        } catch (Throwable t) {
+            return NONE;
+        }
+        if (!(bus instanceof EventBus eventBus)) {
+            return NONE;
+        }
+        try {
+            Object helper = UnsafeAccess.get(eventBus, EventBus.class, "listenerLists");
+            Object backing = helper == null ? null
+                    : UnsafeAccess.get(helper, helper.getClass(), "backingMap");
+            if (!(backing instanceof Map<?, ?> map)) {
+                return NONE;
+            }
+            Object list = map.get(RegisterPayloadHandlersEvent.class);
+            if (!(list instanceof ListenerList listenerList)) {
+                return NONE;
+            }
+            EventListener[] listeners = listenerList.getListeners();
+            return listeners == null ? NONE : listeners;
+        } catch (Throwable t) {
+            if (!warned) {
+                warned = true;
+                ModReloader.LOGGER.warn("[ModReloader] cannot read the mod event buses; payloads a "
+                        + "library defers onto its own bus will not be registered", t);
+            }
+            return NONE;
+        }
     }
 
     /**

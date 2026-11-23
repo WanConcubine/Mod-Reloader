@@ -10,6 +10,7 @@ import dev.modreloader.inspect.ModInspection;
 import dev.modreloader.inspect.ModInspector;
 import dev.modreloader.inspect.RegistrationAudit;
 import dev.modreloader.inspect.RegistrationAuditScanner;
+import net.neoforged.bus.api.EventListener;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.loading.moddiscovery.ModFile;
@@ -104,6 +105,7 @@ public final class HotAddEngine {
         List<ModContainer> containers = List.of();
         List<ModContainer> outerContainers;
         EventBusSnapshot.Snapshot busSnapshot;
+        NetworkAdaptation.Snapshot payloadListenerSnapshot;
         final List<String> loaded = new ArrayList<>();
         PlatformHooks hooks;
         int keysBefore;
@@ -722,6 +724,11 @@ public final class HotAddEngine {
         // take them off again (otherwise a retry registers them twice).
         EventBusSnapshot.Snapshot busSnapshot = EventBusSnapshot.of();
         run.busSnapshot = busSnapshot;
+        // Architectury's NetworkManager registers a hot-added mod's payloads by
+        // adding a listener to the *architectury* bus, so the container replay
+        // cannot see them. Record every mod bus before the construct and replay
+        // what appeared afterwards at the payload stage.
+        run.payloadListenerSnapshot = NetworkAdaptation.snapshot();
         rollback.add("event listeners", () -> {
             if (!run.constructed) {
                 return;
@@ -966,21 +973,28 @@ public final class HotAddEngine {
 
         // 4a. payloads: NeoForge closes its network registry after start-up, so
         //     reopen it for this mod only. Connections that already exist keep
-        //     their stale setup and cannot use the new channels.
-        for (ModContainer container : run.containers) {
-            NetworkAdaptation.Result payloads = NetworkAdaptation.adapt(container);
-            if (!payloads.ok()) {
-                return fail(rollback, Stage.CONSTRUCT, FailureKind.NETWORK_PAYLOAD,
-                        container.getModId() + " needs network payloads but they could not "
-                                + "be adapted: " + payloads.error());
-            }
-            if (!payloads.added().isEmpty()) {
-                run.payloadsAdapted = true;
-                ModReloader.LOGGER.info(
-                        "[ModReloader] adapted payloads for {}: {}; existing connections were "
-                                + "patched too (requires the runtime on the other side)",
-                        container.getModId(), payloads.added());
-            }
+        //     their stale setup and cannot use the new channels. Libraries such as
+        //     Architectury defer the registration onto their own mod bus (added
+        //     during the construct), so those listeners are replayed as well.
+        List<EventListener> deferredPayloads =
+                NetworkAdaptation.addedSince(run.payloadListenerSnapshot, run.containers);
+        if (!deferredPayloads.isEmpty()) {
+            ModReloader.LOGGER.info(
+                    "[ModReloader] payload registration deferred through another mod's bus: "
+                            + "{} listener(s) to replay", deferredPayloads.size());
+        }
+        NetworkAdaptation.Result payloads = NetworkAdaptation.adaptAll(run.containers, deferredPayloads);
+        if (!payloads.ok()) {
+            return fail(rollback, Stage.CONSTRUCT, FailureKind.NETWORK_PAYLOAD,
+                    String.join(", ", run.ids) + " needs network payloads but they could not "
+                            + "be adapted: " + payloads.error());
+        }
+        if (!payloads.added().isEmpty()) {
+            run.payloadsAdapted = true;
+            ModReloader.LOGGER.info(
+                    "[ModReloader] adapted payloads for {}: {}; existing connections were "
+                            + "patched too (requires the runtime on the other side)",
+                    String.join(", ", run.ids), payloads.added());
         }
 
         // 4b. commands: the server fired RegisterCommandsEvent long ago, so a
