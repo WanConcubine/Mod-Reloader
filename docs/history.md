@@ -2644,3 +2644,12 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
   监听器并逐个 `invoke`（只跑新增，避免重复注册抛 “already registered”）；`adaptAll` 一次开窗口完成容器重放 +
   跨总线重放。`./gradlew build -x test` 绿；120 个 Java 单测 PASS（中文路径下 Gradle test worker 的 @argfile
   编码损坏，改用 JUnit Launcher 直接跑）。jar sha `fc17122e…`；真机复测待做。
+- 2026-11-23（Architectury lifecycle 跨总线回放：FTB Ultimine 连锁时 NPE）：payload 修复后能进世界，但第一次按连锁键时
+  客户端 `FTBUltimineClient.addPressedInfo` 与服务器 `BlockMatchers.determineBestMatcher` 同时 NPE：
+  `ShapeRegistry.getShape(int)` 返回 null（crash-2026-11-23_12.42.35/37）。根因同构：Architectury 把
+  `FMLCommonSetupEvent`/`FMLClientSetupEvent` 桥接到自己的 `LifecycleEvent.SETUP`/`CLIENT_SETUP`（桥接监听器在
+  architectury 总线），FTB Ultimine 构造期注册的 `commonSetup`（注册内置形状/限制器）从未执行。修复：新增
+  `hotadd/ArchitecturyEvents`——构造前快照 SETUP/CLIENT_SETUP 监听器列表与 `KeyMappingRegistryImpl.MAPPINGS`，
+  common setup 后只回放新增的 SETUP 监听器、client 阶段回放新增 CLIENT_SETUP；并把 Architectury 在
+  `RegisterKeyMappingsEvent` 之后再入队的键位直接补进 `Options.keyMappings`（否则键位静默失效）。
+  `./gradlew build -x test` 绿、120 单测 PASS；jar sha `6f7003fa…`，已部署，真机复测待做。

@@ -106,6 +106,7 @@ public final class HotAddEngine {
         List<ModContainer> outerContainers;
         EventBusSnapshot.Snapshot busSnapshot;
         NetworkAdaptation.Snapshot payloadListenerSnapshot;
+        ArchitecturyEvents.Snapshot architecturySnapshot;
         final List<String> loaded = new ArrayList<>();
         PlatformHooks hooks;
         int keysBefore;
@@ -729,6 +730,11 @@ public final class HotAddEngine {
         // cannot see them. Record every mod bus before the construct and replay
         // what appeared afterwards at the payload stage.
         run.payloadListenerSnapshot = NetworkAdaptation.snapshot();
+        // Same pattern for Architectury's lifecycle bridge: FMLCommonSetupEvent is
+        // bridged to LifecycleEvent.SETUP on architectury's own bus, so a mod that
+        // registers common setup in its constructor misses it (FTB Ultimine's
+        // shapes). Record the listener lists before the construct.
+        run.architecturySnapshot = ArchitecturyEvents.snapshot();
         rollback.add("event listeners", () -> {
             if (!run.constructed) {
                 return;
@@ -882,6 +888,16 @@ public final class HotAddEngine {
         }
         run.stagePlan.enter(Stage.EVENT);
         FmlEvents.commonSetupAll(run.containers);
+        // Architectury maps FMLCommonSetupEvent to LifecycleEvent.SETUP through a
+        // listener on its own bus; replay only the listeners the hot-added mod
+        // registered during the construct.
+        List<Object> deferredSetup = ArchitecturyEvents.newSetup(run.architecturySnapshot);
+        if (!deferredSetup.isEmpty()) {
+            ModReloader.LOGGER.info(
+                    "[ModReloader] Architectury setup deferred through another mod's bus: "
+                            + "{} listener(s) to replay", deferredSetup.size());
+            ArchitecturyEvents.runSetup(deferredSetup);
+        }
         return null;
     }
 
@@ -943,6 +959,22 @@ public final class HotAddEngine {
         // handler registry in one of them), hence this stage sits in between.
         run.stagePlan.enter(Stage.CLIENT);
         FmlEvents.sidedSetupAll(run.containers);
+        if (Platform.isClient()) {
+            // Same bridge as LifecycleEvent.SETUP, for FMLClientSetupEvent.
+            List<Object> deferredClientSetup =
+                    ArchitecturyEvents.newClientSetup(run.architecturySnapshot);
+            if (!deferredClientSetup.isEmpty()) {
+                ModReloader.LOGGER.info(
+                        "[ModReloader] Architectury client setup deferred through another mod's bus: "
+                                + "{} listener(s) to replay", deferredClientSetup.size());
+                try {
+                    ArchitecturyEvents.runClientSetup(deferredClientSetup);
+                } catch (Throwable t) {
+                    ModReloader.LOGGER.warn(
+                            "[ModReloader] Architectury client setup replay failed", t);
+                }
+            }
+        }
         try {
             // Startup order: registries frozen -> common setup -> client setup ->
             // renderers. A mod's RegisterRenderers may resolve its own registry
@@ -955,6 +987,16 @@ public final class HotAddEngine {
             hooks.afterClientLifecycles(run.containers);
         } catch (Throwable t) {
             ModReloader.LOGGER.warn("[ModReloader] staged client replay failed", t);
+        }
+        if (Platform.isClient()) {
+            // Architectury queues keys registered after RegisterKeyMappingsEvent;
+            // its own post-event path only runs when the registry was already live.
+            List<Object> deferredKeys = ArchitecturyEvents.newKeyMappings(run.architecturySnapshot);
+            int keysAdded = ArchitecturyEvents.registerKeyMappings(deferredKeys);
+            if (keysAdded > 0) {
+                ModReloader.LOGGER.info("[ModReloader] registered {} key mapping(s) Architectury "
+                        + "queued after the startup event", keysAdded);
+            }
         }
         String modernUiShaders = ModernUIAdapter.afterClientStartup(run.ids);
         if (modernUiShaders != null) {
