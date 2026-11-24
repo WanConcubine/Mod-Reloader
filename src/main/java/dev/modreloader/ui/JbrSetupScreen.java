@@ -30,7 +30,7 @@ public final class JbrSetupScreen extends Screen {
     private volatile String error;
     private volatile boolean running;
     private volatile boolean closed;
-    private MultiLineLabel body;
+    private ScrollableText body;
 
     public JbrSetupScreen(Screen parent, Path pendingJar) {
         super(Component.translatable("modreloader.jbr_setup.title"));
@@ -43,8 +43,9 @@ public final class JbrSetupScreen extends Screen {
     protected void init() {
         String target = minecraft == null ? "jbr-21.0.11"
                 : JbrProvisioner.installDir(minecraft.gameDirectory.toPath()).toString();
-        body = MultiLineLabel.create(font, width - 40,
-                Component.translatable("modreloader.jbr_setup.body", target));
+        body = new ScrollableText(MultiLineLabel.create(font, width - 40,
+                Component.translatable("modreloader.jbr_setup.body", target)),
+                width, width / 2, 50, height - 110, 10, true);
         int y = height - 78;
         addRenderableWidget(Button.builder(Component.translatable("modreloader.jbr_setup.download"),
                         pressed -> {
@@ -179,7 +180,7 @@ public final class JbrSetupScreen extends Screen {
         renderBackground(guiGraphics, mouseX, mouseY, partialTick);
         super.render(guiGraphics, mouseX, mouseY, partialTick);
         guiGraphics.drawCenteredString(font, title, width / 2, 24, 0xFFFFFF);
-        body.renderCentered(guiGraphics, width / 2, 54, 10, 0xDDDDDD);
+        body.render(guiGraphics);
         int y = height - 76;
         int statusY = height - 104;
         if (error != null) {
@@ -194,6 +195,12 @@ public final class JbrSetupScreen extends Screen {
                     Component.translatable("modreloader.jbr_setup.mixinruntime_missing"),
                     width / 2, height - 96, 0xFF8888);
         }
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        return (body != null && body.handleScroll(scrollY))
+                || super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
     @Override

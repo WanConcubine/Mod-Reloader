@@ -23,7 +23,7 @@ import java.util.Optional;
  */
 public final class JbrConsentScreen extends Screen {
     private final Screen parent;
-    private MultiLineLabel body;
+    private ScrollableText body;
     private String status;
     private boolean downloadable;
 
@@ -54,7 +54,8 @@ public final class JbrConsentScreen extends Screen {
             text = Component.translatable("modreloader.jbr_consent.no_asset",
                     JbrProvisioner.releasePage());
         }
-        body = MultiLineLabel.create(font, width - 40, text);
+        body = new ScrollableText(MultiLineLabel.create(font, width - 40, text),
+                width, width / 2, 34, height - 106, 10, true);
 
         int y = height - 76;
         Button copyPage = Button.builder(Component.translatable("modreloader.jbr_consent.copy"),
@@ -114,7 +115,7 @@ public final class JbrConsentScreen extends Screen {
         renderBackground(guiGraphics, mouseX, mouseY, partialTick);
         super.render(guiGraphics, mouseX, mouseY, partialTick);
         guiGraphics.drawCenteredString(font, title, width / 2, 18, 0xFFFFFF);
-        body.renderCentered(guiGraphics, width / 2, 36, 10, 0xDDDDDD);
+        body.render(guiGraphics);
         if (!status.isEmpty()) {
             guiGraphics.drawCenteredString(font, Component.literal(status),
                     width / 2, height - 100, 0x88FF88);
@@ -124,6 +125,12 @@ public final class JbrConsentScreen extends Screen {
                     Component.translatable("modreloader.jbr_consent.manual_hint"),
                     width / 2, height - 100, 0xFFAA55);
         }
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        return (body != null && body.handleScroll(scrollY))
+                || super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
     @Override

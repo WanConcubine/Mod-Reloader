@@ -19,7 +19,7 @@ import java.util.Optional;
  */
 public final class JbrGuideScreen extends Screen {
     private final Screen parent;
-    private MultiLineLabel body;
+    private ScrollableText body;
     private String status = "";
 
     public JbrGuideScreen(Screen parent) {
@@ -35,9 +35,10 @@ public final class JbrGuideScreen extends Screen {
         String target = JbrProvisioner.installDir(gameDir).toString();
         String url = asset.map(JbrProvisioner::downloadUrl)
                 .orElse(JbrProvisioner.releasePage());
-        body = MultiLineLabel.create(font, width - 40,
+        body = new ScrollableText(MultiLineLabel.create(font, width - 40,
                 Component.translatable("modreloader.jbr_guide.body", url, target,
-                        install.map(String::valueOf).orElse("—")));
+                        install.map(String::valueOf).orElse("—"))),
+                width, 20, 32, height - 82, 10, false);
 
         int y = height - 56;
         addRenderableWidget(Button.builder(Component.translatable("modreloader.jbr_guide.copy"),
@@ -70,11 +71,17 @@ public final class JbrGuideScreen extends Screen {
         renderBackground(guiGraphics, mouseX, mouseY, partialTick);
         super.render(guiGraphics, mouseX, mouseY, partialTick);
         guiGraphics.drawCenteredString(font, title, width / 2, 16, 0xFFFFFF);
-        body.renderLeftAligned(guiGraphics, 20, 32, 10, 0xDDDDDD);
+        body.render(guiGraphics);
         if (!status.isEmpty()) {
             guiGraphics.drawCenteredString(font, Component.literal(status),
                     width / 2, height - 72, 0x88FF88);
         }
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        return (body != null && body.handleScroll(scrollY))
+                || super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
     @Override
