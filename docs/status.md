@@ -615,6 +615,10 @@
 
 > 逐步过程与证据见 [history.md](history.md)；这里只留最近三条。
 
+- **2026-11-25（0.1.1 发布）**：JBR 同意/准备/指南三页正文改为可滚动裁剪视口（修复 854×480 覆盖按钮；
+  真机视觉复验待下次无 JBR 会话）；无 JBR 玩家路径 Windows 真机端到端跑通（stock 21.0.7 → 自动下载/校验/
+  解压 JBR 21.0.11 → 重启 `enhanced=true`）。`build/libs/modreloader-1.21.1-0.1.1.jar`
+  （526,042 B，sha256 `66c6bc21…`），tag `v0.1.1`；120/120 单测。
 - **2026-11-22（回退 LoadingModList 发布；视频设置重定向）**：Embeddium 热加的“发布 mod 文件给 mixin 插件”尝试
   会让其 mixin 全部应用并撞 `Minecraft.fences` 活实例 NPE（`crash-2026-11-22_12.52.54-client.txt`），
   按所有者决定**回退**，默认保留“插件自跳过、不崩”的路径；新增 `client/VideoSettingsRedirect`：

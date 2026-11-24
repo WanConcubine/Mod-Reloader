@@ -2653,3 +2653,18 @@ FML 的 `ConfigTracker.loadConfigs(Type.SERVER, …)` 在**世界启动**时遍�
   common setup 后只回放新增的 SETUP 监听器、client 阶段回放新增 CLIENT_SETUP；并把 Architectury 在
   `RegisterKeyMappingsEvent` 之后再入队的键位直接补进 `Options.keyMappings`（否则键位静默失效）。
   `./gradlew build -x test` 绿、120 单测 PASS；jar sha `6f7003fa…`，已部署，真机复测待做。
+
+## 2026-11-25（0.1.1 发布）
+
+- 版本 `0.1.0-beta.1` → `0.1.1`（gradle.properties / neoforge.mods.toml / README / release notes）。
+- 自 `v0.1.0-beta.1` 起 17 个提交：品牌统一 NoRestart；Architectury lifecycle 与跨总线 payload；
+  枚举扩展（Farmer's Delight）；Embeddium 问题 69 opt-in + 视频设置重定向；白名单 FerriteCore/农夫乐事 J2；
+  JBR 同意/准备/指南三页改为可滚动裁剪视口。
+- `./gradlew build -x test` 成功；120/120 单测（JUnit Launcher 直跑）。jar
+  `build/libs/modreloader-1.21.1-0.1.1.jar`（526,042 B，sha256
+  `66c6bc2146efb8bbcb81bfd6a91fa8c2e74c01c8deddff97ab75bac84dbe2c93`）。
+- Windows/PCL2 真机冒烟（模拟无 JBR）：stock Microsoft 21.0.7 → Create 6.0.10 预检要求 JBR →
+  同意页 → 下载/校验/解压 `<gameDir>/jbr-21.0.11` → 自动重启为 JetBrains 21.0.11
+  （`enhancedRedefinition=true`、late AT enabled）。jar 仍在 `mods/`，Create 按启动加载（未走热加）。
+  同会话发现同意页正文遮挡按钮，已修复（构建/单测通过，视觉复验待下次无 JBR 会话）。
+- tag `v0.1.1`；GitHub Release 附 jar。
