@@ -2,22 +2,30 @@
 
 （仓库名 `Mod-Reloader`、modId `modreloader` 保持不变。）
 
-让 Minecraft 模组在游戏运行时**安全地增删 / 更新 / 热重载**。
+让 Minecraft 模组在游戏运行时**加、删、换**，不必每换一个模组就重开一次游戏。
 
-> 当前版本：**0.1.1**（GPL-3.0-only）。
->
-> 状态（2026-11-25，细节以 [docs/status.md](docs/status.md) 为准）：分析器 v0 可运行；运行时在 NeoForge 1.21.1 dev 环境
-> 验证到四档里的前三档——**嫔级**（无 mixin/注册表）、**妃级**（mixin + 布局变更，JBR 只在改已加载类布局时需要）、
-> **贵妃级 add-only**（方块/物品 + 资源包/创造栏 + datapack + capability），含真实 dogfood 众星捧月 1.5.0；皇后级只提示重启。
-> **AT**：stock 是硬边界；JBR late AT 只覆盖**成员级** access/final（Jade/JEI/Controlling L1 PASS），
-> 类级 `public-f`（去类的 final）不可用，会被拒绝并提示重启（[late-at](docs/features/late-at.md) §5.1）。
-> 失败回滚覆盖 post-ModList / post-pack / post-construct 监听器；构造器其它副作用、post-construct 重试仍不行。
-> 工程侧：`PlatformHooks` 双端解耦、`Capabilities` 锚点守卫、`dev/` 不进发布 jar、**120 个无游戏 Java 单测**；
-> 兼容性流水线 v0（`tools/pipeline`）与无焦点 L1（`-PnoFocus=true`）。皇后级与软重启未开始；已知/未验证项见
-> [status](docs/status.md)，功能文档见 [docs/features/](docs/features/)。
-> 短期目标是把工具做出来给社区用，论文/研究输出留到以后。
->
-> **先读顺序**：[AGENTS.md](AGENTS.md) → [docs/status.md](docs/status.md)。状态只写在 status.md。
+> 当前版本 **0.1.1**（GPL-3.0-only）。细节、已知问题与验证记录以 [docs/status.md](docs/status.md) 为准。
+
+## 先看这里（玩家）
+
+- **无 mixin、无 access transformer 的模组不需要额外环境**：把 jar 放进 `mods/` 或 `modreloader/inbox/`，在游戏里加载即可。
+- **需要 JBR 的少数情况**（带 mixin 且要改已加载类的布局，或带 access transformer）：在游戏里点一次「准备热加载环境」，会自动下载 JBR、填好参数并重启。切换本身只需要重启一次，之后在这一局游戏里增删模组都不用再重启。（下次启动仍由启动器决定 JVM，需要时会再提示一次，还是点一下。）
+- **不想用热加载也完全可以**：把 jar 放进 `mods/` 正常重启，和平时一样。热加载只是多一个选项，不强制。
+
+## 支持范围
+
+- 已经实测过的模组在 [白名单](docs/whitelist/README.md)，stock 与 JBR 分开记录，标了等级和已知 bug。
+- **没测过的模组不代表不能热加载**，只是我们没验证过，稳定性不做保证；建议先在存档副本上试。
+- 加载失败会自动回滚到操作前；涉及注册表/数据提交的操作，会在确认前说明「不可撤销」。
+- 等级说明（嫔 / 妃 / 贵妃 / 皇后）见 [docs/glossary.md](docs/glossary.md)；皇后级（native / 性能核心）目前只能完整重启。
+- 妃级（带 mixin）需要 MixinRuntime (mr)；没装时嫔级照常，妃级会在预检阶段被拦下并提示。
+
+## 开发状态（摘要）
+
+在 NeoForge 1.21.1 上开发与验证：嫔级、妃级、贵妃级 add-only 都有真实模组实测，皇后级只提示重启；
+AT 在 stock JVM 是硬边界，JBR 下只覆盖成员级（类级 `public-f` 会被拒绝并提示重启）；
+未验证项与已知问题全部写在 [status](docs/status.md) 和 [features/](docs/features/) 里，这里不重复。
+开发或贡献者请先读 [AGENTS.md](AGENTS.md) → [docs/status.md](docs/status.md)；状态只写在 status.md。
 
 ## 目标（2026-11-14 锁定）
 
